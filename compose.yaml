@@ -1,0 +1,18 @@
+services:
+  db:
+    image: postgres:17.6-alpine@sha256:ef257d85f76e48da1c64832459b59fcaba1a4dac97bf5d7450c77753542eee94
+    environment:
+      POSTGRES_USER: metis
+      POSTGRES_PASSWORD: ${METIS_POSTGRES_PASSWORD:-metis-local}
+      POSTGRES_DB: metis
+    ports:
+      - "127.0.0.1:55432:5432"
+    volumes:
+      - metis-pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U metis -d metis"]
+      interval: 2s
+      timeout: 2s
+      retries: 20
+volumes:
+  metis-pg:

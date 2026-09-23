@@ -1,0 +1,24 @@
+services:
+  app:
+    image: metis-simulation:local
+    build:
+      context: .
+    env_file:
+      - path: .local/runtime.env
+        required: true
+    environment:
+      METIS_DATABASE_URL: postgresql+psycopg://metis:${METIS_POSTGRES_PASSWORD:-metis-local}@db:5432/metis
+      METIS_SOURCE_ID: metis-simulator-local
+      METIS_FRONTEND_PATH: /app/frontend/dist
+      METIS_LOCAL_DEMO: "0"
+      METIS_COOKIE_SECURE: "0"
+      METIS_ORIGINS: http://127.0.0.1:${METIS_APP_PORT:-8000},http://localhost:${METIS_APP_PORT:-8000}
+    command:
+      - sh
+      - -c
+      - metis-sim migrate && exec metis-sim serve --host 0.0.0.0 --port 8000
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - 127.0.0.1:${METIS_APP_PORT:-8000}:8000

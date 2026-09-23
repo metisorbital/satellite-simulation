@@ -1,0 +1,9 @@
+"""Fixed ``wgs84_j2_v1`` and illumination model constants in SI units."""
+
+MU_M3_S2 = 3.986004418e14
+EARTH_RADIUS_M = 6_378_137.0
+J2 = 1.082629821313e-3
+SUN_RADIUS_M = 695_700_000.0
+AU_M = 149_597_870_700.0
+MIN_ALTITUDE_M = 300_000.0
+MAX_ALTITUDE_M = 1_500_000.0

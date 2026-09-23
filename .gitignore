@@ -203,6 +203,17 @@ cython_debug/
 # Temporary file for partial code execution
 tempCodeRunnerFile.py
 
+# Local credentials, durable demo/test data and generated build output
+.local/
+node_modules/
+frontend/dist/
+frontend/test-results/
+frontend/playwright-report/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+*.writer.lock
+
 # Ruff stuff:
 .ruff_cache/
 

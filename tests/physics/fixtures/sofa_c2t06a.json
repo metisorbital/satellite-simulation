@@ -1,0 +1,16 @@
+{
+  "source": "https://github.com/liberfa/erfa/blob/1a8044cde5b7763295d472a6443387239127c6c8/src/t_erfa_c.c",
+  "attribution": "SOFA-derived ERFA t_c2t06a validation fixture; routine revision 2013-08-07. Numerical inputs and expected values reproduced for interoperability validation.",
+  "tt_jd1": 2400000.5,
+  "tt_jd2": 53736.0,
+  "ut1_jd1": 2400000.5,
+  "ut1_jd2": 53736.0,
+  "xp_rad": 2.55060238e-7,
+  "yp_rad": 1.860359247e-6,
+  "position_m": [4000000.0, 3000000.0, 5000000.0],
+  "expected_matrix": [
+    [-0.1810332128305897282, 0.9834769806938592296, 0.00006555550962998436505],
+    [-0.9834768134136214897, -0.1810332203649130832, 0.0005749800844905594110],
+    [0.0005773474024748545878, 0.00003961816829632690581, 0.9999998325501747785]
+  ]
+}

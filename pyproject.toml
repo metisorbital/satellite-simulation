@@ -1,0 +1,44 @@
+[build-system]
+requires = ["hatchling>=1.27,<2"]
+build-backend = "hatchling.build"
+
+[project]
+name = "metis-satellite-simulation"
+version = "0.1.0"
+description = "Deterministic orbit-to-power simulation and mission viewer"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "fastapi>=0.115,<1", "uvicorn[standard]>=0.34,<1", "pydantic>=2.10,<3",
+  "numpy>=2.2,<3", "astropy>=7,<9", "astropy-iers-data", "pyerfa>=2,<3",
+  "sqlalchemy>=2.0,<2.1", "psycopg[binary]>=3.2,<4", "alembic>=1.14,<2",
+  "pyyaml>=6,<7", "rfc8785>=0.1,<1", "itsdangerous>=2.2,<3",
+]
+
+[dependency-groups]
+dev = ["pytest>=8,<10", "httpx>=0.28,<1", "scipy>=1.15,<2", "ruff>=0.11,<1", "mypy>=1.15,<2", "types-PyYAML"]
+
+[project.scripts]
+metis-sim = "metis_sim.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["backend/src/metis_sim"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["backend/src"]
+markers = ["slow: full duration numerical and throughput gates", "postgres: requires METIS_TEST_DATABASE_URL"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.12"
+mypy_path = "backend/src"
+ignore_missing_imports = true
+check_untyped_defs = true
+

@@ -1,0 +1,149 @@
+{
+  "schema_version": "physics_validation.v1",
+  "recorded_date_local": "2026-09-23",
+  "timezone": "Asia/Yerevan",
+  "scope": "Engine numerical checks; not flight accuracy or complete service/browser acceptance",
+  "suite": {
+    "command": "uv run pytest tests/physics -q",
+    "passed": 80,
+    "duration_s": 112.45,
+    "initial_full_suite_passed": 78,
+    "initial_full_suite_duration_s": 133.32,
+    "expected_negative_test_warnings": 3,
+    "followup_frame_and_engine_tests_passed": 7,
+    "followup_provenance_timestamp_tests_passed": 4,
+    "ruff": "passed",
+    "mypy_physics_source_files": 10,
+    "mypy": "passed"
+  },
+  "hardware": {
+    "cpu": "Apple M3 Pro",
+    "logical_cpus": 11,
+    "memory_bytes": 19327352832,
+    "os": "macOS 26.6.2",
+    "architecture": "arm64"
+  },
+  "versions": {
+    "python": "3.12.12",
+    "numpy": "2.5.3",
+    "astropy": "8.0.1",
+    "astropy-iers-data": "0.2026.9.21.0.56.25",
+    "pyerfa": "2.0.1.5",
+    "scipy": "1.18.1",
+    "pytest": "9.1.1"
+  },
+  "provenance": {
+    "uv_lock_sha256": "15d46334cbc36c1ac8bff6d97b4890b35e8a6c7ca5e070a395321d68272bc8e1",
+    "iers_sha256": "d7adc96fca77e27746586e8b7dd75376eebbc82ba5f65ced13379cf0ebd62327",
+    "leap_seconds_sha256": "6cb6f5d4b819f2e568e25db4b0b26d89dedf031fdffb18bc94d40f4e94e268d7",
+    "iers_mjd_coverage": [41684.0, 61666.0],
+    "baseline_iers_values": "predicted",
+    "leap_seconds_expiry_utc": "2027-06-27T23:59:23.000",
+    "network_updates": false,
+    "demo_configuration_sha256": "b884af19db02263cea411f24f9560417c6f21b0d2e36e2b3d6593defd6e81ec8",
+    "healthy_configuration_sha256": "7824d68aba83e773a435685e47ce0d724073ea54d402c50dfc65ab9e1c2613dd"
+  },
+  "gates": {
+    "P-01": {
+      "status": "passed",
+      "duration_s": 86400,
+      "reference": "independent circular two-body analytic solution",
+      "position_error_m": 0.0000231950947,
+      "velocity_error_m_s": 0.0000000252983954,
+      "relative_energy_drift": 2.2144451e-14,
+      "tolerances": {"position_m": 10.0, "velocity_m_s": 0.02, "relative_energy": 1e-7}
+    },
+    "P-02": {
+      "status": "passed",
+      "duration_s": 86400,
+      "reference": "RK4 half-step convergence and independent SciPy DOP853",
+      "dop853_rtol": 2e-13,
+      "dop853_atol": 1e-8,
+      "convergence_max_position_errors_m": [0.00007519574897952029, 0.00003697631580540526, 0.000028350484419933848],
+      "dop853_max_position_errors_m": [0.00005001536188567444, 0.000039128331041866807, 0.000024258113995449413],
+      "midpoint_max_position_errors_m": [0.00007519573916982892, 0.00003697655962339023, 0.000028350083437316316],
+      "tolerance_m": 10.0
+    },
+    "P-03": {
+      "status": "passed",
+      "sample_count": 101,
+      "roundtrip_max_position_error_m": 2.87052896e-9,
+      "finite_difference_steps_s": [0.1, 0.05],
+      "max_velocity_errors_m_s": [0.0000160810508588944, 0.000005001339461683512],
+      "tolerances": {"roundtrip_position_m": 0.01, "velocity_m_s": 0.02}
+    },
+    "P-04": {
+      "status": "passed",
+      "fixture": "tests/physics/fixtures/sofa_c2t06a.json",
+      "max_matrix_element_error": 3.608224830031759e-15,
+      "position_error_m": 1.874250527238297e-8,
+      "tolerances": {"matrix_element": 1e-12, "position_m": 0.01}
+    },
+    "P-05": {
+      "status": "passed",
+      "independent_methods": ["angular disk area quadrature", "angular contact root"],
+      "geometry_count": 5,
+      "fraction_comparison_tolerance": 1e-7,
+      "entry_time_tolerance_s": 1.0,
+      "umbra_generation_exactly_zero": true
+    },
+    "P-06": {
+      "status": "passed",
+      "edge_case_count": 60,
+      "max_bus_residual_w": 0.0,
+      "max_load_residual_w": 0.0,
+      "max_energy_residual_wh": 3.9968028886505635e-15,
+      "tolerances": {"bus_w": 1e-6, "energy_wh": 1e-8}
+    },
+    "P-07": {
+      "status": "passed",
+      "measured_discharge_loss_wh": 1.7543859649123306,
+      "analytic_discharge_loss_wh": 1.7543859649122806,
+      "error_wh": 4.9960036108132044e-14,
+      "tolerance_wh": 1e-6
+    },
+    "P-08": {
+      "status": "partial",
+      "engine_speed_and_fleet_independence": "exact equality",
+      "trace_endpoints": 126,
+      "requested_speeds": [20, 1, 5],
+      "not_covered": "integrated pause/resume and persistence behavior"
+    },
+    "P-10": {
+      "status": "passed_at_engine_boundary",
+      "epoch_utc": "2026-09-21T00:00:00Z",
+      "duration_s": 21600,
+      "target_satellite_id": "METIS-02",
+      "reserve_soc": 0.15,
+      "dwell_s": 60,
+      "identical_orbit_across_all_cases": true,
+      "positive_prefailure_generation_deficit": true,
+      "cases": {
+        "baseline": {"reserve_entry_tick": 20590, "failure_tick": 20650, "minimum_soc": 0.03915260513396618, "final_soc": 0.03915260513396618},
+        "healthy": {"reserve_entry_tick": null, "failure_tick": null, "minimum_soc": 0.7530592712312528, "final_soc": 0.8266938119846404},
+        "milder": {"reserve_entry_tick": null, "failure_tick": null, "minimum_soc": 0.7530592712312528, "final_soc": 0.8266613582731561},
+        "delayed": {"reserve_entry_tick": null, "failure_tick": null, "minimum_soc": 0.3108831020296892, "final_soc": 0.3108831020296892}
+      }
+    },
+    "P-12": {
+      "status": "passed",
+      "initial_energy_wh": 340.0,
+      "frame_60_interval_mode": "nominal",
+      "frame_60_endpoint_mode": "payload_active",
+      "frame_60_load_requested_w": 150.0,
+      "frame_61_load_requested_w": 210.0,
+      "frame_120_endpoint_derating": 0.4,
+      "frame_120_midpoint_derating": 0.405
+    }
+  },
+  "not_covered_by_this_evidence": [
+    "P-09 actual Cesium interpolation and displayed health timing",
+    "P-11 pause/reconnect/stale/persistence behavior",
+    "P-08 integrated pause/resume",
+    "terminal censoring persistence",
+    "sustained ten-minute service and browser capacity",
+    "future sensor-noise models",
+    "learned warning or prediction quality",
+    "real spacecraft flight accuracy"
+  ]
+}

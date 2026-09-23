@@ -1,0 +1,103 @@
+schema_version: simulation.v1
+run:
+  epoch_utc: '2026-09-21T00:00:00Z'
+  duration_s: 21600
+  tick_s: 1
+  telemetry_period_s: 1
+  speed: 20
+  seed: 42
+  earth_model: wgs84_j2_v1
+  orbit_model: j2_cartesian
+  sun_model: astropy_builtin
+profiles:
+  leo_power_demo:
+    panel:
+      area_m2: 0.9
+      efficiency: 0.28
+      conversion_efficiency: 0.95
+      irradiance_1au_w_m2: 1361.0
+      pointing:
+        type: ideal_sun_tracking
+    battery:
+      type: energy_store
+      usable_capacity_wh: 400.0
+      initial_soc: 0.85
+      charge_efficiency: 0.95
+      discharge_efficiency: 0.95
+      max_charge_w: 250.0
+      max_discharge_w: 300.0
+    loads_w:
+      nominal: 150.0
+      payload_active: 210.0
+      safe: 70.0
+    sensors:
+      catalog: power-leo.v1
+      noise:
+        type: none
+satellites:
+- satellite_id: METIS-01
+  name: Metis One
+  profile_id: leo_power_demo
+  orbit:
+    a_m: 6928137.0
+    e: 0.1
+    i_deg: 97.6
+    raan_deg: 0.0
+    argp_deg: 0.0
+    true_anomaly_deg: 0.0
+  initial_mode: nominal
+  operations: []
+  visual:
+    color: '#8FD3FF'
+    asset_id: null
+- satellite_id: METIS-02
+  name: Metis Two
+  profile_id: leo_power_demo
+  orbit:
+    a_m: 6928137.0
+    e: 0.001
+    i_deg: 97.6
+    raan_deg: 0.0
+    argp_deg: 0.0
+    true_anomaly_deg: 120.0
+  initial_mode: nominal
+  operations:
+  - start_s: 3600
+    end_s: 3900
+    mode: payload_active
+  visual:
+    color: '#F7C873'
+    asset_id: null
+- satellite_id: METIS-03
+  name: Metis Three
+  profile_id: leo_power_demo
+  orbit:
+    a_m: 6928137.0
+    e: 0.001
+    i_deg: 97.6
+    raan_deg: 0.0
+    argp_deg: 0.0
+    true_anomaly_deg: 240.0
+  initial_mode: nominal
+  operations: []
+  visual:
+    color: '#A8E6B5'
+    asset_id: null
+constellations:
+- constellation_id: metis-demo
+  satellite_ids:
+  - METIS-01
+  - METIS-02
+  - METIS-03
+scenario:
+- satellite_id: METIS-02
+  type: solar_derating
+  points:
+  - at_s: 5400
+    multiplier: 1.0
+  - at_s: 12600
+    multiplier: 0.25
+  outcome:
+    type: energy_reserve_violation
+    reserve_soc: 0.15
+    dwell_s: 60

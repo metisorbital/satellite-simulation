@@ -1,0 +1,171 @@
+{
+  "$defs": {
+    "ChannelReading": {
+      "additionalProperties": false,
+      "description": "One allowlisted channel value and its measurement quality.",
+      "properties": {
+        "quality": {
+          "enum": [
+            "valid",
+            "missing",
+            "invalid",
+            "saturated"
+          ],
+          "title": "Quality",
+          "type": "string"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "maxItems": 3,
+              "minItems": 3,
+              "prefixItems": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Value"
+        }
+      },
+      "required": [
+        "value",
+        "quality"
+      ],
+      "title": "ChannelReading",
+      "type": "object"
+    }
+  },
+  "$id": "https://metisorbital.local/schemas/telemetry.v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Allowlisted producer-neutral telemetry measurement frame.",
+  "properties": {
+    "catalog_version": {
+      "const": "power-leo.v1",
+      "title": "Catalog Version",
+      "type": "string"
+    },
+    "channels": {
+      "additionalProperties": {
+        "$ref": "#/$defs/ChannelReading"
+      },
+      "title": "Channels",
+      "type": "object"
+    },
+    "emitted_at": {
+      "format": "date-time",
+      "title": "Emitted At",
+      "type": "string"
+    },
+    "interval_mode": {
+      "anyOf": [
+        {
+          "enum": [
+            "nominal",
+            "payload_active",
+            "safe"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Interval Mode"
+    },
+    "mode": {
+      "enum": [
+        "nominal",
+        "payload_active",
+        "safe"
+      ],
+      "title": "Mode",
+      "type": "string"
+    },
+    "observed_at": {
+      "format": "date-time",
+      "title": "Observed At",
+      "type": "string"
+    },
+    "sample_window_s": {
+      "minimum": 0,
+      "title": "Sample Window S",
+      "type": "number"
+    },
+    "satellite_id": {
+      "pattern": "^[A-Za-z0-9_-]{1,64}$",
+      "title": "Satellite Id",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "telemetry.v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "sequence": {
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "title": "Sequence",
+      "type": "integer"
+    },
+    "source_id": {
+      "pattern": "^[A-Za-z0-9_-]{1,64}$",
+      "title": "Source Id",
+      "type": "string"
+    },
+    "source_kind": {
+      "enum": [
+        "synthetic",
+        "observed"
+      ],
+      "title": "Source Kind",
+      "type": "string"
+    },
+    "stream_id": {
+      "format": "uuid",
+      "title": "Stream Id",
+      "type": "string"
+    },
+    "time_domain": {
+      "enum": [
+        "simulation_utc",
+        "mission_utc"
+      ],
+      "title": "Time Domain",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "source_id",
+    "stream_id",
+    "sequence",
+    "satellite_id",
+    "source_kind",
+    "time_domain",
+    "observed_at",
+    "sample_window_s",
+    "emitted_at",
+    "catalog_version",
+    "mode",
+    "interval_mode",
+    "channels"
+  ],
+  "title": "telemetry.v1",
+  "type": "object"
+}

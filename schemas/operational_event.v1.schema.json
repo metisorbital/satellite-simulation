@@ -1,0 +1,205 @@
+{
+  "$defs": {
+    "LowEnergyLimitDetails": {
+      "additionalProperties": false,
+      "description": "Allowlisted observed public SOC limit transition details.",
+      "properties": {
+        "channel_id": {
+          "const": "eps.battery_soc",
+          "title": "Channel Id",
+          "type": "string"
+        },
+        "clear_value": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Clear Value",
+          "type": "number"
+        },
+        "operator": {
+          "enum": [
+            "lt",
+            "gt"
+          ],
+          "title": "Operator",
+          "type": "string"
+        },
+        "value": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Value",
+          "type": "number"
+        }
+      },
+      "required": [
+        "channel_id",
+        "operator",
+        "value",
+        "clear_value"
+      ],
+      "title": "LowEnergyLimitDetails",
+      "type": "object"
+    },
+    "ModeChangedDetails": {
+      "additionalProperties": false,
+      "description": "Allowlisted observed mode transition details.",
+      "properties": {
+        "from_mode": {
+          "enum": [
+            "nominal",
+            "payload_active",
+            "safe"
+          ],
+          "title": "From Mode",
+          "type": "string"
+        },
+        "to_mode": {
+          "enum": [
+            "nominal",
+            "payload_active",
+            "safe"
+          ],
+          "title": "To Mode",
+          "type": "string"
+        }
+      },
+      "required": [
+        "from_mode",
+        "to_mode"
+      ],
+      "title": "ModeChangedDetails",
+      "type": "object"
+    },
+    "PowerUnservedDetails": {
+      "additionalProperties": false,
+      "description": "Allowlisted observed unserved-power state details.",
+      "properties": {
+        "active": {
+          "title": "Active",
+          "type": "boolean"
+        },
+        "sample_window_s": {
+          "minimum": 0,
+          "title": "Sample Window S",
+          "type": "number"
+        },
+        "value_w": {
+          "minimum": 0,
+          "title": "Value W",
+          "type": "number"
+        }
+      },
+      "required": [
+        "active",
+        "value_w",
+        "sample_window_s"
+      ],
+      "title": "PowerUnservedDetails",
+      "type": "object"
+    }
+  },
+  "$id": "https://metisorbital.local/schemas/operational_event.v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Allowlisted observable operational event envelope.",
+  "properties": {
+    "details": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ModeChangedDetails"
+        },
+        {
+          "$ref": "#/$defs/LowEnergyLimitDetails"
+        },
+        {
+          "$ref": "#/$defs/PowerUnservedDetails"
+        }
+      ],
+      "title": "Details"
+    },
+    "emitted_at": {
+      "format": "date-time",
+      "title": "Emitted At",
+      "type": "string"
+    },
+    "event_sequence": {
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "title": "Event Sequence",
+      "type": "integer"
+    },
+    "event_type": {
+      "enum": [
+        "mode_changed",
+        "low_energy_limit_entered",
+        "low_energy_limit_cleared",
+        "power_unserved"
+      ],
+      "title": "Event Type",
+      "type": "string"
+    },
+    "observed_at": {
+      "format": "date-time",
+      "title": "Observed At",
+      "type": "string"
+    },
+    "reason_code": {
+      "maxLength": 64,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9_-]{1,64}$",
+      "title": "Reason Code",
+      "type": "string"
+    },
+    "satellite_id": {
+      "pattern": "^[A-Za-z0-9_-]{1,64}$",
+      "title": "Satellite Id",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "operational_event.v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source_id": {
+      "pattern": "^[A-Za-z0-9_-]{1,64}$",
+      "title": "Source Id",
+      "type": "string"
+    },
+    "source_kind": {
+      "enum": [
+        "synthetic",
+        "observed"
+      ],
+      "title": "Source Kind",
+      "type": "string"
+    },
+    "stream_id": {
+      "format": "uuid",
+      "title": "Stream Id",
+      "type": "string"
+    },
+    "time_domain": {
+      "enum": [
+        "simulation_utc",
+        "mission_utc"
+      ],
+      "title": "Time Domain",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "source_id",
+    "stream_id",
+    "event_sequence",
+    "satellite_id",
+    "source_kind",
+    "time_domain",
+    "observed_at",
+    "emitted_at",
+    "event_type",
+    "reason_code",
+    "details"
+  ],
+  "title": "operational_event.v1",
+  "type": "object"
+}

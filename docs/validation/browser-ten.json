@@ -1,0 +1,341 @@
+{
+  "recorded_at": "2026-09-22T22:13:26.536Z",
+  "browser": "153.0.8010.12",
+  "mode": "headless Chromium",
+  "platform": "darwin",
+  "architecture": "arm64",
+  "viewport": {
+    "width": 1400,
+    "height": 950
+  },
+  "renderer": {
+    "webgl": "WebGL 2.0 (OpenGL ES 3.0 Chromium)",
+    "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M3 Pro, Unspecified Version)",
+    "vendor": "Google Inc. (Apple)"
+  },
+  "requested_speed": 20,
+  "satellite_count": 10,
+  "satellite_inventory": [
+    "METIS-01",
+    "METIS-02",
+    "METIS-03",
+    "METIS-04",
+    "METIS-05",
+    "METIS-06",
+    "METIS-07",
+    "METIS-08",
+    "METIS-09",
+    "METIS-10"
+  ],
+  "run_id": "47f973b5-89bd-41ac-9a64-da29410c47ab",
+  "duration_s": 1200,
+  "spacecraft_readings_after_pause": [
+    {
+      "satellite_id": "METIS-01",
+      "observed_at": "2026-09-21T00:05:47Z",
+      "display_seconds": 347,
+      "battery_soc_percent": 81.19517543859762,
+      "sample_lag_s": 0
+    },
+    {
+      "satellite_id": "METIS-02",
+      "observed_at": "2026-09-21T00:05:47Z",
+      "display_seconds": 347,
+      "battery_soc_percent": 81.19517543859762,
+      "sample_lag_s": 0
+    },
+    {
+      "satellite_id": "METIS-03",
+      "observed_at": "2026-09-21T00:05:47Z",
+      "display_seconds": 347,
+      "battery_soc_percent": 88.96352690115533,
+      "sample_lag_s": 0
+    },
+    {
+      "satellite_id": "METIS-04",
+      "observed_at": "2026-09-21T00:05:47Z",
+      "display_seconds": 347,
+      "battery_soc_percent": 88.96393739506708,
+      "sample_lag_s": 0
+    },
+    {
+      "satellite_id": "METIS-05",
+      "observed_at": "2026-09-21T00:05:47Z",
+      "display_seconds": 347,
+      "battery_soc_percent": 88.96422067902257,
+      "sample_lag_s": 0
+    },
+    {
+      "satellite_id": "METIS-06",
+      "observed_at": "2026-09-21T00:05:47Z",
+      "display_seconds": 347,
+      "battery_soc_percent": 88.96426816712085,
+      "sample_lag_s": 0
+    },
+    {
+      "satellite_id": "METIS-07",
+      "observed_at": "2026-09-21T00:05:47Z",
+      "display_seconds": 347,
+      "battery_soc_percent": 88.9640615324819,
+      "sample_lag_s": 0
+    },
+    {
+      "satellite_id": "METIS-08",
+      "observed_at": "2026-09-21T00:05:47Z",
+      "display_seconds": 347,
+      "battery_soc_percent": 88.9636798955794,
+      "sample_lag_s": 0
+    },
+    {
+      "satellite_id": "METIS-09",
+      "observed_at": "2026-09-21T00:05:47Z",
+      "display_seconds": 347,
+      "battery_soc_percent": 82.73515433573105,
+      "sample_lag_s": 0
+    },
+    {
+      "satellite_id": "METIS-10",
+      "observed_at": "2026-09-21T00:05:47Z",
+      "display_seconds": 347,
+      "battery_soc_percent": 81.19517543859762,
+      "sample_lag_s": 0
+    }
+  ],
+  "cadence": {
+    "measurement": "browser requestAnimationFrame cadence; not direct GPU or Cesium postRender throughput",
+    "elapsed_ms": 15016.100000000002,
+    "callbacks": 902,
+    "frames_per_second": 60.002264236386274,
+    "median_interval_ms": 16.69999999999891,
+    "p95_interval_ms": 16.700000000000728,
+    "max_interval_ms": 16.80000000000291,
+    "intervals_over_50ms": 0,
+    "sample_lag_min_s": 0,
+    "sample_lag_max_s": 0.9984537446041202,
+    "missing_measurement_callbacks": 0,
+    "stale_callbacks": 0,
+    "scene_rendering": {
+      "measurement": "Cesium scene.postRender callbacks, aggregated in wall-time windows of at least one second",
+      "sample_windows": 10,
+      "unavailable_windows": 0,
+      "complete_position_windows": 10,
+      "positioned_spacecraft_ids": [
+        "METIS-01",
+        "METIS-02",
+        "METIS-03",
+        "METIS-04",
+        "METIS-05",
+        "METIS-06",
+        "METIS-07",
+        "METIS-08",
+        "METIS-09",
+        "METIS-10"
+      ],
+      "rendered_frames": 901,
+      "total_window_ms": 15001.39999999851,
+      "frames_per_second": 60.061060967648984,
+      "minimum_window_fps": 59.910134797803295,
+      "maximum_window_fps": 60.89647599108738,
+      "windows": [
+        {
+          "observed_at_ms": 5399.5,
+          "frames": 120,
+          "window_ms": 1998.7999999970198,
+          "fps": 60.036021613057294,
+          "positioned_spacecraft": [
+            "METIS-01",
+            "METIS-02",
+            "METIS-03",
+            "METIS-04",
+            "METIS-05",
+            "METIS-06",
+            "METIS-07",
+            "METIS-08",
+            "METIS-09",
+            "METIS-10"
+          ]
+        },
+        {
+          "observed_at_ms": 6400.60000000149,
+          "frames": 60,
+          "window_ms": 1001.1000000014901,
+          "fps": 59.934072520138535,
+          "positioned_spacecraft": [
+            "METIS-01",
+            "METIS-02",
+            "METIS-03",
+            "METIS-04",
+            "METIS-05",
+            "METIS-06",
+            "METIS-07",
+            "METIS-08",
+            "METIS-09",
+            "METIS-10"
+          ]
+        },
+        {
+          "observed_at_ms": 7400.70000000298,
+          "frames": 60,
+          "window_ms": 1000.1000000014901,
+          "fps": 59.994000599850615,
+          "positioned_spacecraft": [
+            "METIS-01",
+            "METIS-02",
+            "METIS-03",
+            "METIS-04",
+            "METIS-05",
+            "METIS-06",
+            "METIS-07",
+            "METIS-08",
+            "METIS-09",
+            "METIS-10"
+          ]
+        },
+        {
+          "observed_at_ms": 9400.60000000149,
+          "frames": 120,
+          "window_ms": 1999.8999999985099,
+          "fps": 60.00300015005221,
+          "positioned_spacecraft": [
+            "METIS-01",
+            "METIS-02",
+            "METIS-03",
+            "METIS-04",
+            "METIS-05",
+            "METIS-06",
+            "METIS-07",
+            "METIS-08",
+            "METIS-09",
+            "METIS-10"
+          ]
+        },
+        {
+          "observed_at_ms": 11399.70000000298,
+          "frames": 120,
+          "window_ms": 1999.1000000014901,
+          "fps": 60.02701215542522,
+          "positioned_spacecraft": [
+            "METIS-01",
+            "METIS-02",
+            "METIS-03",
+            "METIS-04",
+            "METIS-05",
+            "METIS-06",
+            "METIS-07",
+            "METIS-08",
+            "METIS-09",
+            "METIS-10"
+          ]
+        },
+        {
+          "observed_at_ms": 12400.70000000298,
+          "frames": 60,
+          "window_ms": 1001,
+          "fps": 59.94005994005994,
+          "positioned_spacecraft": [
+            "METIS-01",
+            "METIS-02",
+            "METIS-03",
+            "METIS-04",
+            "METIS-05",
+            "METIS-06",
+            "METIS-07",
+            "METIS-08",
+            "METIS-09",
+            "METIS-10"
+          ]
+        },
+        {
+          "observed_at_ms": 14400.5,
+          "frames": 120,
+          "window_ms": 1999.7999999970198,
+          "fps": 60.006000600149434,
+          "positioned_spacecraft": [
+            "METIS-01",
+            "METIS-02",
+            "METIS-03",
+            "METIS-04",
+            "METIS-05",
+            "METIS-06",
+            "METIS-07",
+            "METIS-08",
+            "METIS-09",
+            "METIS-10"
+          ]
+        },
+        {
+          "observed_at_ms": 16398.90000000596,
+          "frames": 120,
+          "window_ms": 1998.4000000059605,
+          "fps": 60.0480384305655,
+          "positioned_spacecraft": [
+            "METIS-01",
+            "METIS-02",
+            "METIS-03",
+            "METIS-04",
+            "METIS-05",
+            "METIS-06",
+            "METIS-07",
+            "METIS-08",
+            "METIS-09",
+            "METIS-10"
+          ]
+        },
+        {
+          "observed_at_ms": 17400.40000000596,
+          "frames": 60,
+          "window_ms": 1001.5,
+          "fps": 59.910134797803295,
+          "positioned_spacecraft": [
+            "METIS-01",
+            "METIS-02",
+            "METIS-03",
+            "METIS-04",
+            "METIS-05",
+            "METIS-06",
+            "METIS-07",
+            "METIS-08",
+            "METIS-09",
+            "METIS-10"
+          ]
+        },
+        {
+          "observed_at_ms": 18402.10000000149,
+          "frames": 61,
+          "window_ms": 1001.6999999955297,
+          "fps": 60.89647599108738,
+          "positioned_spacecraft": [
+            "METIS-01",
+            "METIS-02",
+            "METIS-03",
+            "METIS-04",
+            "METIS-05",
+            "METIS-06",
+            "METIS-07",
+            "METIS-08",
+            "METIS-09",
+            "METIS-10"
+          ]
+        }
+      ]
+    }
+  },
+  "checks": {
+    "scene_at_least_30_fps": true,
+    "positioned_every_spacecraft_in_every_window": true,
+    "scene_rate_available": true,
+    "active_sample_lag_within_one_second": true,
+    "no_missing_measurements": true,
+    "no_stale_callbacks": true,
+    "every_selected_spacecraft_has_current_measurements": true,
+    "no_browser_errors": true,
+    "no_failed_requests": true,
+    "local_runtime_only": true
+  },
+  "errors": [],
+  "failed_requests": [],
+  "external_requests": [],
+  "final_clock": "SIMULATION UTC00:05:472026-09-21",
+  "final_sample": "Sample 00:05:47 UTC#347",
+  "final_state": "paused"
+}

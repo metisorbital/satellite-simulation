@@ -1,0 +1,14 @@
+{
+  "run_id": "39d4ce99-2b75-446c-b1a9-d9b1acb089d0",
+  "source_hash_matches_current_backend": true,
+  "sampled_batch_count": 121,
+  "sampling": "one batch near each hundred simulated ticks; command queue depth measured after commit",
+  "sampled_commit_p95_ms": 63.516375004837755,
+  "sampled_commit_max_ms": 110.59791700245114,
+  "sampled_processing_p95_ms": 19.024708002689295,
+  "sampled_processing_max_ms": 65.27554200147279,
+  "sampled_command_queue_depth_max": 0,
+  "persistence_backpressure_events": 0,
+  "runner_failure_events": 0,
+  "visual_resynchronization_events": 0
+}

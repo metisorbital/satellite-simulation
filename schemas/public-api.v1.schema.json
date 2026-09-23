@@ -1,0 +1,1701 @@
+{
+  "$defs": {
+    "BatteryConfiguration": {
+      "additionalProperties": false,
+      "description": "Ideal bounded energy-store nameplate and starting condition.",
+      "properties": {
+        "charge_efficiency": {
+          "exclusiveMinimum": 0,
+          "maximum": 1,
+          "title": "Charge Efficiency",
+          "type": "number"
+        },
+        "discharge_efficiency": {
+          "exclusiveMinimum": 0,
+          "maximum": 1,
+          "title": "Discharge Efficiency",
+          "type": "number"
+        },
+        "initial_soc": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Initial Soc",
+          "type": "number"
+        },
+        "max_charge_w": {
+          "minimum": 0,
+          "title": "Max Charge W",
+          "type": "number"
+        },
+        "max_discharge_w": {
+          "minimum": 0,
+          "title": "Max Discharge W",
+          "type": "number"
+        },
+        "type": {
+          "const": "energy_store",
+          "title": "Type",
+          "type": "string"
+        },
+        "usable_capacity_wh": {
+          "exclusiveMinimum": 0,
+          "title": "Usable Capacity Wh",
+          "type": "number"
+        }
+      },
+      "required": [
+        "type",
+        "usable_capacity_wh",
+        "initial_soc",
+        "charge_efficiency",
+        "discharge_efficiency",
+        "max_charge_w",
+        "max_discharge_w"
+      ],
+      "title": "BatteryConfiguration",
+      "type": "object"
+    },
+    "ChannelReading": {
+      "additionalProperties": false,
+      "description": "One allowlisted channel value and its measurement quality.",
+      "properties": {
+        "quality": {
+          "enum": [
+            "valid",
+            "missing",
+            "invalid",
+            "saturated"
+          ],
+          "title": "Quality",
+          "type": "string"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "additionalItems": false,
+              "items": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "maxItems": 3,
+              "minItems": 3,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Value"
+        }
+      },
+      "required": [
+        "value",
+        "quality"
+      ],
+      "title": "ChannelReading",
+      "type": "object"
+    },
+    "ConfiguredPublicLimit": {
+      "additionalProperties": false,
+      "description": "Observable SOC threshold with explicit hysteresis.",
+      "properties": {
+        "channel_id": {
+          "const": "eps.battery_soc",
+          "title": "Channel Id",
+          "type": "string"
+        },
+        "clear_value": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Clear Value",
+          "type": "number"
+        },
+        "operator": {
+          "enum": [
+            "lt",
+            "gt"
+          ],
+          "title": "Operator",
+          "type": "string"
+        },
+        "value": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Value",
+          "type": "number"
+        }
+      },
+      "required": [
+        "channel_id",
+        "operator",
+        "value",
+        "clear_value"
+      ],
+      "title": "ConfiguredPublicLimit",
+      "type": "object"
+    },
+    "ConstellationDefinition": {
+      "additionalProperties": false,
+      "description": "Display grouping containing unique satellite identities.",
+      "properties": {
+        "constellation_id": {
+          "title": "Constellation Id",
+          "type": "string"
+        },
+        "satellite_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Satellite Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "constellation_id",
+        "satellite_ids"
+      ],
+      "title": "ConstellationDefinition",
+      "type": "object"
+    },
+    "ControlRequest": {
+      "additionalProperties": false,
+      "description": "A run command; speed is meaningful only for set_speed.",
+      "properties": {
+        "action": {
+          "enum": [
+            "start",
+            "pause",
+            "resume",
+            "stop",
+            "set_speed"
+          ],
+          "title": "Action",
+          "type": "string"
+        },
+        "speed": {
+          "anyOf": [
+            {
+              "enum": [
+                1,
+                5,
+                20
+              ],
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Speed"
+        }
+      },
+      "required": [
+        "action"
+      ],
+      "title": "ControlRequest",
+      "type": "object"
+    },
+    "DeratingPoint": {
+      "additionalProperties": false,
+      "description": "Elapsed run time and solar generation multiplier control point.",
+      "properties": {
+        "at_s": {
+          "maximum": 86400,
+          "minimum": 0,
+          "title": "At S",
+          "type": "integer"
+        },
+        "multiplier": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Multiplier",
+          "type": "number"
+        }
+      },
+      "required": [
+        "at_s",
+        "multiplier"
+      ],
+      "title": "DeratingPoint",
+      "type": "object"
+    },
+    "LowEnergyLimitDetails": {
+      "additionalProperties": false,
+      "description": "Allowlisted observed public SOC limit transition details.",
+      "properties": {
+        "channel_id": {
+          "const": "eps.battery_soc",
+          "title": "Channel Id",
+          "type": "string"
+        },
+        "clear_value": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Clear Value",
+          "type": "number"
+        },
+        "operator": {
+          "enum": [
+            "lt",
+            "gt"
+          ],
+          "title": "Operator",
+          "type": "string"
+        },
+        "value": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Value",
+          "type": "number"
+        }
+      },
+      "required": [
+        "channel_id",
+        "operator",
+        "value",
+        "clear_value"
+      ],
+      "title": "LowEnergyLimitDetails",
+      "type": "object"
+    },
+    "MeasurementFrame": {
+      "additionalProperties": false,
+      "description": "Allowlisted producer-neutral telemetry measurement frame.",
+      "properties": {
+        "catalog_version": {
+          "const": "power-leo.v1",
+          "title": "Catalog Version",
+          "type": "string"
+        },
+        "channels": {
+          "additionalProperties": {
+            "$ref": "#/$defs/ChannelReading"
+          },
+          "title": "Channels",
+          "type": "object"
+        },
+        "emitted_at": {
+          "format": "date-time",
+          "title": "Emitted At",
+          "type": "string"
+        },
+        "interval_mode": {
+          "anyOf": [
+            {
+              "enum": [
+                "nominal",
+                "payload_active",
+                "safe"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Interval Mode"
+        },
+        "mode": {
+          "enum": [
+            "nominal",
+            "payload_active",
+            "safe"
+          ],
+          "title": "Mode",
+          "type": "string"
+        },
+        "observed_at": {
+          "format": "date-time",
+          "title": "Observed At",
+          "type": "string"
+        },
+        "sample_window_s": {
+          "minimum": 0,
+          "title": "Sample Window S",
+          "type": "number"
+        },
+        "satellite_id": {
+          "pattern": "^[A-Za-z0-9_-]{1,64}$",
+          "title": "Satellite Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "telemetry.v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "sequence": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "title": "Sequence",
+          "type": "integer"
+        },
+        "source_id": {
+          "pattern": "^[A-Za-z0-9_-]{1,64}$",
+          "title": "Source Id",
+          "type": "string"
+        },
+        "source_kind": {
+          "enum": [
+            "synthetic",
+            "observed"
+          ],
+          "title": "Source Kind",
+          "type": "string"
+        },
+        "stream_id": {
+          "format": "uuid",
+          "title": "Stream Id",
+          "type": "string"
+        },
+        "time_domain": {
+          "enum": [
+            "simulation_utc",
+            "mission_utc"
+          ],
+          "title": "Time Domain",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema_version",
+        "source_id",
+        "stream_id",
+        "sequence",
+        "satellite_id",
+        "source_kind",
+        "time_domain",
+        "observed_at",
+        "sample_window_s",
+        "emitted_at",
+        "catalog_version",
+        "mode",
+        "interval_mode",
+        "channels"
+      ],
+      "title": "MeasurementFrame",
+      "type": "object"
+    },
+    "ModeChangedDetails": {
+      "additionalProperties": false,
+      "description": "Allowlisted observed mode transition details.",
+      "properties": {
+        "from_mode": {
+          "enum": [
+            "nominal",
+            "payload_active",
+            "safe"
+          ],
+          "title": "From Mode",
+          "type": "string"
+        },
+        "to_mode": {
+          "enum": [
+            "nominal",
+            "payload_active",
+            "safe"
+          ],
+          "title": "To Mode",
+          "type": "string"
+        }
+      },
+      "required": [
+        "from_mode",
+        "to_mode"
+      ],
+      "title": "ModeChangedDetails",
+      "type": "object"
+    },
+    "NoiseConfiguration": {
+      "additionalProperties": false,
+      "description": "Supported sensor noise selection.",
+      "properties": {
+        "type": {
+          "const": "none",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "NoiseConfiguration",
+      "type": "object"
+    },
+    "Operation": {
+      "additionalProperties": false,
+      "description": "Half-open scheduled operational mode interval.",
+      "properties": {
+        "end_s": {
+          "maximum": 86400,
+          "minimum": 1,
+          "title": "End S",
+          "type": "integer"
+        },
+        "mode": {
+          "enum": [
+            "nominal",
+            "payload_active",
+            "safe"
+          ],
+          "title": "Mode",
+          "type": "string"
+        },
+        "start_s": {
+          "maximum": 86400,
+          "minimum": 0,
+          "title": "Start S",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "start_s",
+        "end_s",
+        "mode"
+      ],
+      "title": "Operation",
+      "type": "object"
+    },
+    "OperationalEvent": {
+      "additionalProperties": false,
+      "description": "Allowlisted observable operational event envelope.",
+      "properties": {
+        "details": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModeChangedDetails"
+            },
+            {
+              "$ref": "#/$defs/LowEnergyLimitDetails"
+            },
+            {
+              "$ref": "#/$defs/PowerUnservedDetails"
+            }
+          ],
+          "title": "Details"
+        },
+        "emitted_at": {
+          "format": "date-time",
+          "title": "Emitted At",
+          "type": "string"
+        },
+        "event_sequence": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "title": "Event Sequence",
+          "type": "integer"
+        },
+        "event_type": {
+          "enum": [
+            "mode_changed",
+            "low_energy_limit_entered",
+            "low_energy_limit_cleared",
+            "power_unserved"
+          ],
+          "title": "Event Type",
+          "type": "string"
+        },
+        "observed_at": {
+          "format": "date-time",
+          "title": "Observed At",
+          "type": "string"
+        },
+        "reason_code": {
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_-]{1,64}$",
+          "title": "Reason Code",
+          "type": "string"
+        },
+        "satellite_id": {
+          "pattern": "^[A-Za-z0-9_-]{1,64}$",
+          "title": "Satellite Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "operational_event.v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_id": {
+          "pattern": "^[A-Za-z0-9_-]{1,64}$",
+          "title": "Source Id",
+          "type": "string"
+        },
+        "source_kind": {
+          "enum": [
+            "synthetic",
+            "observed"
+          ],
+          "title": "Source Kind",
+          "type": "string"
+        },
+        "stream_id": {
+          "format": "uuid",
+          "title": "Stream Id",
+          "type": "string"
+        },
+        "time_domain": {
+          "enum": [
+            "simulation_utc",
+            "mission_utc"
+          ],
+          "title": "Time Domain",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema_version",
+        "source_id",
+        "stream_id",
+        "event_sequence",
+        "satellite_id",
+        "source_kind",
+        "time_domain",
+        "observed_at",
+        "emitted_at",
+        "event_type",
+        "reason_code",
+        "details"
+      ],
+      "title": "OperationalEvent",
+      "type": "object"
+    },
+    "OrbitConfiguration": {
+      "additionalProperties": false,
+      "description": "Osculating classical orbit elements at the run epoch.",
+      "properties": {
+        "a_m": {
+          "exclusiveMinimum": 0,
+          "title": "A M",
+          "type": "number"
+        },
+        "argp_deg": {
+          "exclusiveMaximum": 360,
+          "minimum": 0,
+          "title": "Argp Deg",
+          "type": "number"
+        },
+        "e": {
+          "maximum": 0.05,
+          "minimum": 0,
+          "title": "E",
+          "type": "number"
+        },
+        "i_deg": {
+          "maximum": 180,
+          "minimum": 0,
+          "title": "I Deg",
+          "type": "number"
+        },
+        "raan_deg": {
+          "exclusiveMaximum": 360,
+          "minimum": 0,
+          "title": "Raan Deg",
+          "type": "number"
+        },
+        "true_anomaly_deg": {
+          "exclusiveMaximum": 360,
+          "minimum": 0,
+          "title": "True Anomaly Deg",
+          "type": "number"
+        }
+      },
+      "required": [
+        "a_m",
+        "e",
+        "i_deg",
+        "raan_deg",
+        "argp_deg",
+        "true_anomaly_deg"
+      ],
+      "title": "OrbitConfiguration",
+      "type": "object"
+    },
+    "OrbitPoint": {
+      "additionalProperties": false,
+      "description": "One authoritative Earth-fixed orbit state without predicted health.",
+      "properties": {
+        "elapsed_s": {
+          "title": "Elapsed S",
+          "type": "integer"
+        },
+        "observed_at": {
+          "format": "date-time",
+          "title": "Observed At",
+          "type": "string"
+        },
+        "position_itrs_m": {
+          "additionalItems": false,
+          "items": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "maxItems": 3,
+          "minItems": 3,
+          "title": "Position Itrs M",
+          "type": "array"
+        },
+        "velocity_itrs_m_s": {
+          "additionalItems": false,
+          "items": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "maxItems": 3,
+          "minItems": 3,
+          "title": "Velocity Itrs M S",
+          "type": "array"
+        }
+      },
+      "required": [
+        "elapsed_s",
+        "observed_at",
+        "position_itrs_m",
+        "velocity_itrs_m_s"
+      ],
+      "title": "OrbitPoint",
+      "type": "object"
+    },
+    "PanelConfiguration": {
+      "additionalProperties": false,
+      "description": "Equivalent solar-array nameplate and conversion parameters.",
+      "properties": {
+        "area_m2": {
+          "exclusiveMinimum": 0,
+          "title": "Area M2",
+          "type": "number"
+        },
+        "conversion_efficiency": {
+          "exclusiveMinimum": 0,
+          "maximum": 1,
+          "title": "Conversion Efficiency",
+          "type": "number"
+        },
+        "efficiency": {
+          "exclusiveMinimum": 0,
+          "maximum": 1,
+          "title": "Efficiency",
+          "type": "number"
+        },
+        "irradiance_1au_w_m2": {
+          "maximum": 1361.0,
+          "minimum": 1361.0,
+          "title": "Irradiance 1Au W M2",
+          "type": "number"
+        },
+        "pointing": {
+          "$ref": "#/$defs/PointingConfiguration"
+        }
+      },
+      "required": [
+        "area_m2",
+        "efficiency",
+        "conversion_efficiency",
+        "irradiance_1au_w_m2",
+        "pointing"
+      ],
+      "title": "PanelConfiguration",
+      "type": "object"
+    },
+    "PointingConfiguration": {
+      "additionalProperties": false,
+      "description": "Supported panel pointing policy.",
+      "properties": {
+        "type": {
+          "const": "ideal_sun_tracking",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "PointingConfiguration",
+      "type": "object"
+    },
+    "PowerUnservedDetails": {
+      "additionalProperties": false,
+      "description": "Allowlisted observed unserved-power state details.",
+      "properties": {
+        "active": {
+          "title": "Active",
+          "type": "boolean"
+        },
+        "sample_window_s": {
+          "minimum": 0,
+          "title": "Sample Window S",
+          "type": "number"
+        },
+        "value_w": {
+          "minimum": 0,
+          "title": "Value W",
+          "type": "number"
+        }
+      },
+      "required": [
+        "active",
+        "value_w",
+        "sample_window_s"
+      ],
+      "title": "PowerUnservedDetails",
+      "type": "object"
+    },
+    "PublicLimit": {
+      "additionalProperties": false,
+      "description": "A disclosed operational limit with hysteresis.",
+      "properties": {
+        "channel_id": {
+          "const": "eps.battery_soc",
+          "title": "Channel Id",
+          "type": "string"
+        },
+        "clear_value": {
+          "title": "Clear Value",
+          "type": "number"
+        },
+        "operator": {
+          "enum": [
+            "lt",
+            "gt"
+          ],
+          "title": "Operator",
+          "type": "string"
+        },
+        "value": {
+          "title": "Value",
+          "type": "number"
+        }
+      },
+      "required": [
+        "channel_id",
+        "operator",
+        "value",
+        "clear_value"
+      ],
+      "title": "PublicLimit",
+      "type": "object"
+    },
+    "PublicModelProvenance": {
+      "additionalProperties": false,
+      "description": "Allowlisted public model and Earth-orientation provenance.\n\nNotes\n-----\nFields may be absent when the producer has not supplied that metadata.\nUnknown fields are rejected so private manifest parameters cannot cross\nthe public response boundary through an unrestricted metadata mapping.",
+      "properties": {
+        "accuracy_claim": {
+          "title": "Accuracy Claim",
+          "type": "string"
+        },
+        "astropy_iers_data_version": {
+          "title": "Astropy Iers Data Version",
+          "type": "string"
+        },
+        "astropy_version": {
+          "title": "Astropy Version",
+          "type": "string"
+        },
+        "coverage_validated": {
+          "title": "Coverage Validated",
+          "type": "boolean"
+        },
+        "earth_model": {
+          "title": "Earth Model",
+          "type": "string"
+        },
+        "earth_orientation_source": {
+          "title": "Earth Orientation Source",
+          "type": "string"
+        },
+        "eclipse_model": {
+          "title": "Eclipse Model",
+          "type": "string"
+        },
+        "eps_model_limits": {
+          "title": "Eps Model Limits",
+          "type": "string"
+        },
+        "erfa_version": {
+          "title": "Erfa Version",
+          "type": "string"
+        },
+        "force_model_limits": {
+          "title": "Force Model Limits",
+          "type": "string"
+        },
+        "frame": {
+          "title": "Frame",
+          "type": "string"
+        },
+        "iers_first_mjd": {
+          "title": "Iers First Mjd",
+          "type": "number"
+        },
+        "iers_last_mjd": {
+          "title": "Iers Last Mjd",
+          "type": "number"
+        },
+        "iers_sha256": {
+          "title": "Iers Sha256",
+          "type": "string"
+        },
+        "iers_values": {
+          "enum": [
+            "observed",
+            "predicted"
+          ],
+          "title": "Iers Values",
+          "type": "string"
+        },
+        "inertial_frame": {
+          "title": "Inertial Frame",
+          "type": "string"
+        },
+        "integrator": {
+          "title": "Integrator",
+          "type": "string"
+        },
+        "leap_seconds_expiry": {
+          "title": "Leap Seconds Expiry",
+          "type": "string"
+        },
+        "leap_seconds_sha256": {
+          "title": "Leap Seconds Sha256",
+          "type": "string"
+        },
+        "midpoint_model": {
+          "title": "Midpoint Model",
+          "type": "string"
+        },
+        "network_updates": {
+          "title": "Network Updates",
+          "type": "boolean"
+        },
+        "numpy_version": {
+          "title": "Numpy Version",
+          "type": "string"
+        },
+        "orbit_model": {
+          "title": "Orbit Model",
+          "type": "string"
+        },
+        "panel_model": {
+          "title": "Panel Model",
+          "type": "string"
+        },
+        "sun_model": {
+          "title": "Sun Model",
+          "type": "string"
+        },
+        "time_advance_scale": {
+          "title": "Time Advance Scale",
+          "type": "string"
+        }
+      },
+      "title": "PublicModelProvenance",
+      "type": "object"
+    },
+    "PublicRunStatus": {
+      "additionalProperties": false,
+      "description": "Committed run status containing no configuration or scenario identity.",
+      "properties": {
+        "committed_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Committed At"
+        },
+        "committed_tick": {
+          "default": -1,
+          "title": "Committed Tick",
+          "type": "integer"
+        },
+        "diagnostic": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Diagnostic"
+        },
+        "duration_s": {
+          "title": "Duration S",
+          "type": "integer"
+        },
+        "effective_speed": {
+          "default": 0,
+          "title": "Effective Speed",
+          "type": "number"
+        },
+        "epoch_utc": {
+          "format": "date-time",
+          "title": "Epoch Utc",
+          "type": "string"
+        },
+        "frame_count": {
+          "default": 0,
+          "title": "Frame Count",
+          "type": "integer"
+        },
+        "model_provenance": {
+          "$ref": "#/$defs/PublicModelProvenance"
+        },
+        "requested_speed": {
+          "enum": [
+            1,
+            5,
+            20
+          ],
+          "title": "Requested Speed",
+          "type": "integer"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "satellites": {
+          "items": {
+            "$ref": "#/$defs/PublicSpacecraft"
+          },
+          "title": "Satellites",
+          "type": "array"
+        },
+        "source_kind": {
+          "const": "synthetic",
+          "default": "synthetic",
+          "title": "Source Kind",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "created",
+            "running",
+            "paused",
+            "completed",
+            "stopped",
+            "failed",
+            "aborted"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "status_revision": {
+          "default": 0,
+          "title": "Status Revision",
+          "type": "integer"
+        },
+        "wall_lag_s": {
+          "default": 0,
+          "title": "Wall Lag S",
+          "type": "number"
+        }
+      },
+      "required": [
+        "run_id",
+        "status",
+        "epoch_utc",
+        "duration_s",
+        "committed_tick",
+        "status_revision",
+        "committed_at",
+        "requested_speed",
+        "effective_speed",
+        "wall_lag_s",
+        "satellites",
+        "source_kind",
+        "model_provenance",
+        "frame_count",
+        "diagnostic"
+      ],
+      "title": "PublicRunStatus",
+      "type": "object"
+    },
+    "PublicSpacecraft": {
+      "additionalProperties": false,
+      "description": "Public nameplate and display properties of one spacecraft.",
+      "properties": {
+        "capacity_wh": {
+          "title": "Capacity Wh",
+          "type": "number"
+        },
+        "color": {
+          "title": "Color",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "panel_area_m2": {
+          "title": "Panel Area M2",
+          "type": "number"
+        },
+        "public_limits": {
+          "items": {
+            "$ref": "#/$defs/PublicLimit"
+          },
+          "title": "Public Limits",
+          "type": "array"
+        },
+        "satellite_id": {
+          "title": "Satellite Id",
+          "type": "string"
+        },
+        "stream_id": {
+          "title": "Stream Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "satellite_id",
+        "name",
+        "color",
+        "stream_id",
+        "capacity_wh",
+        "panel_area_m2",
+        "public_limits"
+      ],
+      "title": "PublicSpacecraft",
+      "type": "object"
+    },
+    "ReserveOutcome": {
+      "additionalProperties": false,
+      "description": "Private state-triggered operational reserve outcome rule.",
+      "properties": {
+        "dwell_s": {
+          "default": 60,
+          "minimum": 1,
+          "title": "Dwell S",
+          "type": "integer"
+        },
+        "reserve_soc": {
+          "exclusiveMaximum": 1,
+          "exclusiveMinimum": 0,
+          "title": "Reserve Soc",
+          "type": "number"
+        },
+        "type": {
+          "const": "energy_reserve_violation",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "reserve_soc"
+      ],
+      "title": "ReserveOutcome",
+      "type": "object"
+    },
+    "RunConfiguration": {
+      "additionalProperties": false,
+      "description": "Simulation timing, seed, and versioned model selections.",
+      "properties": {
+        "duration_s": {
+          "default": 21600,
+          "maximum": 86400,
+          "minimum": 1,
+          "title": "Duration S",
+          "type": "integer"
+        },
+        "earth_model": {
+          "const": "wgs84_j2_v1",
+          "title": "Earth Model",
+          "type": "string"
+        },
+        "epoch_utc": {
+          "format": "date-time",
+          "title": "Epoch Utc",
+          "type": "string"
+        },
+        "orbit_model": {
+          "const": "j2_cartesian",
+          "title": "Orbit Model",
+          "type": "string"
+        },
+        "seed": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "title": "Seed",
+          "type": "integer"
+        },
+        "speed": {
+          "default": 20,
+          "enum": [
+            1,
+            5,
+            20
+          ],
+          "title": "Speed",
+          "type": "integer"
+        },
+        "sun_model": {
+          "const": "astropy_builtin",
+          "title": "Sun Model",
+          "type": "string"
+        },
+        "telemetry_period_s": {
+          "const": 1,
+          "title": "Telemetry Period S",
+          "type": "integer"
+        },
+        "tick_s": {
+          "const": 1,
+          "title": "Tick S",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "epoch_utc",
+        "tick_s",
+        "telemetry_period_s",
+        "seed",
+        "earth_model",
+        "orbit_model",
+        "sun_model"
+      ],
+      "title": "RunConfiguration",
+      "type": "object"
+    },
+    "SatelliteDefinition": {
+      "additionalProperties": false,
+      "description": "Stable spacecraft identity, orbit, profile reference, and schedule.",
+      "properties": {
+        "initial_mode": {
+          "enum": [
+            "nominal",
+            "payload_active",
+            "safe"
+          ],
+          "title": "Initial Mode",
+          "type": "string"
+        },
+        "name": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "operations": {
+          "items": {
+            "$ref": "#/$defs/Operation"
+          },
+          "title": "Operations",
+          "type": "array"
+        },
+        "orbit": {
+          "$ref": "#/$defs/OrbitConfiguration"
+        },
+        "profile_id": {
+          "title": "Profile Id",
+          "type": "string"
+        },
+        "satellite_id": {
+          "title": "Satellite Id",
+          "type": "string"
+        },
+        "visual": {
+          "$ref": "#/$defs/VisualConfiguration"
+        }
+      },
+      "required": [
+        "satellite_id",
+        "name",
+        "profile_id",
+        "orbit",
+        "initial_mode",
+        "operations"
+      ],
+      "title": "SatelliteDefinition",
+      "type": "object"
+    },
+    "SatelliteTrajectory": {
+      "additionalProperties": false,
+      "description": "Orbit samples for one spacecraft.",
+      "properties": {
+        "samples": {
+          "items": {
+            "$ref": "#/$defs/OrbitPoint"
+          },
+          "title": "Samples",
+          "type": "array"
+        },
+        "satellite_id": {
+          "title": "Satellite Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "satellite_id",
+        "samples"
+      ],
+      "title": "SatelliteTrajectory",
+      "type": "object"
+    },
+    "SensorConfiguration": {
+      "additionalProperties": false,
+      "description": "Public channel catalog and sensor-noise policy.",
+      "properties": {
+        "catalog": {
+          "const": "power-leo.v1",
+          "title": "Catalog",
+          "type": "string"
+        },
+        "noise": {
+          "$ref": "#/$defs/NoiseConfiguration"
+        }
+      },
+      "required": [
+        "catalog",
+        "noise"
+      ],
+      "title": "SensorConfiguration",
+      "type": "object"
+    },
+    "SequenceRange": {
+      "additionalProperties": false,
+      "description": "A delivered stream's inclusive sequence bounds.",
+      "properties": {
+        "first": {
+          "title": "First",
+          "type": "integer"
+        },
+        "last": {
+          "title": "Last",
+          "type": "integer"
+        },
+        "stream_id": {
+          "title": "Stream Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "stream_id",
+        "first",
+        "last"
+      ],
+      "title": "SequenceRange",
+      "type": "object"
+    },
+    "SimulationConfig": {
+      "additionalProperties": false,
+      "description": "Complete validated P0 simulation input configuration.",
+      "properties": {
+        "constellations": {
+          "items": {
+            "$ref": "#/$defs/ConstellationDefinition"
+          },
+          "title": "Constellations",
+          "type": "array"
+        },
+        "profiles": {
+          "additionalProperties": {
+            "$ref": "#/$defs/SpacecraftProfile"
+          },
+          "title": "Profiles",
+          "type": "object"
+        },
+        "run": {
+          "$ref": "#/$defs/RunConfiguration"
+        },
+        "satellites": {
+          "items": {
+            "$ref": "#/$defs/SatelliteDefinition"
+          },
+          "title": "Satellites",
+          "type": "array"
+        },
+        "scenario": {
+          "items": {
+            "$ref": "#/$defs/SolarDeratingScenario"
+          },
+          "title": "Scenario",
+          "type": "array"
+        },
+        "schema_version": {
+          "const": "simulation.v1",
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema_version",
+        "run",
+        "profiles",
+        "satellites",
+        "constellations",
+        "scenario"
+      ],
+      "title": "SimulationConfig",
+      "type": "object"
+    },
+    "Snapshot": {
+      "additionalProperties": false,
+      "description": "A consistent committed status and bounded measurement history.",
+      "properties": {
+        "frames": {
+          "items": {
+            "$ref": "#/$defs/MeasurementFrame"
+          },
+          "title": "Frames",
+          "type": "array"
+        },
+        "status": {
+          "$ref": "#/$defs/PublicRunStatus"
+        }
+      },
+      "required": [
+        "status",
+        "frames"
+      ],
+      "title": "Snapshot",
+      "type": "object"
+    },
+    "SolarDeratingScenario": {
+      "additionalProperties": false,
+      "description": "Private piecewise-linear solar derating scenario.",
+      "properties": {
+        "outcome": {
+          "$ref": "#/$defs/ReserveOutcome"
+        },
+        "points": {
+          "items": {
+            "$ref": "#/$defs/DeratingPoint"
+          },
+          "title": "Points",
+          "type": "array"
+        },
+        "satellite_id": {
+          "title": "Satellite Id",
+          "type": "string"
+        },
+        "type": {
+          "const": "solar_derating",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "satellite_id",
+        "type",
+        "points",
+        "outcome"
+      ],
+      "title": "SolarDeratingScenario",
+      "type": "object"
+    },
+    "SpacecraftProfile": {
+      "additionalProperties": false,
+      "description": "Reusable spacecraft subsystem configuration.",
+      "properties": {
+        "battery": {
+          "$ref": "#/$defs/BatteryConfiguration"
+        },
+        "loads_w": {
+          "additionalProperties": {
+            "minimum": 0,
+            "type": "number"
+          },
+          "propertyNames": {
+            "enum": [
+              "nominal",
+              "payload_active",
+              "safe"
+            ]
+          },
+          "title": "Loads W",
+          "type": "object"
+        },
+        "panel": {
+          "$ref": "#/$defs/PanelConfiguration"
+        },
+        "public_limits": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/ConfiguredPublicLimit"
+          },
+          "title": "Public Limits",
+          "type": "array"
+        },
+        "sensors": {
+          "$ref": "#/$defs/SensorConfiguration"
+        }
+      },
+      "required": [
+        "panel",
+        "battery",
+        "loads_w",
+        "sensors"
+      ],
+      "title": "SpacecraftProfile",
+      "type": "object"
+    },
+    "Trajectory": {
+      "additionalProperties": false,
+      "description": "Bounded orbit-only prediction with explicit coordinates.",
+      "properties": {
+        "frame": {
+          "const": "ITRS",
+          "default": "ITRS",
+          "title": "Frame",
+          "type": "string"
+        },
+        "kind": {
+          "const": "predicted_orbit",
+          "default": "predicted_orbit",
+          "title": "Kind",
+          "type": "string"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "satellites": {
+          "items": {
+            "$ref": "#/$defs/SatelliteTrajectory"
+          },
+          "title": "Satellites",
+          "type": "array"
+        }
+      },
+      "required": [
+        "run_id",
+        "kind",
+        "frame",
+        "satellites"
+      ],
+      "title": "Trajectory",
+      "type": "object"
+    },
+    "ViewerBootstrap": {
+      "additionalProperties": false,
+      "description": "One prepared run and session-bound CSRF token for the browser.",
+      "properties": {
+        "csrf_token": {
+          "title": "Csrf Token",
+          "type": "string"
+        },
+        "run": {
+          "$ref": "#/$defs/PublicRunStatus"
+        }
+      },
+      "required": [
+        "csrf_token",
+        "run"
+      ],
+      "title": "ViewerBootstrap",
+      "type": "object"
+    },
+    "VisualConfiguration": {
+      "additionalProperties": false,
+      "description": "Allowlisted visual marker metadata for a spacecraft.",
+      "properties": {
+        "asset_id": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z0-9_-]{1,64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Asset Id"
+        },
+        "color": {
+          "default": "#8FD3FF",
+          "pattern": "^#[0-9A-Fa-f]{6}$",
+          "title": "Color",
+          "type": "string"
+        }
+      },
+      "title": "VisualConfiguration",
+      "type": "object"
+    },
+    "VisualMessage": {
+      "additionalProperties": false,
+      "description": "Bounded public presentation transport; never a durable consumer offset.",
+      "properties": {
+        "frames": {
+          "items": {
+            "$ref": "#/$defs/MeasurementFrame"
+          },
+          "title": "Frames",
+          "type": "array"
+        },
+        "message": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Message"
+        },
+        "ranges": {
+          "items": {
+            "$ref": "#/$defs/SequenceRange"
+          },
+          "title": "Ranges",
+          "type": "array"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "sent_at": {
+          "format": "date-time",
+          "title": "Sent At",
+          "type": "string"
+        },
+        "status": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PublicRunStatus"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "type": {
+          "enum": [
+            "snapshot",
+            "samples",
+            "clock",
+            "lifecycle",
+            "resync_required",
+            "error"
+          ],
+          "title": "Type",
+          "type": "string"
+        },
+        "visual_schema_version": {
+          "const": "visual.v1",
+          "default": "visual.v1",
+          "title": "Visual Schema Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "visual_schema_version",
+        "type",
+        "sent_at",
+        "run_id",
+        "status",
+        "frames",
+        "ranges",
+        "message"
+      ],
+      "title": "VisualMessage",
+      "type": "object"
+    }
+  },
+  "$id": "https://metisorbital.local/schemas/public-api.v1.json",
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "additionalProperties": false,
+  "properties": {
+    "ChannelReading": {
+      "$ref": "#/$defs/ChannelReading"
+    },
+    "ControlRequest": {
+      "$ref": "#/$defs/ControlRequest"
+    },
+    "MeasurementFrame": {
+      "$ref": "#/$defs/MeasurementFrame"
+    },
+    "OperationalEvent": {
+      "$ref": "#/$defs/OperationalEvent"
+    },
+    "OrbitPoint": {
+      "$ref": "#/$defs/OrbitPoint"
+    },
+    "PublicLimit": {
+      "$ref": "#/$defs/PublicLimit"
+    },
+    "PublicRunStatus": {
+      "$ref": "#/$defs/PublicRunStatus"
+    },
+    "PublicSpacecraft": {
+      "$ref": "#/$defs/PublicSpacecraft"
+    },
+    "SatelliteTrajectory": {
+      "$ref": "#/$defs/SatelliteTrajectory"
+    },
+    "SequenceRange": {
+      "$ref": "#/$defs/SequenceRange"
+    },
+    "SimulationConfig": {
+      "$ref": "#/$defs/SimulationConfig"
+    },
+    "Snapshot": {
+      "$ref": "#/$defs/Snapshot"
+    },
+    "Trajectory": {
+      "$ref": "#/$defs/Trajectory"
+    },
+    "ViewerBootstrap": {
+      "$ref": "#/$defs/ViewerBootstrap"
+    },
+    "VisualMessage": {
+      "$ref": "#/$defs/VisualMessage"
+    }
+  },
+  "required": [
+    "SimulationConfig",
+    "MeasurementFrame",
+    "OperationalEvent",
+    "ChannelReading",
+    "PublicLimit",
+    "PublicSpacecraft",
+    "PublicRunStatus",
+    "Snapshot",
+    "OrbitPoint",
+    "SatelliteTrajectory",
+    "Trajectory",
+    "SequenceRange",
+    "VisualMessage",
+    "ViewerBootstrap",
+    "ControlRequest"
+  ],
+  "title": "MetisPublicContracts",
+  "type": "object"
+}

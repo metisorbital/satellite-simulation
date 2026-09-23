@@ -1,0 +1,34 @@
+{
+  "name": "metis-orbital-viewer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "test": "vitest run tests/playback.test.ts tests/client.test.ts tests/orbit-reference.test.ts",
+    "test:e2e": "npm run build && playwright test",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "dependencies": {
+    "cesium": "1.145.0",
+    "lucide-react": "1.47.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "@types/node": "22.18.6",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.2.3",
+    "@vitejs/plugin-react": "6.1.1",
+    "typescript": "7.0.2",
+    "json-schema-to-typescript": "16.0.0",
+    "prettier": "3.9.8",
+    "vite": "8.3.0",
+    "vite-plugin-static-copy": "4.1.1",
+    "vitest": "5.0.1"
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "schema_version": "telemetry.v1",
+  "source_id": "mission-ground-test",
+  "stream_id": "8152b6ac-8f6c-4d54-94eb-764b414a1b9c",
+  "sequence": 0,
+  "satellite_id": "METIS-OBS-01",
+  "source_kind": "observed",
+  "time_domain": "mission_utc",
+  "observed_at": "2026-09-21T00:00:00Z",
+  "sample_window_s": 0,
+  "emitted_at": "2026-09-21T00:00:02Z",
+  "catalog_version": "power-leo.v1",
+  "mode": "nominal",
+  "interval_mode": "nominal",
+  "channels": {
+    "orbit.latitude_deg": {"value": 12.5, "quality": "valid"},
+    "eps.battery_soc": {"value": 0.72, "quality": "valid"},
+    "eps.solar_power_w": {"value": null, "quality": "missing"}
+  }
+}

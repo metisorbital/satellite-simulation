@@ -1,0 +1,632 @@
+{
+  "$defs": {
+    "BatteryConfiguration": {
+      "additionalProperties": false,
+      "description": "Ideal bounded energy-store nameplate and starting condition.",
+      "properties": {
+        "charge_efficiency": {
+          "exclusiveMinimum": 0,
+          "maximum": 1,
+          "title": "Charge Efficiency",
+          "type": "number"
+        },
+        "discharge_efficiency": {
+          "exclusiveMinimum": 0,
+          "maximum": 1,
+          "title": "Discharge Efficiency",
+          "type": "number"
+        },
+        "initial_soc": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Initial Soc",
+          "type": "number"
+        },
+        "max_charge_w": {
+          "minimum": 0,
+          "title": "Max Charge W",
+          "type": "number"
+        },
+        "max_discharge_w": {
+          "minimum": 0,
+          "title": "Max Discharge W",
+          "type": "number"
+        },
+        "type": {
+          "const": "energy_store",
+          "title": "Type",
+          "type": "string"
+        },
+        "usable_capacity_wh": {
+          "exclusiveMinimum": 0,
+          "title": "Usable Capacity Wh",
+          "type": "number"
+        }
+      },
+      "required": [
+        "type",
+        "usable_capacity_wh",
+        "initial_soc",
+        "charge_efficiency",
+        "discharge_efficiency",
+        "max_charge_w",
+        "max_discharge_w"
+      ],
+      "title": "BatteryConfiguration",
+      "type": "object"
+    },
+    "ConfiguredPublicLimit": {
+      "additionalProperties": false,
+      "description": "Observable SOC threshold with explicit hysteresis.",
+      "properties": {
+        "channel_id": {
+          "const": "eps.battery_soc",
+          "title": "Channel Id",
+          "type": "string"
+        },
+        "clear_value": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Clear Value",
+          "type": "number"
+        },
+        "operator": {
+          "enum": [
+            "lt",
+            "gt"
+          ],
+          "title": "Operator",
+          "type": "string"
+        },
+        "value": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Value",
+          "type": "number"
+        }
+      },
+      "required": [
+        "channel_id",
+        "operator",
+        "value",
+        "clear_value"
+      ],
+      "title": "ConfiguredPublicLimit",
+      "type": "object"
+    },
+    "ConstellationDefinition": {
+      "additionalProperties": false,
+      "description": "Display grouping containing unique satellite identities.",
+      "properties": {
+        "constellation_id": {
+          "title": "Constellation Id",
+          "type": "string"
+        },
+        "satellite_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Satellite Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "constellation_id",
+        "satellite_ids"
+      ],
+      "title": "ConstellationDefinition",
+      "type": "object"
+    },
+    "DeratingPoint": {
+      "additionalProperties": false,
+      "description": "Elapsed run time and solar generation multiplier control point.",
+      "properties": {
+        "at_s": {
+          "maximum": 86400,
+          "minimum": 0,
+          "title": "At S",
+          "type": "integer"
+        },
+        "multiplier": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Multiplier",
+          "type": "number"
+        }
+      },
+      "required": [
+        "at_s",
+        "multiplier"
+      ],
+      "title": "DeratingPoint",
+      "type": "object"
+    },
+    "NoiseConfiguration": {
+      "additionalProperties": false,
+      "description": "Supported sensor noise selection.",
+      "properties": {
+        "type": {
+          "const": "none",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "NoiseConfiguration",
+      "type": "object"
+    },
+    "Operation": {
+      "additionalProperties": false,
+      "description": "Half-open scheduled operational mode interval.",
+      "properties": {
+        "end_s": {
+          "maximum": 86400,
+          "minimum": 1,
+          "title": "End S",
+          "type": "integer"
+        },
+        "mode": {
+          "enum": [
+            "nominal",
+            "payload_active",
+            "safe"
+          ],
+          "title": "Mode",
+          "type": "string"
+        },
+        "start_s": {
+          "maximum": 86400,
+          "minimum": 0,
+          "title": "Start S",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "start_s",
+        "end_s",
+        "mode"
+      ],
+      "title": "Operation",
+      "type": "object"
+    },
+    "OrbitConfiguration": {
+      "additionalProperties": false,
+      "description": "Osculating classical orbit elements at the run epoch.",
+      "properties": {
+        "a_m": {
+          "exclusiveMinimum": 0,
+          "title": "A M",
+          "type": "number"
+        },
+        "argp_deg": {
+          "exclusiveMaximum": 360,
+          "minimum": 0,
+          "title": "Argp Deg",
+          "type": "number"
+        },
+        "e": {
+          "maximum": 0.05,
+          "minimum": 0,
+          "title": "E",
+          "type": "number"
+        },
+        "i_deg": {
+          "maximum": 180,
+          "minimum": 0,
+          "title": "I Deg",
+          "type": "number"
+        },
+        "raan_deg": {
+          "exclusiveMaximum": 360,
+          "minimum": 0,
+          "title": "Raan Deg",
+          "type": "number"
+        },
+        "true_anomaly_deg": {
+          "exclusiveMaximum": 360,
+          "minimum": 0,
+          "title": "True Anomaly Deg",
+          "type": "number"
+        }
+      },
+      "required": [
+        "a_m",
+        "e",
+        "i_deg",
+        "raan_deg",
+        "argp_deg",
+        "true_anomaly_deg"
+      ],
+      "title": "OrbitConfiguration",
+      "type": "object"
+    },
+    "PanelConfiguration": {
+      "additionalProperties": false,
+      "description": "Equivalent solar-array nameplate and conversion parameters.",
+      "properties": {
+        "area_m2": {
+          "exclusiveMinimum": 0,
+          "title": "Area M2",
+          "type": "number"
+        },
+        "conversion_efficiency": {
+          "exclusiveMinimum": 0,
+          "maximum": 1,
+          "title": "Conversion Efficiency",
+          "type": "number"
+        },
+        "efficiency": {
+          "exclusiveMinimum": 0,
+          "maximum": 1,
+          "title": "Efficiency",
+          "type": "number"
+        },
+        "irradiance_1au_w_m2": {
+          "maximum": 1361.0,
+          "minimum": 1361.0,
+          "title": "Irradiance 1Au W M2",
+          "type": "number"
+        },
+        "pointing": {
+          "$ref": "#/$defs/PointingConfiguration"
+        }
+      },
+      "required": [
+        "area_m2",
+        "efficiency",
+        "conversion_efficiency",
+        "irradiance_1au_w_m2",
+        "pointing"
+      ],
+      "title": "PanelConfiguration",
+      "type": "object"
+    },
+    "PointingConfiguration": {
+      "additionalProperties": false,
+      "description": "Supported panel pointing policy.",
+      "properties": {
+        "type": {
+          "const": "ideal_sun_tracking",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "PointingConfiguration",
+      "type": "object"
+    },
+    "ReserveOutcome": {
+      "additionalProperties": false,
+      "description": "Private state-triggered operational reserve outcome rule.",
+      "properties": {
+        "dwell_s": {
+          "default": 60,
+          "minimum": 1,
+          "title": "Dwell S",
+          "type": "integer"
+        },
+        "reserve_soc": {
+          "exclusiveMaximum": 1,
+          "exclusiveMinimum": 0,
+          "title": "Reserve Soc",
+          "type": "number"
+        },
+        "type": {
+          "const": "energy_reserve_violation",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "reserve_soc"
+      ],
+      "title": "ReserveOutcome",
+      "type": "object"
+    },
+    "RunConfiguration": {
+      "additionalProperties": false,
+      "description": "Simulation timing, seed, and versioned model selections.",
+      "properties": {
+        "duration_s": {
+          "default": 21600,
+          "maximum": 86400,
+          "minimum": 1,
+          "title": "Duration S",
+          "type": "integer"
+        },
+        "earth_model": {
+          "const": "wgs84_j2_v1",
+          "title": "Earth Model",
+          "type": "string"
+        },
+        "epoch_utc": {
+          "format": "date-time",
+          "title": "Epoch Utc",
+          "type": "string"
+        },
+        "orbit_model": {
+          "const": "j2_cartesian",
+          "title": "Orbit Model",
+          "type": "string"
+        },
+        "seed": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "title": "Seed",
+          "type": "integer"
+        },
+        "speed": {
+          "default": 20,
+          "enum": [
+            1,
+            5,
+            20
+          ],
+          "title": "Speed",
+          "type": "integer"
+        },
+        "sun_model": {
+          "const": "astropy_builtin",
+          "title": "Sun Model",
+          "type": "string"
+        },
+        "telemetry_period_s": {
+          "const": 1,
+          "title": "Telemetry Period S",
+          "type": "integer"
+        },
+        "tick_s": {
+          "const": 1,
+          "title": "Tick S",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "epoch_utc",
+        "tick_s",
+        "telemetry_period_s",
+        "seed",
+        "earth_model",
+        "orbit_model",
+        "sun_model"
+      ],
+      "title": "RunConfiguration",
+      "type": "object"
+    },
+    "SatelliteDefinition": {
+      "additionalProperties": false,
+      "description": "Stable spacecraft identity, orbit, profile reference, and schedule.",
+      "properties": {
+        "initial_mode": {
+          "enum": [
+            "nominal",
+            "payload_active",
+            "safe"
+          ],
+          "title": "Initial Mode",
+          "type": "string"
+        },
+        "name": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "operations": {
+          "items": {
+            "$ref": "#/$defs/Operation"
+          },
+          "title": "Operations",
+          "type": "array"
+        },
+        "orbit": {
+          "$ref": "#/$defs/OrbitConfiguration"
+        },
+        "profile_id": {
+          "title": "Profile Id",
+          "type": "string"
+        },
+        "satellite_id": {
+          "title": "Satellite Id",
+          "type": "string"
+        },
+        "visual": {
+          "$ref": "#/$defs/VisualConfiguration"
+        }
+      },
+      "required": [
+        "satellite_id",
+        "name",
+        "profile_id",
+        "orbit",
+        "initial_mode",
+        "operations"
+      ],
+      "title": "SatelliteDefinition",
+      "type": "object"
+    },
+    "SensorConfiguration": {
+      "additionalProperties": false,
+      "description": "Public channel catalog and sensor-noise policy.",
+      "properties": {
+        "catalog": {
+          "const": "power-leo.v1",
+          "title": "Catalog",
+          "type": "string"
+        },
+        "noise": {
+          "$ref": "#/$defs/NoiseConfiguration"
+        }
+      },
+      "required": [
+        "catalog",
+        "noise"
+      ],
+      "title": "SensorConfiguration",
+      "type": "object"
+    },
+    "SolarDeratingScenario": {
+      "additionalProperties": false,
+      "description": "Private piecewise-linear solar derating scenario.",
+      "properties": {
+        "outcome": {
+          "$ref": "#/$defs/ReserveOutcome"
+        },
+        "points": {
+          "items": {
+            "$ref": "#/$defs/DeratingPoint"
+          },
+          "title": "Points",
+          "type": "array"
+        },
+        "satellite_id": {
+          "title": "Satellite Id",
+          "type": "string"
+        },
+        "type": {
+          "const": "solar_derating",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "satellite_id",
+        "type",
+        "points",
+        "outcome"
+      ],
+      "title": "SolarDeratingScenario",
+      "type": "object"
+    },
+    "SpacecraftProfile": {
+      "additionalProperties": false,
+      "description": "Reusable spacecraft subsystem configuration.",
+      "properties": {
+        "battery": {
+          "$ref": "#/$defs/BatteryConfiguration"
+        },
+        "loads_w": {
+          "additionalProperties": {
+            "minimum": 0,
+            "type": "number"
+          },
+          "propertyNames": {
+            "enum": [
+              "nominal",
+              "payload_active",
+              "safe"
+            ]
+          },
+          "title": "Loads W",
+          "type": "object"
+        },
+        "panel": {
+          "$ref": "#/$defs/PanelConfiguration"
+        },
+        "public_limits": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/ConfiguredPublicLimit"
+          },
+          "title": "Public Limits",
+          "type": "array"
+        },
+        "sensors": {
+          "$ref": "#/$defs/SensorConfiguration"
+        }
+      },
+      "required": [
+        "panel",
+        "battery",
+        "loads_w",
+        "sensors"
+      ],
+      "title": "SpacecraftProfile",
+      "type": "object"
+    },
+    "VisualConfiguration": {
+      "additionalProperties": false,
+      "description": "Allowlisted visual marker metadata for a spacecraft.",
+      "properties": {
+        "asset_id": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z0-9_-]{1,64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Asset Id"
+        },
+        "color": {
+          "default": "#8FD3FF",
+          "pattern": "^#[0-9A-Fa-f]{6}$",
+          "title": "Color",
+          "type": "string"
+        }
+      },
+      "title": "VisualConfiguration",
+      "type": "object"
+    }
+  },
+  "$id": "https://metisorbital.local/schemas/simulation.v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Complete validated P0 simulation input configuration.",
+  "properties": {
+    "constellations": {
+      "items": {
+        "$ref": "#/$defs/ConstellationDefinition"
+      },
+      "title": "Constellations",
+      "type": "array"
+    },
+    "profiles": {
+      "additionalProperties": {
+        "$ref": "#/$defs/SpacecraftProfile"
+      },
+      "title": "Profiles",
+      "type": "object"
+    },
+    "run": {
+      "$ref": "#/$defs/RunConfiguration"
+    },
+    "satellites": {
+      "items": {
+        "$ref": "#/$defs/SatelliteDefinition"
+      },
+      "title": "Satellites",
+      "type": "array"
+    },
+    "scenario": {
+      "items": {
+        "$ref": "#/$defs/SolarDeratingScenario"
+      },
+      "title": "Scenario",
+      "type": "array"
+    },
+    "schema_version": {
+      "const": "simulation.v1",
+      "title": "Schema Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "run",
+    "profiles",
+    "satellites",
+    "constellations",
+    "scenario"
+  ],
+  "title": "simulation.v1",
+  "type": "object"
+}
