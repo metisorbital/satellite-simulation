@@ -10,6 +10,47 @@ audience: engineering
 The implementation follows the causal path defined in the [specification](specification.md): validated configuration, deterministic orbit and environment, electrical-power state, durable public telemetry, and a browser viewer.
 The viewer consumes backend outputs and does not calculate orbital physics.
 
+## See the System at a Glance
+
+A **run** is one execution of a validated configuration. A **tick** is one elapsed simulated second in that run; wall time only controls how quickly ticks are committed. This separation lets a paused or slower run produce the same physical measurements.
+
+```mermaid
+flowchart LR
+  config[Operator configuration] --> validate[Validate and freeze]
+  validate --> engine[Prepare orbit and power model]
+  engine --> runner[Single writer advances ticks]
+  runner --> database[(PostgreSQL committed history)]
+  database --> api[REST cursor and snapshot reads]
+  database --> visual[Bounded visual stream]
+  api --> consumer[Telemetry consumer]
+  visual --> viewer[React and Cesium viewer]
+  viewer --> controls[Run controls]
+  controls --> runner
+```
+
+The writer commits measurements before either reader can see them. The REST cursor is for durable replay; the visual stream is for a responsive display and can ask the viewer to resynchronize. The [API guide](api.md) shows how to read each one.
+
+## Find the Code
+
+```text
+backend/src/metis_sim/
+  domain/         # Validated configuration and public data shapes
+  models/         # Orbit, coordinate frames, eclipse, operations, power
+  application/    # Run preparation, measurement mapping, single writer
+  adapters/       # Safe configuration parsing and PostgreSQL storage
+  api/            # FastAPI routes, authentication, WebSocket, static UI
+  cli.py          # metis-sim init, migrate, serve, demo
+frontend/src/
+  api/            # Browser session, visual stream, generated API types
+  scene/          # Cesium scene and committed-time playback
+  panels/         # Selected spacecraft telemetry
+configs/          # Demo and matched healthy configuration
+schemas/          # Generated JSON Schema; do not edit by hand
+tests/            # Physics, contracts, and integration checks
+```
+
+For example, start in `models/power.py` to understand a battery calculation, then read `application/measurement.py` to see which results become public channels. Start in `frontend/src/scene/playback.ts` to understand how a committed sample reaches the viewer.
+
 ## Follow the Service Boundary
 
 `backend/src/metis_sim/domain` contains immutable configuration, public contracts, channel catalogues, and physics-facing types.
@@ -21,6 +62,28 @@ The viewer consumes backend outputs and does not calculate orbital physics.
 The contract source is Python Pydantic models.
 `scripts/generate_contracts.py` generates JSON Schema and the frontend TypeScript API types from those models.
 Do not hand-edit generated files.
+
+## Follow One Measurement
+
+1. The configuration adapter parses YAML or JSON into the immutable `SimulationConfig` contract.
+1. `SimulationService` prepares `SimulationEngine`, which computes the bounded physical run from the same epoch and fixed tick sequence.
+1. The runner samples each tick. `MeasurementProjector` maps physical state to allowlisted public frames and separate private truth.
+1. The repository commits the batch and its run status in PostgreSQL. Readers only see committed ticks.
+1. A consumer paginates public frames with a durable cursor. The viewer gets a current snapshot and bounded visual updates; it never reconstructs eclipse or battery physics itself.
+
+The private scenario may affect generated power, but its settings, seed, and outcome labels do not appear in public frames. See the [contract rules](contracts.md) for exact fields and replay semantics.
+
+## Keep the Boundaries Small
+
+| Decision | Why it exists | Simpler extension path |
+|---|---|---|
+| One application process and one writer | A single committed clock avoids conflicting ticks and partial publication. | Add new model behavior within the existing runner and repository boundary. |
+| Pure physical model modules | Orbit and power calculations can be checked without HTTP or database setup. | Put new equations in `models/` and connect them through the engine. |
+| Generated public contracts | Python validation and TypeScript consumers use the same shapes. | Change the Pydantic source, regenerate artifacts, then check the diff. |
+| Separate public and private projections | A viewer or telemetry consumer cannot receive evaluation answers. | Add public fields through explicit response models and projection tests. |
+| PostgreSQL frame log and cursors | A consumer can recover after disconnecting without requiring a broker. | Read with stable stream identities and save the returned cursor after processing. |
+
+To make a change, follow [the contributor guide](contributing.md) for focused checks, then use [validation evidence](validation/README.md) to see what the current model has actually demonstrated.
 
 ## Preserve Simulation and Persistence Semantics
 

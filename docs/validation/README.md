@@ -49,7 +49,7 @@ Select **METIS-02**, keep **20×**, and press **Resume** to watch the developing
 
 ## Team and Review Discipline
 
-[AGENTS.md](../../AGENTS.md) records the team agreement: explicit ownership, preserved concurrent changes, NumPy-style Python docstrings, narrow interfaces, numerical invariants, independent review, and evidence-based handoff.
+[AGENTS.md](https://github.com/metisorbital/satellite-simulation/blob/main/AGENTS.md) records the team agreement: explicit ownership, preserved concurrent changes, NumPy-style Python docstrings, narrow interfaces, numerical invariants, independent review, and evidence-based handoff.
 The integration lead handled product scope, API/storage composition, acceptance and final integration.
 Independent engineers implemented physics, contracts and the viewer; bounded packaging and benchmark work used a smaller-model developer.
 

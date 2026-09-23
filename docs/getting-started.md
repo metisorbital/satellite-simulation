@@ -14,6 +14,15 @@ It does not require a real spacecraft connection.
 
 Install Docker with Compose, Python 3.12.12 with uv 0.10.2, and Node 22.23.0.
 The committed lockfiles are the dependency source of truth.
+Check that the tools are available before installing project dependencies:
+
+```bash
+python3 --version
+uv --version
+node --version
+npm --version
+docker compose version
+```
 
 From the repository root, install the Python and frontend dependencies and produce the frontend bundle:
 
@@ -125,5 +134,26 @@ npm --prefix frontend test
 npm --prefix frontend run build
 ```
 
+For database integration coverage, create a separate empty test database once and point `pytest` to it. The local Compose default password is shown below; adjust the URL if you set `METIS_POSTGRES_PASSWORD`.
+
+```bash
+docker compose exec -T db createdb -U metis metis_docs_test
+METIS_TEST_DATABASE_URL=postgresql+psycopg://metis:metis-local@127.0.0.1:55432/metis_docs_test uv run pytest -q
+```
+
+The test fixtures may replace their test schema. Never point `METIS_TEST_DATABASE_URL` at the application database or a production database. Without this variable, PostgreSQL-specific tests are skipped and the suite does not establish database behavior.
+
 Read [Implementation Validation and Review](validation/README.md) for the executed numerical, service, browser, and capacity checks and their limits.
 The [implementation map](implementation.md) explains the service boundaries behind these commands.
+
+## Troubleshoot Local Setup
+
+| Symptom | Check and fix |
+|---|---|
+| `metis-sim migrate` cannot connect to PostgreSQL | Run `docker compose up -d --wait db` and check that loopback port `55432` is available. The local CLI uses that port by default. |
+| `/health/live` works but `/health/ready` returns `503` | The process is up, but database access, writer ownership, or persistence is unhealthy. Check the service log and database health before starting a new run. |
+| The API responds but `/` does not show the viewer | Build `frontend/dist` with `npm ci --prefix frontend` and `npm --prefix frontend run build`, then restart the local demo. The app mounts the viewer only when that directory exists. |
+| The browser session or control request returns `401` or `403` | Open the exact loopback origin used by `metis-sim demo`, then reload to refresh the scoped cookie. A different origin must be in `METIS_ORIGINS`; browser controls also require the session CSRF token. |
+| Port `8000` is already in use | Run `uv run metis-sim demo --at 0 --port 8002` and open `http://127.0.0.1:8002`. The demo includes this selected loopback port in its default origin list. |
+
+For API status codes and replay behavior, see the [API consumer guide](api.md). To find the module behind a failure, use the [implementation guide](implementation.md).

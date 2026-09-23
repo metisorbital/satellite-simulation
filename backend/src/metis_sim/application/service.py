@@ -50,7 +50,20 @@ class SimulationService:
         self.demo_run_id: str | None = None
 
     def create_configuration(self, config: SimulationConfig, token: Idempotent) -> dict[str, Any]:
-        """Persist one fully resolved immutable configuration revision."""
+        """Persist one fully resolved immutable configuration revision.
+
+        Parameters
+        ----------
+        config : SimulationConfig
+            Validated input whose normalized form and hash become immutable.
+        token : Idempotent
+            Scope, idempotency key, and canonical request hash for retries.
+
+        Returns
+        -------
+        dict[str, Any]
+            Revision identity, canonical hash, and schema version.
+        """
         with self.mutations:
             return self.repository.save_configuration(
                 config.model_dump(mode="json"),
@@ -60,7 +73,28 @@ class SimulationService:
             )
 
     def create_run(self, configuration_id: str, retain: bool, token: Idempotent) -> dict[str, Any]:
-        """Validate ephemeris coverage and prepare an independent reproducible execution."""
+        """Prepare an independent run from a saved configuration revision.
+
+        Parameters
+        ----------
+        configuration_id : str
+            Immutable revision to execute.
+        retain : bool
+            Whether durable run history remains after normal expiry cleanup.
+        token : Idempotent
+            Scope, idempotency key, and canonical request hash for retries.
+
+        Returns
+        -------
+        dict[str, Any]
+            Created public run status with newly allocated stream identities.
+
+        Notes
+        -----
+        Preparation checks pinned time data and computes the physical run before
+        it is made available to the writer. This work runs outside the HTTP
+        event loop.
+        """
         with self.mutations:
             existing = self.repository.existing(token)
             if existing is not None:
@@ -147,7 +181,32 @@ class SimulationService:
             return result
 
     def trajectory(self, run_id: str, start: int, end: int, step: int) -> Trajectory:
-        """Return backend orbit samples only, never precomputed future EPS state."""
+        """Return a bounded orbit-only preview from a prepared run.
+
+        Parameters
+        ----------
+        run_id : str
+            Prepared run to inspect.
+        start, end : int
+            Inclusive elapsed-second bounds within the configured run.
+        step : int
+            Positive sample spacing in simulated seconds.
+
+        Returns
+        -------
+        Trajectory
+            Earth-fixed position and velocity points for each spacecraft.
+
+        Raises
+        ------
+        ServiceError
+            If the request exceeds one hour, is outside the run, or the
+            prepared engine has been released.
+
+        Notes
+        -----
+        This preview contains no future battery state, power, or scenario truth.
+        """
         status = self.repository.status(run_id)
         if (
             not 0 <= start <= end <= status["duration_s"]

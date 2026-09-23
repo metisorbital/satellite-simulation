@@ -22,7 +22,13 @@ SatelliteMode = Literal["nominal", "payload_active", "safe"]
 
 
 class ContractModel(BaseModel):
-    """Base for strict, immutable operator configuration models."""
+    """Base for strict, immutable operator configuration models.
+
+    Notes
+    -----
+    Subclasses reject unknown fields, freeze validated values, require strict
+    types, and reject non-finite floating-point values.
+    """
 
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True, allow_inf_nan=False)
 
@@ -46,7 +52,24 @@ def _check_identifier(value: str) -> str:
 
 
 class RunConfiguration(ContractModel):
-    """Simulation timing, seed, and versioned model selections."""
+    """Simulation timing, seed, and versioned model selections.
+
+    Attributes
+    ----------
+    epoch_utc : datetime
+        UTC-normalized instant at which the run starts.
+    duration_s : int
+        Configured elapsed duration in simulated seconds; samples include
+        both tick zero and the endpoint.
+    tick_s, telemetry_period_s : int
+        Fixed physical and telemetry cadence; both are one second in P0.
+    speed : {1, 5, 20}
+        Requested wall-clock multiplier.
+    seed : int
+        Reproducibility seed within JavaScript's exact integer range.
+    earth_model, orbit_model, sun_model : str
+        Versioned model identifiers used by the run.
+    """
 
     epoch_utc: datetime
     duration_s: Annotated[int, Field(ge=1, le=86_400)] = 21_600
@@ -79,13 +102,31 @@ class RunConfiguration(ContractModel):
 
 
 class PointingConfiguration(ContractModel):
-    """Supported panel pointing policy."""
+    """Supported panel pointing policy.
+
+    Attributes
+    ----------
+    type : str
+        P0 panel policy, currently ``ideal_sun_tracking``.
+    """
 
     type: Literal["ideal_sun_tracking"]
 
 
 class PanelConfiguration(ContractModel):
-    """Equivalent solar-array nameplate and conversion parameters."""
+    """Equivalent solar-array nameplate and conversion parameters.
+
+    Attributes
+    ----------
+    area_m2 : float
+        Equivalent panel area in square metres.
+    efficiency, conversion_efficiency : float
+        Panel and bus-conversion efficiencies in ``(0, 1]``.
+    irradiance_1au_w_m2 : float
+        Reference solar irradiance in watts per square metre.
+    pointing : PointingConfiguration
+        Declared panel pointing policy.
+    """
 
     area_m2: Annotated[float, Field(gt=0)]
     efficiency: Annotated[float, Field(gt=0, le=1)]
@@ -95,7 +136,21 @@ class PanelConfiguration(ContractModel):
 
 
 class BatteryConfiguration(ContractModel):
-    """Ideal bounded energy-store nameplate and starting condition."""
+    """Ideal bounded energy-store nameplate and starting condition.
+
+    Attributes
+    ----------
+    type : str
+        P0 battery model, currently ``energy_store``.
+    usable_capacity_wh : float
+        Fixed usable energy capacity in watt-hours.
+    initial_soc : float
+        Initial state of charge as a fraction of usable capacity.
+    charge_efficiency, discharge_efficiency : float
+        Energy conversion efficiencies in ``(0, 1]``.
+    max_charge_w, max_discharge_w : float
+        Bus-power limits in watts.
+    """
 
     type: Literal["energy_store"]
     usable_capacity_wh: Annotated[float, Field(gt=0)]
@@ -107,20 +162,44 @@ class BatteryConfiguration(ContractModel):
 
 
 class NoiseConfiguration(ContractModel):
-    """Supported sensor noise selection."""
+    """Supported sensor noise selection.
+
+    Attributes
+    ----------
+    type : str
+        P0 uses ``none`` so numerical evidence remains deterministic.
+    """
 
     type: Literal["none"]
 
 
 class SensorConfiguration(ContractModel):
-    """Public channel catalog and sensor-noise policy."""
+    """Public channel catalog and sensor-noise policy.
+
+    Attributes
+    ----------
+    catalog : str
+        Versioned public channel catalog identifier.
+    noise : NoiseConfiguration
+        Noise policy applied after the physical calculation.
+    """
 
     catalog: Literal["power-leo.v1"]
     noise: NoiseConfiguration
 
 
 class ConfiguredPublicLimit(ContractModel):
-    """Observable SOC threshold with explicit hysteresis."""
+    """Observable SOC threshold with explicit hysteresis.
+
+    Attributes
+    ----------
+    channel_id : str
+        Public channel monitored by the limit, currently battery SOC.
+    operator : {"lt", "gt"}
+        Comparison used to enter the limit.
+    value, clear_value : float
+        Entry and hysteresis-clear thresholds as SOC fractions.
+    """
 
     channel_id: Literal["eps.battery_soc"]
     operator: Literal["lt", "gt"]
@@ -138,7 +217,21 @@ class ConfiguredPublicLimit(ContractModel):
 
 
 class SpacecraftProfile(ContractModel):
-    """Reusable spacecraft subsystem configuration."""
+    """Reusable spacecraft subsystem configuration.
+
+    Attributes
+    ----------
+    panel : PanelConfiguration
+        Equivalent solar-array model.
+    battery : BatteryConfiguration
+        Bounded energy-store model.
+    loads_w : mapping
+        Requested load in watts for every supported satellite mode.
+    sensors : SensorConfiguration
+        Public channel catalog and sensor policy.
+    public_limits : tuple of ConfiguredPublicLimit
+        Limits that may appear in the public spacecraft descriptor.
+    """
 
     panel: PanelConfiguration
     battery: BatteryConfiguration
@@ -174,7 +267,23 @@ class SpacecraftProfile(ContractModel):
 
 
 class OrbitConfiguration(ContractModel):
-    """Osculating classical orbit elements at the run epoch."""
+    """Osculating classical orbit elements at the run epoch.
+
+    Attributes
+    ----------
+    a_m : float
+        Semi-major axis in metres.
+    e : float
+        Dimensionless eccentricity.
+    i_deg, raan_deg, argp_deg, true_anomaly_deg : float
+        Inclination, right ascension of ascending node, argument of
+        periapsis, and true anomaly in degrees.
+
+    Notes
+    -----
+    The model validates the initial perigee and apogee against the supported
+    300--1500 km P0 radial envelope.
+    """
 
     a_m: Annotated[float, Field(gt=0)]
     e: Annotated[float, Field(ge=0, le=0.05)]
@@ -201,7 +310,15 @@ class OrbitConfiguration(ContractModel):
 
 
 class Operation(ContractModel):
-    """Half-open scheduled operational mode interval."""
+    """Half-open scheduled operational mode interval.
+
+    Attributes
+    ----------
+    start_s, end_s : int
+        Simulated-second bounds of the half-open interval ``[start_s, end_s)``.
+    mode : SatelliteMode
+        Mode active during the interval.
+    """
 
     start_s: Annotated[int, Field(ge=0, le=86_400)]
     end_s: Annotated[int, Field(ge=1, le=86_400)]
@@ -216,14 +333,41 @@ class Operation(ContractModel):
 
 
 class VisualConfiguration(ContractModel):
-    """Allowlisted visual marker metadata for a spacecraft."""
+    """Allowlisted visual marker metadata for a spacecraft.
+
+    Attributes
+    ----------
+    color : str
+        Six-digit hexadecimal marker color.
+    asset_id : str or None
+        Optional identifier resolved by the allowlisted visual asset catalog.
+    """
 
     color: Annotated[str, Field(pattern=r"^#[0-9A-Fa-f]{6}$")] = "#8FD3FF"
     asset_id: Annotated[str, Field(pattern=ID_PATTERN.pattern)] | None = None
 
 
 class SatelliteDefinition(ContractModel):
-    """Stable spacecraft identity, orbit, profile reference, and schedule."""
+    """Stable spacecraft identity, orbit, profile reference, and schedule.
+
+    Attributes
+    ----------
+    satellite_id : str
+        Stable ASCII identity used in streams and public frames.
+    name : str
+        Human-readable spacecraft name.
+    profile_id : str
+        Reference to a reusable :class:`SpacecraftProfile`.
+    orbit : OrbitConfiguration
+        Initial osculating orbit.
+    initial_mode : SatelliteMode
+        Default mode whenever no scheduled operation is active, including
+        tick zero unless an operation starts there.
+    operations : tuple of Operation
+        Non-overlapping scheduled mode intervals.
+    visual : VisualConfiguration
+        Allowlisted marker metadata.
+    """
 
     satellite_id: str
     name: Annotated[str, Field(min_length=1, max_length=128)]
@@ -250,7 +394,15 @@ class SatelliteDefinition(ContractModel):
 
 
 class ConstellationDefinition(ContractModel):
-    """Display grouping containing unique satellite identities."""
+    """Display grouping containing unique satellite identities.
+
+    Attributes
+    ----------
+    constellation_id : str
+        Stable grouping identifier.
+    satellite_ids : tuple of str
+        Unique member IDs retained in display order.
+    """
 
     constellation_id: str
     satellite_ids: tuple[str, ...]
@@ -273,14 +425,32 @@ class ConstellationDefinition(ContractModel):
 
 
 class DeratingPoint(ContractModel):
-    """Elapsed run time and solar generation multiplier control point."""
+    """Elapsed run time and solar generation multiplier control point.
+
+    Attributes
+    ----------
+    at_s : int
+        Simulated-second location of the control point.
+    multiplier : float
+        Solar-generation multiplier in ``[0, 1]``.
+    """
 
     at_s: Annotated[int, Field(ge=0, le=86_400)]
     multiplier: Annotated[float, Field(ge=0, le=1)]
 
 
 class ReserveOutcome(ContractModel):
-    """Private state-triggered operational reserve outcome rule."""
+    """Private state-triggered operational reserve outcome rule.
+
+    Attributes
+    ----------
+    type : str
+        P0 outcome type, currently ``energy_reserve_violation``.
+    reserve_soc : float
+        SOC threshold used by the private evaluator.
+    dwell_s : int
+        Consecutive simulated seconds required below the threshold.
+    """
 
     type: Literal["energy_reserve_violation"]
     reserve_soc: Annotated[float, Field(gt=0, lt=1)]
@@ -288,7 +458,19 @@ class ReserveOutcome(ContractModel):
 
 
 class SolarDeratingScenario(ContractModel):
-    """Private piecewise-linear solar derating scenario."""
+    """Private piecewise-linear solar derating scenario.
+
+    Attributes
+    ----------
+    satellite_id : str
+        Spacecraft affected by the scenario.
+    type : str
+        P0 scenario type, currently ``solar_derating``.
+    points : tuple of DeratingPoint
+        Strictly increasing multiplier control points.
+    outcome : ReserveOutcome
+        Private state-based outcome rule.
+    """
 
     satellite_id: str
     type: Literal["solar_derating"]
@@ -310,7 +492,28 @@ class SolarDeratingScenario(ContractModel):
 
 
 class SimulationConfig(ContractModel):
-    """Complete validated P0 simulation input configuration."""
+    """Complete validated P0 simulation input configuration.
+
+    Attributes
+    ----------
+    schema_version : str
+        Configuration contract revision, currently ``simulation.v1``.
+    run : RunConfiguration
+        Timing, seed, and selected model versions.
+    profiles : mapping of str to SpacecraftProfile
+        Reusable spacecraft subsystem definitions.
+    satellites : tuple of SatelliteDefinition
+        One to ten configured spacecraft.
+    constellations : tuple of ConstellationDefinition
+        Optional display groupings with validated membership.
+    scenario : tuple of SolarDeratingScenario
+        Zero or one private P0 derating scenario.
+
+    Notes
+    -----
+    Cross-object references and nested mappings are validated and frozen
+    before the configuration is normalized or hashed.
+    """
 
     schema_version: Literal["simulation.v1"]
     run: RunConfiguration

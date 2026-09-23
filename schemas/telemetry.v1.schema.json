@@ -2,7 +2,7 @@
   "$defs": {
     "ChannelReading": {
       "additionalProperties": false,
-      "description": "One allowlisted channel value and its measurement quality.",
+      "description": "One allowlisted channel value and its measurement quality.\n\nAttributes\n----------\nvalue : float, tuple of float, or None\n    Scalar or fixed three-vector reading. Failed readings use ``None``.\nquality : {\"valid\", \"missing\", \"invalid\", \"saturated\"}\n    Quality state that explains whether ``value`` is usable.\n\nNotes\n-----\nValid and saturated readings require a value; missing and invalid\nreadings require ``None``.",
       "properties": {
         "quality": {
           "enum": [
@@ -53,7 +53,7 @@
   "$id": "https://metisorbital.local/schemas/telemetry.v1.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "Allowlisted producer-neutral telemetry measurement frame.",
+  "description": "Allowlisted producer-neutral telemetry measurement frame.\n\nAttributes\n----------\nschema_version : str\n    Breaking-contract identifier, currently ``telemetry.v1``.\nsource_id : str\n    Stable producer identity.\nstream_id : UUID\n    Monotonic sequence namespace for one spacecraft stream.\nsequence : int\n    Zero-based stream sequence, bounded by the exact JSON integer range.\nsatellite_id : str\n    Logical spacecraft identity.\nsource_kind : {\"synthetic\", \"observed\"}\n    Provenance of the producer data.\ntime_domain : {\"simulation_utc\", \"mission_utc\"}\n    Meaning of ``observed_at``.\nobserved_at, emitted_at : datetime\n    UTC represented sample time and producer emission time.\nsample_window_s : float\n    Interval length ending at ``observed_at`` for interval-average\n    channels; zero denotes the initial instantaneous frame.\ncatalog_version : str\n    Versioned channel catalog identifier.\nmode, interval_mode : Mode or None\n    Endpoint mode and mode used for interval-average channels.\nchannels : mapping of str to ChannelReading\n    Allowlisted measured or derived public channel values.\n\nNotes\n-----\nTimestamps are normalized to UTC and channel mappings are frozen after\nvalidation. Private scenario parameters, seeds, and future outcomes do\nnot belong in this envelope.",
   "properties": {
     "catalog_version": {
       "const": "power-leo.v1",

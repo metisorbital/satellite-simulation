@@ -18,7 +18,13 @@ Mode = Literal["nominal", "payload_active", "safe"]
 
 
 class PublicModel(BaseModel):
-    """Base for strict immutable public wire models."""
+    """Base for strict immutable public wire models.
+
+    Notes
+    -----
+    Extra fields and non-finite numbers are rejected so a producer cannot
+    publish undeclared or non-portable values.
+    """
 
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True, allow_inf_nan=False)
 
@@ -31,7 +37,20 @@ def _utc_datetime(value: datetime) -> datetime:
 
 
 class ChannelReading(PublicModel):
-    """One allowlisted channel value and its measurement quality."""
+    """One allowlisted channel value and its measurement quality.
+
+    Attributes
+    ----------
+    value : float, tuple of float, or None
+        Scalar or fixed three-vector reading. Failed readings use ``None``.
+    quality : {"valid", "missing", "invalid", "saturated"}
+        Quality state that explains whether ``value`` is usable.
+
+    Notes
+    -----
+    Valid and saturated readings require a value; missing and invalid
+    readings require ``None``.
+    """
 
     value: float | tuple[float, float, float] | None
     quality: Literal["valid", "missing", "invalid", "saturated"]
@@ -57,7 +76,42 @@ class ChannelReading(PublicModel):
 
 
 class MeasurementFrame(PublicModel):
-    """Allowlisted producer-neutral telemetry measurement frame."""
+    """Allowlisted producer-neutral telemetry measurement frame.
+
+    Attributes
+    ----------
+    schema_version : str
+        Breaking-contract identifier, currently ``telemetry.v1``.
+    source_id : str
+        Stable producer identity.
+    stream_id : UUID
+        Monotonic sequence namespace for one spacecraft stream.
+    sequence : int
+        Zero-based stream sequence, bounded by the exact JSON integer range.
+    satellite_id : str
+        Logical spacecraft identity.
+    source_kind : {"synthetic", "observed"}
+        Provenance of the producer data.
+    time_domain : {"simulation_utc", "mission_utc"}
+        Meaning of ``observed_at``.
+    observed_at, emitted_at : datetime
+        UTC represented sample time and producer emission time.
+    sample_window_s : float
+        Interval length ending at ``observed_at`` for interval-average
+        channels; zero denotes the initial instantaneous frame.
+    catalog_version : str
+        Versioned channel catalog identifier.
+    mode, interval_mode : Mode or None
+        Endpoint mode and mode used for interval-average channels.
+    channels : mapping of str to ChannelReading
+        Allowlisted measured or derived public channel values.
+
+    Notes
+    -----
+    Timestamps are normalized to UTC and channel mappings are frozen after
+    validation. Private scenario parameters, seeds, and future outcomes do
+    not belong in this envelope.
+    """
 
     schema_version: Literal["telemetry.v1"]
     source_id: Annotated[str, Field(pattern=ID_PATTERN)]
@@ -125,14 +179,30 @@ class MeasurementFrame(PublicModel):
 
 
 class ModeChangedDetails(PublicModel):
-    """Allowlisted observed mode transition details."""
+    """Allowlisted observed mode transition details.
+
+    Attributes
+    ----------
+    from_mode, to_mode : Mode
+        Endpoint modes on either side of the public transition.
+    """
 
     from_mode: Mode
     to_mode: Mode
 
 
 class LowEnergyLimitDetails(PublicModel):
-    """Allowlisted observed public SOC limit transition details."""
+    """Allowlisted observed public SOC limit transition details.
+
+    Attributes
+    ----------
+    channel_id : str
+        Public SOC channel associated with the limit.
+    operator : {"lt", "gt"}
+        Comparison used to enter or clear the limit.
+    value, clear_value : float
+        Entry and hysteresis-clear SOC thresholds.
+    """
 
     channel_id: Literal["eps.battery_soc"]
     operator: Literal["lt", "gt"]
@@ -141,7 +211,17 @@ class LowEnergyLimitDetails(PublicModel):
 
 
 class PowerUnservedDetails(PublicModel):
-    """Allowlisted observed unserved-power state details."""
+    """Allowlisted observed unserved-power state details.
+
+    Attributes
+    ----------
+    active : bool
+        Whether requested load was not fully served.
+    value_w : float
+        Unserved requested load in watts.
+    sample_window_s : float
+        Interval represented by the value in seconds.
+    """
 
     active: bool
     value_w: Annotated[float, Field(ge=0)]
@@ -165,7 +245,38 @@ EventDetails = ModeChangedDetails | LowEnergyLimitDetails | PowerUnservedDetails
 
 
 class OperationalEvent(PublicModel):
-    """Allowlisted observable operational event envelope."""
+    """Allowlisted observable operational event envelope.
+
+    Attributes
+    ----------
+    schema_version : str
+        Breaking-contract identifier, currently ``operational_event.v1``.
+    source_id : str
+        Stable producer identity.
+    stream_id : UUID
+        Stream namespace associated with the event.
+    event_sequence : int
+        Monotonic sequence within the stream's event namespace.
+    satellite_id : str
+        Logical spacecraft identity.
+    source_kind : {"synthetic", "observed"}
+        Provenance of the producer data.
+    time_domain : {"simulation_utc", "mission_utc"}
+        Meaning of ``observed_at``.
+    observed_at, emitted_at : datetime
+        UTC event time and producer emission time.
+    event_type : EventType
+        Allowlisted observable event discriminator.
+    reason_code : str
+        Stable ASCII reason code for the event.
+    details : EventDetails
+        Typed details matching ``event_type`` exactly.
+
+    Notes
+    -----
+    Event details describe an observed condition or transition. Private
+    injection schedules and evaluator-only outcome labels are excluded.
+    """
 
     schema_version: Literal["operational_event.v1"]
     source_id: Annotated[str, Field(pattern=ID_PATTERN)]

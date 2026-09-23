@@ -2,7 +2,7 @@
   "$defs": {
     "BatteryConfiguration": {
       "additionalProperties": false,
-      "description": "Ideal bounded energy-store nameplate and starting condition.",
+      "description": "Ideal bounded energy-store nameplate and starting condition.\n\nAttributes\n----------\ntype : str\n    P0 battery model, currently ``energy_store``.\nusable_capacity_wh : float\n    Fixed usable energy capacity in watt-hours.\ninitial_soc : float\n    Initial state of charge as a fraction of usable capacity.\ncharge_efficiency, discharge_efficiency : float\n    Energy conversion efficiencies in ``(0, 1]``.\nmax_charge_w, max_discharge_w : float\n    Bus-power limits in watts.",
       "properties": {
         "charge_efficiency": {
           "exclusiveMinimum": 0,
@@ -57,7 +57,7 @@
     },
     "ConfiguredPublicLimit": {
       "additionalProperties": false,
-      "description": "Observable SOC threshold with explicit hysteresis.",
+      "description": "Observable SOC threshold with explicit hysteresis.\n\nAttributes\n----------\nchannel_id : str\n    Public channel monitored by the limit, currently battery SOC.\noperator : {\"lt\", \"gt\"}\n    Comparison used to enter the limit.\nvalue, clear_value : float\n    Entry and hysteresis-clear thresholds as SOC fractions.",
       "properties": {
         "channel_id": {
           "const": "eps.battery_soc",
@@ -96,7 +96,7 @@
     },
     "ConstellationDefinition": {
       "additionalProperties": false,
-      "description": "Display grouping containing unique satellite identities.",
+      "description": "Display grouping containing unique satellite identities.\n\nAttributes\n----------\nconstellation_id : str\n    Stable grouping identifier.\nsatellite_ids : tuple of str\n    Unique member IDs retained in display order.",
       "properties": {
         "constellation_id": {
           "title": "Constellation Id",
@@ -119,7 +119,7 @@
     },
     "DeratingPoint": {
       "additionalProperties": false,
-      "description": "Elapsed run time and solar generation multiplier control point.",
+      "description": "Elapsed run time and solar generation multiplier control point.\n\nAttributes\n----------\nat_s : int\n    Simulated-second location of the control point.\nmultiplier : float\n    Solar-generation multiplier in ``[0, 1]``.",
       "properties": {
         "at_s": {
           "maximum": 86400,
@@ -143,7 +143,7 @@
     },
     "NoiseConfiguration": {
       "additionalProperties": false,
-      "description": "Supported sensor noise selection.",
+      "description": "Supported sensor noise selection.\n\nAttributes\n----------\ntype : str\n    P0 uses ``none`` so numerical evidence remains deterministic.",
       "properties": {
         "type": {
           "const": "none",
@@ -159,7 +159,7 @@
     },
     "Operation": {
       "additionalProperties": false,
-      "description": "Half-open scheduled operational mode interval.",
+      "description": "Half-open scheduled operational mode interval.\n\nAttributes\n----------\nstart_s, end_s : int\n    Simulated-second bounds of the half-open interval ``[start_s, end_s)``.\nmode : SatelliteMode\n    Mode active during the interval.",
       "properties": {
         "end_s": {
           "maximum": 86400,
@@ -193,7 +193,7 @@
     },
     "OrbitConfiguration": {
       "additionalProperties": false,
-      "description": "Osculating classical orbit elements at the run epoch.",
+      "description": "Osculating classical orbit elements at the run epoch.\n\nAttributes\n----------\na_m : float\n    Semi-major axis in metres.\ne : float\n    Dimensionless eccentricity.\ni_deg, raan_deg, argp_deg, true_anomaly_deg : float\n    Inclination, right ascension of ascending node, argument of\n    periapsis, and true anomaly in degrees.\n\nNotes\n-----\nThe model validates the initial perigee and apogee against the supported\n300--1500 km P0 radial envelope.",
       "properties": {
         "a_m": {
           "exclusiveMinimum": 0,
@@ -244,7 +244,7 @@
     },
     "PanelConfiguration": {
       "additionalProperties": false,
-      "description": "Equivalent solar-array nameplate and conversion parameters.",
+      "description": "Equivalent solar-array nameplate and conversion parameters.\n\nAttributes\n----------\narea_m2 : float\n    Equivalent panel area in square metres.\nefficiency, conversion_efficiency : float\n    Panel and bus-conversion efficiencies in ``(0, 1]``.\nirradiance_1au_w_m2 : float\n    Reference solar irradiance in watts per square metre.\npointing : PointingConfiguration\n    Declared panel pointing policy.",
       "properties": {
         "area_m2": {
           "exclusiveMinimum": 0,
@@ -285,7 +285,7 @@
     },
     "PointingConfiguration": {
       "additionalProperties": false,
-      "description": "Supported panel pointing policy.",
+      "description": "Supported panel pointing policy.\n\nAttributes\n----------\ntype : str\n    P0 panel policy, currently ``ideal_sun_tracking``.",
       "properties": {
         "type": {
           "const": "ideal_sun_tracking",
@@ -301,7 +301,7 @@
     },
     "ReserveOutcome": {
       "additionalProperties": false,
-      "description": "Private state-triggered operational reserve outcome rule.",
+      "description": "Private state-triggered operational reserve outcome rule.\n\nAttributes\n----------\ntype : str\n    P0 outcome type, currently ``energy_reserve_violation``.\nreserve_soc : float\n    SOC threshold used by the private evaluator.\ndwell_s : int\n    Consecutive simulated seconds required below the threshold.",
       "properties": {
         "dwell_s": {
           "default": 60,
@@ -330,7 +330,7 @@
     },
     "RunConfiguration": {
       "additionalProperties": false,
-      "description": "Simulation timing, seed, and versioned model selections.",
+      "description": "Simulation timing, seed, and versioned model selections.\n\nAttributes\n----------\nepoch_utc : datetime\n    UTC-normalized instant at which the run starts.\nduration_s : int\n    Configured elapsed duration in simulated seconds; samples include\n    both tick zero and the endpoint.\ntick_s, telemetry_period_s : int\n    Fixed physical and telemetry cadence; both are one second in P0.\nspeed : {1, 5, 20}\n    Requested wall-clock multiplier.\nseed : int\n    Reproducibility seed within JavaScript's exact integer range.\nearth_model, orbit_model, sun_model : str\n    Versioned model identifiers used by the run.",
       "properties": {
         "duration_s": {
           "default": 21600,
@@ -400,7 +400,7 @@
     },
     "SatelliteDefinition": {
       "additionalProperties": false,
-      "description": "Stable spacecraft identity, orbit, profile reference, and schedule.",
+      "description": "Stable spacecraft identity, orbit, profile reference, and schedule.\n\nAttributes\n----------\nsatellite_id : str\n    Stable ASCII identity used in streams and public frames.\nname : str\n    Human-readable spacecraft name.\nprofile_id : str\n    Reference to a reusable :class:`SpacecraftProfile`.\norbit : OrbitConfiguration\n    Initial osculating orbit.\ninitial_mode : SatelliteMode\n    Default mode whenever no scheduled operation is active, including\n    tick zero unless an operation starts there.\noperations : tuple of Operation\n    Non-overlapping scheduled mode intervals.\nvisual : VisualConfiguration\n    Allowlisted marker metadata.",
       "properties": {
         "initial_mode": {
           "enum": [
@@ -452,7 +452,7 @@
     },
     "SensorConfiguration": {
       "additionalProperties": false,
-      "description": "Public channel catalog and sensor-noise policy.",
+      "description": "Public channel catalog and sensor-noise policy.\n\nAttributes\n----------\ncatalog : str\n    Versioned public channel catalog identifier.\nnoise : NoiseConfiguration\n    Noise policy applied after the physical calculation.",
       "properties": {
         "catalog": {
           "const": "power-leo.v1",
@@ -472,7 +472,7 @@
     },
     "SolarDeratingScenario": {
       "additionalProperties": false,
-      "description": "Private piecewise-linear solar derating scenario.",
+      "description": "Private piecewise-linear solar derating scenario.\n\nAttributes\n----------\nsatellite_id : str\n    Spacecraft affected by the scenario.\ntype : str\n    P0 scenario type, currently ``solar_derating``.\npoints : tuple of DeratingPoint\n    Strictly increasing multiplier control points.\noutcome : ReserveOutcome\n    Private state-based outcome rule.",
       "properties": {
         "outcome": {
           "$ref": "#/$defs/ReserveOutcome"
@@ -505,7 +505,7 @@
     },
     "SpacecraftProfile": {
       "additionalProperties": false,
-      "description": "Reusable spacecraft subsystem configuration.",
+      "description": "Reusable spacecraft subsystem configuration.\n\nAttributes\n----------\npanel : PanelConfiguration\n    Equivalent solar-array model.\nbattery : BatteryConfiguration\n    Bounded energy-store model.\nloads_w : mapping\n    Requested load in watts for every supported satellite mode.\nsensors : SensorConfiguration\n    Public channel catalog and sensor policy.\npublic_limits : tuple of ConfiguredPublicLimit\n    Limits that may appear in the public spacecraft descriptor.",
       "properties": {
         "battery": {
           "$ref": "#/$defs/BatteryConfiguration"
@@ -551,7 +551,7 @@
     },
     "VisualConfiguration": {
       "additionalProperties": false,
-      "description": "Allowlisted visual marker metadata for a spacecraft.",
+      "description": "Allowlisted visual marker metadata for a spacecraft.\n\nAttributes\n----------\ncolor : str\n    Six-digit hexadecimal marker color.\nasset_id : str or None\n    Optional identifier resolved by the allowlisted visual asset catalog.",
       "properties": {
         "asset_id": {
           "anyOf": [
@@ -580,7 +580,7 @@
   "$id": "https://metisorbital.local/schemas/simulation.v1.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "Complete validated P0 simulation input configuration.",
+  "description": "Complete validated P0 simulation input configuration.\n\nAttributes\n----------\nschema_version : str\n    Configuration contract revision, currently ``simulation.v1``.\nrun : RunConfiguration\n    Timing, seed, and selected model versions.\nprofiles : mapping of str to SpacecraftProfile\n    Reusable spacecraft subsystem definitions.\nsatellites : tuple of SatelliteDefinition\n    One to ten configured spacecraft.\nconstellations : tuple of ConstellationDefinition\n    Optional display groupings with validated membership.\nscenario : tuple of SolarDeratingScenario\n    Zero or one private P0 derating scenario.\n\nNotes\n-----\nCross-object references and nested mappings are validated and frozen\nbefore the configuration is normalized or hashed.",
   "properties": {
     "constellations": {
       "items": {

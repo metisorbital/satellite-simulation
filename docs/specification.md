@@ -3,7 +3,7 @@ title: Metis Satellite Simulation Specification
 description: Define the hackathon simulator, its physical fidelity, source boundary, visualization, and verifiable implementation outcomes.
 content-type: reference
 audience: product and engineering
-status: proposed implementation baseline
+status: normative implementation baseline
 version: 1.0
 date: 2026-09-21
 ---
@@ -20,7 +20,7 @@ Read this document first for scope and component ownership.
 Then read [Physics Model](physics-model.md) for equations, fidelity, and numerical gates, and [Configuration and Data Contracts](contracts.md) for objects, YAML, telemetry, persistence, and API semantics.
 Requirement identifiers in these documents are stable reference points for implementation work, not a prewritten backlog.
 
-This is a researched design, not a claim that the software or its performance has been validated.
+This is the normative design and acceptance baseline. The delivered implementation and measured results are reported separately in [implementation validation](validation/README.md); requirements here remain gates to verify, not automatic claims of completion.
 Normative words **must**, **should**, and **may** mean required for the selected milestone, recommended, and optional respectively.
 Where research notes disagree, these three specification documents take precedence.
 
@@ -323,7 +323,7 @@ An operations specialist should review the example power sizing and chosen opera
 
 ## 12. Document Status
 
-Prepared as version 1.0 on 2026-09-21 for engineering handoff.
+Prepared as version 1.0 on 2026-09-21 for engineering handoff and retained as the normative baseline.
 Research agents investigated physics and contracts independently, and a separate reviewer examined scope and integration ambiguity.
 The review record is [specification review](research/spec-review.md); domain reviews are linked there when complete.
-No application, database, telemetry run, forecast model, or performance result is delivered by this specification-only change.
+The simulator, database, telemetry, and viewer were delivered after this design handoff; [implementation validation](validation/README.md) records the executed checks and measured limits. A forecast model remains outside this simulator's scope.

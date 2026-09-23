@@ -3,7 +3,7 @@ title: Physics Model and Visual Consistency
 description: Define the orbit, time, environment, power model, progressive scenario, and numerical accuracy gates.
 content-type: reference
 audience: engineering and satellite operations
-status: proposed implementation baseline
+status: normative model and numerical gates
 version: 1.0
 date: 2026-09-21
 ---
@@ -11,7 +11,7 @@ date: 2026-09-21
 # Physics Model and Visual Consistency
 
 This is a normative appendix to the [specification](specification.md).
-Equations and numeric tolerances below define the proposed implementation; they have not yet been verified by an implemented simulator.
+Equations and numeric tolerances below define the model and its acceptance gates. The [numerical validation report](validation/physics.md) records which checks the implemented simulator has passed and the limits of those results.
 
 ## 1. Define What Accurate Means
 
@@ -226,8 +226,7 @@ For generalization, later analytics must split by complete runs/scenarios/satell
 
 ## 7. Baseline Configuration Example
 
-This is the complete proposed configuration format, not an executed/calibrated demo fixture.
-The implementation must schema-validate it and tune a committed demo copy until the healthy/fault outcome gates pass.
+This is the original complete configuration example used to define the format. The executable, calibrated fixture is [configs/demo.yaml](../configs/demo.yaml); schema validation and healthy/fault outcome results are recorded in [implementation validation](validation/README.md).
 The example uses distinct orbital phases in one plane; it does not claim an operational constellation design.
 
 ```yaml

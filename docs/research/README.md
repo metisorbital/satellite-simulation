@@ -1,7 +1,8 @@
 # Research and Review Record
 
-The [main specification](../specification.md), [physics appendix](../physics-model.md), and [contracts appendix](../contracts.md) define the proposed implementation.
+The [main specification](../specification.md), [physics appendix](../physics-model.md), and [contracts appendix](../contracts.md) define the implementation baseline.
 Research notes preserve alternatives and preliminary proposals; they are not additional requirements.
+This is a preparation-time record from 2026-09-21. For current delivered behavior and measurements, read [implementation validation](../validation/README.md).
 
 | Document | Purpose |
 |---|---|
@@ -19,7 +20,7 @@ Important synthesis decisions supersede broader research proposals:
 - Frame identity is `(source_id, stream_id, sequence)`; there is no additional required event UUID on telemetry frames.
 - Replay is durable consumer retrieval. The P0 viewer uses current committed data and pause/resume, with recorded-run seeking deferred.
 - Public measurement frames include `sample_window_s`, endpoint `mode`, and `interval_mode` so interval power is not assigned to the wrong operating mode.
-- The six-hour example remains an uncalibrated design fixture until implementation tests run.
+- The six-hour example was an uncalibrated design fixture at research time; [configs/demo.yaml](../../configs/demo.yaml) is the later executable demo.
 
 ## Document Validation
 
@@ -32,7 +33,7 @@ Checks performed during preparation on 2026-09-21:
 - Confirmed the stated 550 km reference period is approximately 95.64988 minutes and the 100 W / 60 s / 95% discharge fixture is approximately 1.754386 Wh.
 
 These are documentation consistency checks, not application or schema-conformance tests.
-No generated Pydantic schema, production orbit implementation, database, browser application, performance benchmark, or calibrated fault experiment exists in this change.
+At the time of this preparation record, no generated Pydantic schema, production orbit implementation, database, browser application, performance benchmark, or calibrated fault experiment existed. The later [validation record](../validation/README.md) documents those delivered components and their limits.
 An independent approximate physics sanity calculation informed review, but it does not establish the final example's outcome under the specified Astropy/IERS implementation.
 
 The PRD skill's referenced external template files were unavailable locally; its embedded requirements structure and the documentation skill's available metadata/style guidance were used instead.

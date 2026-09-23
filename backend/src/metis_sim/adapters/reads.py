@@ -55,7 +55,31 @@ class PublicReader:
     def page(
         self, stream_id: str, after: str | None, limit: int, kind: str = "telemetry"
     ) -> dict[str, Any]:
-        """Read retained immutable envelopes after a namespace-bound cursor."""
+        """Read retained public envelopes after a stream-scoped cursor.
+
+        Parameters
+        ----------
+        stream_id : str
+            Public stream whose history is being read.
+        after : str or None
+            Opaque prior cursor, ``latest`` for the current tail, or None for
+            the earliest retained item.
+        limit : int
+            Maximum number of items in this page.
+        kind : str, default='telemetry'
+            ``telemetry`` or ``events``; each has a separate sequence space.
+
+        Returns
+        -------
+        dict[str, Any]
+            Items, next cursor, more-data flag, retained bounds, and delivery
+            mode. An empty page still includes a usable next cursor.
+
+        Raises
+        ------
+        ServiceError
+            If the stream or cursor is invalid, or retained history expired.
+        """
         table = tables.frames if kind == "telemetry" else tables.events
         sequence = table.c.sequence if kind == "telemetry" else table.c.event_sequence
         with self.database.engine.begin() as connection:

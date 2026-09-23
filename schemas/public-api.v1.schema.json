@@ -2,7 +2,7 @@
   "$defs": {
     "BatteryConfiguration": {
       "additionalProperties": false,
-      "description": "Ideal bounded energy-store nameplate and starting condition.",
+      "description": "Ideal bounded energy-store nameplate and starting condition.\n\nAttributes\n----------\ntype : str\n    P0 battery model, currently ``energy_store``.\nusable_capacity_wh : float\n    Fixed usable energy capacity in watt-hours.\ninitial_soc : float\n    Initial state of charge as a fraction of usable capacity.\ncharge_efficiency, discharge_efficiency : float\n    Energy conversion efficiencies in ``(0, 1]``.\nmax_charge_w, max_discharge_w : float\n    Bus-power limits in watts.",
       "properties": {
         "charge_efficiency": {
           "exclusiveMinimum": 0,
@@ -57,7 +57,7 @@
     },
     "ChannelReading": {
       "additionalProperties": false,
-      "description": "One allowlisted channel value and its measurement quality.",
+      "description": "One allowlisted channel value and its measurement quality.\n\nAttributes\n----------\nvalue : float, tuple of float, or None\n    Scalar or fixed three-vector reading. Failed readings use ``None``.\nquality : {\"valid\", \"missing\", \"invalid\", \"saturated\"}\n    Quality state that explains whether ``value`` is usable.\n\nNotes\n-----\nValid and saturated readings require a value; missing and invalid\nreadings require ``None``.",
       "properties": {
         "quality": {
           "enum": [
@@ -107,7 +107,7 @@
     },
     "ConfiguredPublicLimit": {
       "additionalProperties": false,
-      "description": "Observable SOC threshold with explicit hysteresis.",
+      "description": "Observable SOC threshold with explicit hysteresis.\n\nAttributes\n----------\nchannel_id : str\n    Public channel monitored by the limit, currently battery SOC.\noperator : {\"lt\", \"gt\"}\n    Comparison used to enter the limit.\nvalue, clear_value : float\n    Entry and hysteresis-clear thresholds as SOC fractions.",
       "properties": {
         "channel_id": {
           "const": "eps.battery_soc",
@@ -146,7 +146,7 @@
     },
     "ConstellationDefinition": {
       "additionalProperties": false,
-      "description": "Display grouping containing unique satellite identities.",
+      "description": "Display grouping containing unique satellite identities.\n\nAttributes\n----------\nconstellation_id : str\n    Stable grouping identifier.\nsatellite_ids : tuple of str\n    Unique member IDs retained in display order.",
       "properties": {
         "constellation_id": {
           "title": "Constellation Id",
@@ -169,7 +169,7 @@
     },
     "ControlRequest": {
       "additionalProperties": false,
-      "description": "A run command; speed is meaningful only for set_speed.",
+      "description": "A run command; speed is meaningful only for ``set_speed``.\n\nAttributes\n----------\naction : Action\n    Lifecycle command to apply to the run.\nspeed : {1, 5, 20} or None\n    Requested pacing multiplier for ``set_speed``; omitted otherwise.",
       "properties": {
         "action": {
           "enum": [
@@ -208,7 +208,7 @@
     },
     "DeratingPoint": {
       "additionalProperties": false,
-      "description": "Elapsed run time and solar generation multiplier control point.",
+      "description": "Elapsed run time and solar generation multiplier control point.\n\nAttributes\n----------\nat_s : int\n    Simulated-second location of the control point.\nmultiplier : float\n    Solar-generation multiplier in ``[0, 1]``.",
       "properties": {
         "at_s": {
           "maximum": 86400,
@@ -232,7 +232,7 @@
     },
     "LowEnergyLimitDetails": {
       "additionalProperties": false,
-      "description": "Allowlisted observed public SOC limit transition details.",
+      "description": "Allowlisted observed public SOC limit transition details.\n\nAttributes\n----------\nchannel_id : str\n    Public SOC channel associated with the limit.\noperator : {\"lt\", \"gt\"}\n    Comparison used to enter or clear the limit.\nvalue, clear_value : float\n    Entry and hysteresis-clear SOC thresholds.",
       "properties": {
         "channel_id": {
           "const": "eps.battery_soc",
@@ -271,7 +271,7 @@
     },
     "MeasurementFrame": {
       "additionalProperties": false,
-      "description": "Allowlisted producer-neutral telemetry measurement frame.",
+      "description": "Allowlisted producer-neutral telemetry measurement frame.\n\nAttributes\n----------\nschema_version : str\n    Breaking-contract identifier, currently ``telemetry.v1``.\nsource_id : str\n    Stable producer identity.\nstream_id : UUID\n    Monotonic sequence namespace for one spacecraft stream.\nsequence : int\n    Zero-based stream sequence, bounded by the exact JSON integer range.\nsatellite_id : str\n    Logical spacecraft identity.\nsource_kind : {\"synthetic\", \"observed\"}\n    Provenance of the producer data.\ntime_domain : {\"simulation_utc\", \"mission_utc\"}\n    Meaning of ``observed_at``.\nobserved_at, emitted_at : datetime\n    UTC represented sample time and producer emission time.\nsample_window_s : float\n    Interval length ending at ``observed_at`` for interval-average\n    channels; zero denotes the initial instantaneous frame.\ncatalog_version : str\n    Versioned channel catalog identifier.\nmode, interval_mode : Mode or None\n    Endpoint mode and mode used for interval-average channels.\nchannels : mapping of str to ChannelReading\n    Allowlisted measured or derived public channel values.\n\nNotes\n-----\nTimestamps are normalized to UTC and channel mappings are frozen after\nvalidation. Private scenario parameters, seeds, and future outcomes do\nnot belong in this envelope.",
       "properties": {
         "catalog_version": {
           "const": "power-leo.v1",
@@ -389,7 +389,7 @@
     },
     "ModeChangedDetails": {
       "additionalProperties": false,
-      "description": "Allowlisted observed mode transition details.",
+      "description": "Allowlisted observed mode transition details.\n\nAttributes\n----------\nfrom_mode, to_mode : Mode\n    Endpoint modes on either side of the public transition.",
       "properties": {
         "from_mode": {
           "enum": [
@@ -419,7 +419,7 @@
     },
     "NoiseConfiguration": {
       "additionalProperties": false,
-      "description": "Supported sensor noise selection.",
+      "description": "Supported sensor noise selection.\n\nAttributes\n----------\ntype : str\n    P0 uses ``none`` so numerical evidence remains deterministic.",
       "properties": {
         "type": {
           "const": "none",
@@ -435,7 +435,7 @@
     },
     "Operation": {
       "additionalProperties": false,
-      "description": "Half-open scheduled operational mode interval.",
+      "description": "Half-open scheduled operational mode interval.\n\nAttributes\n----------\nstart_s, end_s : int\n    Simulated-second bounds of the half-open interval ``[start_s, end_s)``.\nmode : SatelliteMode\n    Mode active during the interval.",
       "properties": {
         "end_s": {
           "maximum": 86400,
@@ -469,7 +469,7 @@
     },
     "OperationalEvent": {
       "additionalProperties": false,
-      "description": "Allowlisted observable operational event envelope.",
+      "description": "Allowlisted observable operational event envelope.\n\nAttributes\n----------\nschema_version : str\n    Breaking-contract identifier, currently ``operational_event.v1``.\nsource_id : str\n    Stable producer identity.\nstream_id : UUID\n    Stream namespace associated with the event.\nevent_sequence : int\n    Monotonic sequence within the stream's event namespace.\nsatellite_id : str\n    Logical spacecraft identity.\nsource_kind : {\"synthetic\", \"observed\"}\n    Provenance of the producer data.\ntime_domain : {\"simulation_utc\", \"mission_utc\"}\n    Meaning of ``observed_at``.\nobserved_at, emitted_at : datetime\n    UTC event time and producer emission time.\nevent_type : EventType\n    Allowlisted observable event discriminator.\nreason_code : str\n    Stable ASCII reason code for the event.\ndetails : EventDetails\n    Typed details matching ``event_type`` exactly.\n\nNotes\n-----\nEvent details describe an observed condition or transition. Private\ninjection schedules and evaluator-only outcome labels are excluded.",
       "properties": {
         "details": {
           "anyOf": [
@@ -574,7 +574,7 @@
     },
     "OrbitConfiguration": {
       "additionalProperties": false,
-      "description": "Osculating classical orbit elements at the run epoch.",
+      "description": "Osculating classical orbit elements at the run epoch.\n\nAttributes\n----------\na_m : float\n    Semi-major axis in metres.\ne : float\n    Dimensionless eccentricity.\ni_deg, raan_deg, argp_deg, true_anomaly_deg : float\n    Inclination, right ascension of ascending node, argument of\n    periapsis, and true anomaly in degrees.\n\nNotes\n-----\nThe model validates the initial perigee and apogee against the supported\n300--1500 km P0 radial envelope.",
       "properties": {
         "a_m": {
           "exclusiveMinimum": 0,
@@ -625,7 +625,7 @@
     },
     "OrbitPoint": {
       "additionalProperties": false,
-      "description": "One authoritative Earth-fixed orbit state without predicted health.",
+      "description": "One authoritative Earth-fixed orbit state without predicted health.\n\nAttributes\n----------\nelapsed_s : int\n    Simulated elapsed time from the run epoch.\nobserved_at : datetime\n    UTC timestamp represented by the state.\nposition_itrs_m : tuple of float\n    Earth-fixed position in metres.\nvelocity_itrs_m_s : tuple of float\n    Earth-fixed velocity in metres per second.",
       "properties": {
         "elapsed_s": {
           "title": "Elapsed S",
@@ -684,7 +684,7 @@
     },
     "PanelConfiguration": {
       "additionalProperties": false,
-      "description": "Equivalent solar-array nameplate and conversion parameters.",
+      "description": "Equivalent solar-array nameplate and conversion parameters.\n\nAttributes\n----------\narea_m2 : float\n    Equivalent panel area in square metres.\nefficiency, conversion_efficiency : float\n    Panel and bus-conversion efficiencies in ``(0, 1]``.\nirradiance_1au_w_m2 : float\n    Reference solar irradiance in watts per square metre.\npointing : PointingConfiguration\n    Declared panel pointing policy.",
       "properties": {
         "area_m2": {
           "exclusiveMinimum": 0,
@@ -725,7 +725,7 @@
     },
     "PointingConfiguration": {
       "additionalProperties": false,
-      "description": "Supported panel pointing policy.",
+      "description": "Supported panel pointing policy.\n\nAttributes\n----------\ntype : str\n    P0 panel policy, currently ``ideal_sun_tracking``.",
       "properties": {
         "type": {
           "const": "ideal_sun_tracking",
@@ -741,7 +741,7 @@
     },
     "PowerUnservedDetails": {
       "additionalProperties": false,
-      "description": "Allowlisted observed unserved-power state details.",
+      "description": "Allowlisted observed unserved-power state details.\n\nAttributes\n----------\nactive : bool\n    Whether requested load was not fully served.\nvalue_w : float\n    Unserved requested load in watts.\nsample_window_s : float\n    Interval represented by the value in seconds.",
       "properties": {
         "active": {
           "title": "Active",
@@ -768,7 +768,7 @@
     },
     "PublicLimit": {
       "additionalProperties": false,
-      "description": "A disclosed operational limit with hysteresis.",
+      "description": "A disclosed operational limit with hysteresis.\n\nAttributes\n----------\nchannel_id : str\n    Public channel monitored by this limit.\noperator : {\"lt\", \"gt\"}\n    Comparison used to enter the limit.\nvalue, clear_value : float\n    Entry and clear thresholds exposed to a viewer or consumer.",
       "properties": {
         "channel_id": {
           "const": "eps.battery_soc",
@@ -919,7 +919,7 @@
     },
     "PublicRunStatus": {
       "additionalProperties": false,
-      "description": "Committed run status containing no configuration or scenario identity.",
+      "description": "Committed run status containing no configuration or scenario identity.\n\nAttributes\n----------\nrun_id : str\n    Identifier for this execution.\nstatus : RunState\n    Public lifecycle state.\nepoch_utc : datetime\n    Run start epoch in UTC.\nduration_s : int\n    Configured simulated duration.\ncommitted_tick : int\n    Latest durably committed simulated second, or ``-1`` before the\n    first commit.\nstatus_revision : int\n    Monotonic status revision used to order same-tick responses.\ncommitted_at : datetime or None\n    Simulation UTC timestamp of the latest committed sample; ``None``\n    before the first sample.\nrequested_speed, effective_speed : float or int\n    Requested pacing multiplier and measured effective multiplier.\nwall_lag_s : float\n    Difference between requested simulated progress and wall pacing.\nsatellites : list of PublicSpacecraft\n    Public spacecraft descriptors and stream identities.\nsource_kind : str\n    Provenance label; P0 runs are ``synthetic``.\nmodel_provenance : PublicModelProvenance\n    Allowlisted model and Earth-orientation metadata.\nframe_count : int\n    Number of committed public frames.\ndiagnostic : str or None\n    Safe terminal or health diagnostic, when present.\n\nNotes\n-----\nSeeds, scenario parameters, private manifests, and future outcome labels\nare intentionally excluded from this projection.",
       "properties": {
         "committed_at": {
           "anyOf": [
@@ -1045,7 +1045,7 @@
     },
     "PublicSpacecraft": {
       "additionalProperties": false,
-      "description": "Public nameplate and display properties of one spacecraft.",
+      "description": "Public nameplate and display properties of one spacecraft.\n\nAttributes\n----------\nsatellite_id : str\n    Stable spacecraft identity.\nname, color : str\n    Human-readable label and viewer marker color.\nstream_id : str\n    Durable public telemetry stream identity.\ncapacity_wh, panel_area_m2 : float\n    Disclosed battery capacity and panel area.\npublic_limits : list of PublicLimit\n    Configured limits safe to disclose to consumers.",
       "properties": {
         "capacity_wh": {
           "title": "Capacity Wh",
@@ -1093,7 +1093,7 @@
     },
     "ReserveOutcome": {
       "additionalProperties": false,
-      "description": "Private state-triggered operational reserve outcome rule.",
+      "description": "Private state-triggered operational reserve outcome rule.\n\nAttributes\n----------\ntype : str\n    P0 outcome type, currently ``energy_reserve_violation``.\nreserve_soc : float\n    SOC threshold used by the private evaluator.\ndwell_s : int\n    Consecutive simulated seconds required below the threshold.",
       "properties": {
         "dwell_s": {
           "default": 60,
@@ -1122,7 +1122,7 @@
     },
     "RunConfiguration": {
       "additionalProperties": false,
-      "description": "Simulation timing, seed, and versioned model selections.",
+      "description": "Simulation timing, seed, and versioned model selections.\n\nAttributes\n----------\nepoch_utc : datetime\n    UTC-normalized instant at which the run starts.\nduration_s : int\n    Configured elapsed duration in simulated seconds; samples include\n    both tick zero and the endpoint.\ntick_s, telemetry_period_s : int\n    Fixed physical and telemetry cadence; both are one second in P0.\nspeed : {1, 5, 20}\n    Requested wall-clock multiplier.\nseed : int\n    Reproducibility seed within JavaScript's exact integer range.\nearth_model, orbit_model, sun_model : str\n    Versioned model identifiers used by the run.",
       "properties": {
         "duration_s": {
           "default": 21600,
@@ -1192,7 +1192,7 @@
     },
     "SatelliteDefinition": {
       "additionalProperties": false,
-      "description": "Stable spacecraft identity, orbit, profile reference, and schedule.",
+      "description": "Stable spacecraft identity, orbit, profile reference, and schedule.\n\nAttributes\n----------\nsatellite_id : str\n    Stable ASCII identity used in streams and public frames.\nname : str\n    Human-readable spacecraft name.\nprofile_id : str\n    Reference to a reusable :class:`SpacecraftProfile`.\norbit : OrbitConfiguration\n    Initial osculating orbit.\ninitial_mode : SatelliteMode\n    Default mode whenever no scheduled operation is active, including\n    tick zero unless an operation starts there.\noperations : tuple of Operation\n    Non-overlapping scheduled mode intervals.\nvisual : VisualConfiguration\n    Allowlisted marker metadata.",
       "properties": {
         "initial_mode": {
           "enum": [
@@ -1244,7 +1244,7 @@
     },
     "SatelliteTrajectory": {
       "additionalProperties": false,
-      "description": "Orbit samples for one spacecraft.",
+      "description": "Orbit samples for one spacecraft.\n\nAttributes\n----------\nsatellite_id : str\n    Spacecraft identity.\nsamples : list of OrbitPoint\n    Ordered Earth-fixed orbit samples.",
       "properties": {
         "samples": {
           "items": {
@@ -1267,7 +1267,7 @@
     },
     "SensorConfiguration": {
       "additionalProperties": false,
-      "description": "Public channel catalog and sensor-noise policy.",
+      "description": "Public channel catalog and sensor-noise policy.\n\nAttributes\n----------\ncatalog : str\n    Versioned public channel catalog identifier.\nnoise : NoiseConfiguration\n    Noise policy applied after the physical calculation.",
       "properties": {
         "catalog": {
           "const": "power-leo.v1",
@@ -1287,7 +1287,7 @@
     },
     "SequenceRange": {
       "additionalProperties": false,
-      "description": "A delivered stream's inclusive sequence bounds.",
+      "description": "A delivered stream's inclusive sequence bounds.\n\nAttributes\n----------\nstream_id : str\n    Public stream identity.\nfirst, last : int\n    Inclusive sequence numbers represented by a delivery batch.",
       "properties": {
         "first": {
           "title": "First",
@@ -1312,7 +1312,7 @@
     },
     "SimulationConfig": {
       "additionalProperties": false,
-      "description": "Complete validated P0 simulation input configuration.",
+      "description": "Complete validated P0 simulation input configuration.\n\nAttributes\n----------\nschema_version : str\n    Configuration contract revision, currently ``simulation.v1``.\nrun : RunConfiguration\n    Timing, seed, and selected model versions.\nprofiles : mapping of str to SpacecraftProfile\n    Reusable spacecraft subsystem definitions.\nsatellites : tuple of SatelliteDefinition\n    One to ten configured spacecraft.\nconstellations : tuple of ConstellationDefinition\n    Optional display groupings with validated membership.\nscenario : tuple of SolarDeratingScenario\n    Zero or one private P0 derating scenario.\n\nNotes\n-----\nCross-object references and nested mappings are validated and frozen\nbefore the configuration is normalized or hashed.",
       "properties": {
         "constellations": {
           "items": {
@@ -1364,7 +1364,7 @@
     },
     "Snapshot": {
       "additionalProperties": false,
-      "description": "A consistent committed status and bounded measurement history.",
+      "description": "A consistent committed status and bounded measurement history.\n\nAttributes\n----------\nstatus : PublicRunStatus\n    Status and committed endpoint corresponding to the history.\nframes : list of MeasurementFrame\n    Public frames in the bounded history window, all at or before the\n    committed endpoint.",
       "properties": {
         "frames": {
           "items": {
@@ -1386,7 +1386,7 @@
     },
     "SolarDeratingScenario": {
       "additionalProperties": false,
-      "description": "Private piecewise-linear solar derating scenario.",
+      "description": "Private piecewise-linear solar derating scenario.\n\nAttributes\n----------\nsatellite_id : str\n    Spacecraft affected by the scenario.\ntype : str\n    P0 scenario type, currently ``solar_derating``.\npoints : tuple of DeratingPoint\n    Strictly increasing multiplier control points.\noutcome : ReserveOutcome\n    Private state-based outcome rule.",
       "properties": {
         "outcome": {
           "$ref": "#/$defs/ReserveOutcome"
@@ -1419,7 +1419,7 @@
     },
     "SpacecraftProfile": {
       "additionalProperties": false,
-      "description": "Reusable spacecraft subsystem configuration.",
+      "description": "Reusable spacecraft subsystem configuration.\n\nAttributes\n----------\npanel : PanelConfiguration\n    Equivalent solar-array model.\nbattery : BatteryConfiguration\n    Bounded energy-store model.\nloads_w : mapping\n    Requested load in watts for every supported satellite mode.\nsensors : SensorConfiguration\n    Public channel catalog and sensor policy.\npublic_limits : tuple of ConfiguredPublicLimit\n    Limits that may appear in the public spacecraft descriptor.",
       "properties": {
         "battery": {
           "$ref": "#/$defs/BatteryConfiguration"
@@ -1465,7 +1465,7 @@
     },
     "Trajectory": {
       "additionalProperties": false,
-      "description": "Bounded orbit-only prediction with explicit coordinates.",
+      "description": "Bounded orbit-only prediction with explicit coordinates.\n\nAttributes\n----------\nrun_id : str\n    Run whose prepared engine produced the samples.\nkind : str\n    Explicit ``predicted_orbit`` discriminator.\nframe : str\n    Coordinate frame, fixed to ``ITRS`` in P0.\nsatellites : list of SatelliteTrajectory\n    Per-spacecraft orbit samples.\n\nNotes\n-----\nThis projection contains no future electrical or health state.",
       "properties": {
         "frame": {
           "const": "ITRS",
@@ -1502,7 +1502,7 @@
     },
     "ViewerBootstrap": {
       "additionalProperties": false,
-      "description": "One prepared run and session-bound CSRF token for the browser.",
+      "description": "One prepared run and session-bound CSRF token for the browser.\n\nAttributes\n----------\ncsrf_token : str\n    Token required on browser control requests for this session.\nrun : PublicRunStatus\n    Public status of the session's one scoped run.",
       "properties": {
         "csrf_token": {
           "title": "Csrf Token",
@@ -1521,7 +1521,7 @@
     },
     "VisualConfiguration": {
       "additionalProperties": false,
-      "description": "Allowlisted visual marker metadata for a spacecraft.",
+      "description": "Allowlisted visual marker metadata for a spacecraft.\n\nAttributes\n----------\ncolor : str\n    Six-digit hexadecimal marker color.\nasset_id : str or None\n    Optional identifier resolved by the allowlisted visual asset catalog.",
       "properties": {
         "asset_id": {
           "anyOf": [
@@ -1548,7 +1548,7 @@
     },
     "VisualMessage": {
       "additionalProperties": false,
-      "description": "Bounded public presentation transport; never a durable consumer offset.",
+      "description": "Bounded public presentation transport; never a durable consumer offset.\n\nAttributes\n----------\nvisual_schema_version : str\n    Version of the presentation message envelope.\ntype : str\n    Presentation message kind, such as ``snapshot`` or ``samples``.\nsent_at : datetime\n    Wall-clock send time in UTC.\nrun_id : str\n    Run associated with the presentation update.\nstatus : PublicRunStatus or None\n    Latest public status when supplied.\nframes : list of MeasurementFrame\n    Coalesced public frames delivered to the viewer.\nranges : list of SequenceRange\n    Inclusive sequence bounds for delivered streams.\nmessage : str or None\n    Safe human-readable error or resynchronization message.\n\nNotes\n-----\nConsumers requiring durable delivery must use the HTTP replay routes and\ntheir opaque cursors.",
       "properties": {
         "frames": {
           "items": {

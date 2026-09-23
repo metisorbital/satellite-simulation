@@ -111,7 +111,30 @@ class Runner:
     def command(
         self, run_id: str, action: str, speed: int | None, token: Idempotent
     ) -> dict[str, Any]:
-        """Acknowledge only durable commands, cancelling unapplied requests by deadline."""
+        """Apply a control at a durable boundary or cancel it before application.
+
+        Parameters
+        ----------
+        run_id : str
+            Run receiving the control action.
+        action : str
+            One of start, pause, resume, stop, or set_speed.
+        speed : int or None
+            Requested 1, 5, or 20 multiplier for set_speed; otherwise None.
+        token : Idempotent
+            Scope, key, and request hash used to replay an acknowledgement.
+
+        Returns
+        -------
+        dict[str, Any]
+            Public status acknowledged after the command is committed.
+
+        Raises
+        ------
+        ServiceError
+            If the transition is invalid, storage cannot commit, or a queued
+            request expires without being applied.
+        """
         try:
             existing = self.repository.existing(token)
         except SQLAlchemyError:

@@ -2,6 +2,11 @@
 
 Metis Satellite Simulation produces deterministic synthetic orbit-to-power telemetry and serves an Earth-orbit viewer for a prepared run.
 It is a source for a separate monitoring product, not a health-analysis or command system.
+Its public HTTP API lets another service discover streams and replay committed measurements after a disconnect.
+
+**New to the project?** Run the demo below, then follow the [API consumer guide](docs/api.md) to read your first telemetry page. Contributors can use the [first-change guide](docs/contributing.md).
+
+The documentation site is published at [metisorbital.github.io/satellite-simulation](https://metisorbital.github.io/satellite-simulation/).
 
 ## Run a Local Demo
 
@@ -14,14 +19,46 @@ npm --prefix frontend run build
 docker compose up -d --wait db
 uv run metis-sim init
 uv run metis-sim migrate
-uv run metis-sim demo --at 18000
+uv run metis-sim demo --at 10
 ```
 
 Open `http://127.0.0.1:8000` after the demo has prepared its paused history.
 Use `demo --at 0` for a newly created run and start it with the viewer control.
+Use `demo --at 18000` to inspect the developing power deficit in a prepared run.
 The six-hour default contains three satellites and one synthetic solar-array derating scenario.
 
 See [Getting Started](docs/getting-started.md) for prerequisites, Docker use, and the authentication boundary.
+
+## Understand the Key Ideas
+
+- **Configuration** defines the satellites, physical models, operations, and run duration. The simulator validates and freezes it before a run begins.
+- **Run and tick** identify one execution and its fixed simulated one-second steps. Requested speed changes wall pacing, not the calculated state.
+- **Stream and cursor** identify one satellite's durable public sequence and the reader's place in it. Save the returned cursor after processing a page so the next request can resume.
+- **Viewer** presents committed measurements and a separately labelled orbit-only trajectory. It does not calculate power or eclipse in the browser.
+
+```text
+backend/src/metis_sim/  Python contracts, physics, runner, storage, and API
+frontend/src/          React and Cesium viewer
+configs/               Demo and matched healthy run configurations
+schemas/               Generated public JSON Schemas
+examples/              Standalone telemetry consumer example
+tests/                 Physics, contracts, and service checks
+docs/                  Guides, normative design, and validation evidence
+```
+
+The [implementation guide](docs/implementation.md) maps the data flow and explains where each responsibility lives.
+
+## Common Tasks
+
+| Task | Start here |
+|---|---|
+| Read telemetry from another service | [API consumer guide](docs/api.md) and [standalone Python example](examples/consumer.py) |
+| Understand API objects and Python classes | [Python class reference](docs/python-api.md) and [generated public schema](schemas/public-api.v1.schema.json) |
+| Change a configuration or public channel | [First-change guide](docs/contributing.md) and [contracts](docs/contracts.md) |
+| Run focused and full checks | [Getting Started](docs/getting-started.md#run-the-focused-checks) |
+| Investigate numerical or capacity claims | [Validation evidence](docs/validation/README.md) |
+
+If the browser cannot connect, check `/health/live` and `/health/ready`, then follow the [setup troubleshooting steps](docs/getting-started.md#troubleshoot-local-setup).
 
 The measured maximum tier is ten spacecraft at **19.89× effective speed** with 20× requested: all 120,010 frames were preserved in the sustained run.
 The separate ten-spacecraft native browser measurement reached **60.06 FPS**.

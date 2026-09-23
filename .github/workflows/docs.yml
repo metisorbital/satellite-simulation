@@ -1,0 +1,39 @@
+name: Documentation
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+concurrency:
+  group: github-pages
+  cancel-in-progress: false
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12.12"
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.10.2"
+      - run: uv sync --frozen
+      - run: uv run zensical build --clean
+      - uses: actions/configure-pages@v5
+        if: github.event_name != 'pull_request'
+      - uses: actions/upload-pages-artifact@v5
+        if: github.event_name != 'pull_request'
+        with:
+          path: site
+      - uses: actions/deploy-pages@v5
+        if: github.event_name != 'pull_request'
+        id: deployment

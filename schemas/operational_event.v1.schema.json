@@ -2,7 +2,7 @@
   "$defs": {
     "LowEnergyLimitDetails": {
       "additionalProperties": false,
-      "description": "Allowlisted observed public SOC limit transition details.",
+      "description": "Allowlisted observed public SOC limit transition details.\n\nAttributes\n----------\nchannel_id : str\n    Public SOC channel associated with the limit.\noperator : {\"lt\", \"gt\"}\n    Comparison used to enter or clear the limit.\nvalue, clear_value : float\n    Entry and hysteresis-clear SOC thresholds.",
       "properties": {
         "channel_id": {
           "const": "eps.battery_soc",
@@ -41,7 +41,7 @@
     },
     "ModeChangedDetails": {
       "additionalProperties": false,
-      "description": "Allowlisted observed mode transition details.",
+      "description": "Allowlisted observed mode transition details.\n\nAttributes\n----------\nfrom_mode, to_mode : Mode\n    Endpoint modes on either side of the public transition.",
       "properties": {
         "from_mode": {
           "enum": [
@@ -71,7 +71,7 @@
     },
     "PowerUnservedDetails": {
       "additionalProperties": false,
-      "description": "Allowlisted observed unserved-power state details.",
+      "description": "Allowlisted observed unserved-power state details.\n\nAttributes\n----------\nactive : bool\n    Whether requested load was not fully served.\nvalue_w : float\n    Unserved requested load in watts.\nsample_window_s : float\n    Interval represented by the value in seconds.",
       "properties": {
         "active": {
           "title": "Active",
@@ -100,7 +100,7 @@
   "$id": "https://metisorbital.local/schemas/operational_event.v1.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "Allowlisted observable operational event envelope.",
+  "description": "Allowlisted observable operational event envelope.\n\nAttributes\n----------\nschema_version : str\n    Breaking-contract identifier, currently ``operational_event.v1``.\nsource_id : str\n    Stable producer identity.\nstream_id : UUID\n    Stream namespace associated with the event.\nevent_sequence : int\n    Monotonic sequence within the stream's event namespace.\nsatellite_id : str\n    Logical spacecraft identity.\nsource_kind : {\"synthetic\", \"observed\"}\n    Provenance of the producer data.\ntime_domain : {\"simulation_utc\", \"mission_utc\"}\n    Meaning of ``observed_at``.\nobserved_at, emitted_at : datetime\n    UTC event time and producer emission time.\nevent_type : EventType\n    Allowlisted observable event discriminator.\nreason_code : str\n    Stable ASCII reason code for the event.\ndetails : EventDetails\n    Typed details matching ``event_type`` exactly.\n\nNotes\n-----\nEvent details describe an observed condition or transition. Private\ninjection schedules and evaluator-only outcome labels are excluded.",
   "properties": {
     "details": {
       "anyOf": [

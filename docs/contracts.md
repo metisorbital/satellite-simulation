@@ -3,7 +3,7 @@ title: Configuration and Data Contracts
 description: Specify satellite configuration, public measurements, private truth, persistence, and transport behavior.
 content-type: reference
 audience: engineering
-status: proposed implementation baseline
+status: normative implementation contract
 version: 1.0
 date: 2026-09-21
 ---
@@ -11,7 +11,7 @@ date: 2026-09-21
 # Configuration and Data Contracts
 
 This is a normative appendix to the [specification](specification.md).
-All endpoint paths and schemas below are proposed implementation requirements; no server exists yet.
+The endpoint paths and schemas below define the implemented contract for this version. The [API consumer guide](api.md) shows how to use the running service.
 
 ## 1. Objects and Responsibility
 

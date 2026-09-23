@@ -4,7 +4,13 @@ A React/TypeScript mission interface with a CesiumJS Earth scene. The Python bac
 
 ## Run locally
 
-Start the repository's backend on `127.0.0.1:8000`, then:
+Follow the [repository setup guide](../docs/getting-started.md) to install dependencies, start PostgreSQL, initialize local credentials, and apply migrations. From the repository root, start a prepared local backend in one terminal:
+
+```bash
+uv run metis-sim demo --at 10
+```
+
+Then run these commands from `frontend/` in another terminal:
 
 ```sh
 npm ci

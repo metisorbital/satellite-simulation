@@ -37,7 +37,26 @@ class MeasurementProjector:
     def project(
         self, samples: tuple[PhysicsSample, ...]
     ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
-        """Freeze telemetry, observed events and separately private truth for one tick."""
+        """Project one tick into public records and separate private truth.
+
+        Parameters
+        ----------
+        samples : tuple of PhysicsSample
+            Physical endpoints for the tick in stable satellite order. These
+            samples contain private truth and must not be serialized directly.
+
+        Returns
+        -------
+        tuple of list of dict
+            Public telemetry frames, public operational events, and private
+            evaluation rows, in that order. The caller persists them together
+            at one committed boundary.
+
+        Notes
+        -----
+        Only allowlisted physical channels enter public frames. Private scenario
+        settings and outcomes remain in the third collection.
+        """
         frames, events, truth = [], [], []
         emitted_at = utc_now()
         for sample in samples:
