@@ -46,7 +46,7 @@ All Python public classes and functions must use NumPy-style docstrings.
 ## 2. Configuration Rules
 
 **CFG-03:** YAML and API JSON must enter the same Pydantic validation and normalization path.
-Generate JSON Schema and TypeScript contract types from those models; do not maintain separately handwritten competing schemas.
+Generate JSON Schema and Dart contract types from those models; do not maintain separately handwritten competing schemas.
 Pydantic supports JSON Schema generation from models. [Pydantic documentation](https://docs.pydantic.dev/latest/concepts/json_schema/)
 
 Required root sections are `schema_version`, `run`, `profiles`, `satellites`, `constellations`, and `scenario`.

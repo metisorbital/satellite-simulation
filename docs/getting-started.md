@@ -12,7 +12,7 @@ It does not require a real spacecraft connection.
 
 ## Install the Prerequisites
 
-Install Docker with Compose, Python 3.12.12 with uv 0.10.2, and Node 22.23.0.
+Install Docker with Compose, Python 3.12.12 with uv 0.10.2, Node 22.23.0, and Flutter 3.47.5 (including Dart).
 The committed lockfiles are the dependency source of truth.
 Check that the tools are available before installing project dependencies:
 
@@ -21,6 +21,7 @@ python3 --version
 uv --version
 node --version
 npm --version
+flutter --version
 docker compose version
 ```
 
@@ -29,7 +30,7 @@ From the repository root, install the Python and frontend dependencies and produ
 ```bash
 uv sync --frozen
 npm ci --prefix frontend
-npm --prefix frontend run build
+(cd frontend && flutter pub get --enforce-lockfile && npm run prepare:cesium && flutter build web --release --no-web-resources-cdn)
 ```
 
 ## Start PostgreSQL and Create Local Credentials
@@ -129,9 +130,10 @@ uv run ruff format --check backend/src backend/migrations tests scripts examples
 uv run mypy backend/src scripts/generate_contracts.py
 uv run pytest -q
 uv run python scripts/generate_contracts.py
-git diff --exit-code -- schemas frontend/src/api/generated.ts
+git diff --exit-code -- schemas frontend/lib/api/generated.dart
 npm --prefix frontend test
-npm --prefix frontend run build
+(cd frontend && flutter analyze && flutter test)
+(cd frontend && flutter pub get --enforce-lockfile && npm run prepare:cesium && flutter build web --release --no-web-resources-cdn)
 ```
 
 For database integration coverage, create a separate empty test database once and point `pytest` to it. The local Compose default password is shown below; adjust the URL if you set `METIS_POSTGRES_PASSWORD`.
@@ -152,7 +154,7 @@ The [implementation map](implementation.md) explains the service boundaries behi
 |---|---|
 | `metis-sim migrate` cannot connect to PostgreSQL | Run `docker compose up -d --wait db` and check that loopback port `55432` is available. The local CLI uses that port by default. |
 | `/health/live` works but `/health/ready` returns `503` | The process is up, but database access, writer ownership, or persistence is unhealthy. Check the service log and database health before starting a new run. |
-| The API responds but `/` does not show the viewer | Build `frontend/dist` with `npm ci --prefix frontend` and `npm --prefix frontend run build`, then restart the local demo. The app mounts the viewer only when that directory exists. |
+| The API responds but `/` does not show the viewer | Build `frontend/build/web` with `npm ci --prefix frontend` and `(cd frontend && flutter pub get --enforce-lockfile && npm run prepare:cesium && flutter build web --release --no-web-resources-cdn)`, then restart the local demo. The app mounts the viewer only when that directory exists. |
 | The browser session or control request returns `401` or `403` | Open the exact loopback origin used by `metis-sim demo`, then reload to refresh the scoped cookie. A different origin must be in `METIS_ORIGINS`; browser controls also require the session CSRF token. |
 | Port `8000` is already in use | Run `uv run metis-sim demo --at 0 --port 8002` and open `http://127.0.0.1:8002`. The demo includes this selected loopback port in its default origin list. |
 

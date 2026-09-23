@@ -36,7 +36,7 @@ class Settings:
         "http://localhost:5173",
         "http://127.0.0.1:5173",
     )
-    frontend_path: Path = field(default_factory=lambda: Path("frontend/dist"))
+    frontend_path: Path = field(default_factory=lambda: Path("frontend/build/web"))
     demo_config: Path = field(default_factory=lambda: Path("configs/demo.yaml"))
     minimum_free_bytes: int = 256 * 1024 * 1024
     storage_quota_bytes: int = 5 * 1024 * 1024 * 1024

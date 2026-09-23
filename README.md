@@ -6,16 +6,19 @@ Its public HTTP API lets another service discover streams and replay committed m
 
 **New to the project?** Run the demo below, then follow the [API consumer guide](docs/api.md) to read your first telemetry page. Contributors can use the [first-change guide](docs/contributing.md).
 
+The [Flutter viewer guide](docs/frontend.md) covers the frontend build and browser boundary.
+The [Python API reference](docs/python-api.md) renders NumPy-style source docstrings automatically.
+
 The documentation site is published at [metisorbital.github.io/satellite-simulation](https://metisorbital.github.io/satellite-simulation/).
 
 ## Run a Local Demo
 
-Use Python 3.12.12, uv 0.10.2, Node 22.23.0, and Docker with Compose.
+Use Python 3.12.12, uv 0.10.2, Node 22.23.0, Flutter 3.47.5, and Docker with Compose.
 
 ```bash
 uv sync --frozen
 npm ci --prefix frontend
-npm --prefix frontend run build
+(cd frontend && flutter pub get --enforce-lockfile && npm run prepare:cesium && flutter build web --release --no-web-resources-cdn)
 docker compose up -d --wait db
 uv run metis-sim init
 uv run metis-sim migrate
@@ -38,7 +41,7 @@ See [Getting Started](docs/getting-started.md) for prerequisites, Docker use, an
 
 ```text
 backend/src/metis_sim/  Python contracts, physics, runner, storage, and API
-frontend/src/          React and Cesium viewer
+frontend/lib/          Flutter and Cesium viewer
 configs/               Demo and matched healthy run configurations
 schemas/               Generated public JSON Schemas
 examples/              Standalone telemetry consumer example
@@ -61,7 +64,7 @@ The [implementation guide](docs/implementation.md) maps the data flow and explai
 If the browser cannot connect, check `/health/live` and `/health/ready`, then follow the [setup troubleshooting steps](docs/getting-started.md#troubleshoot-local-setup).
 
 The measured maximum tier is ten spacecraft at **19.89× effective speed** with 20× requested: all 120,010 frames were preserved in the sustained run.
-The separate ten-spacecraft native browser measurement reached **60.06 FPS**.
+The earlier React viewer's ten-spacecraft native browser measurement reached **60.06 FPS**; it is not a Flutter performance result.
 See the [capacity report](docs/validation/throughput.md) for the strict timing miss, latency, hardware and measurement limits.
 
 ## Read the Authoritative Design and Evidence

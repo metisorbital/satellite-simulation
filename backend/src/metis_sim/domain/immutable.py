@@ -8,10 +8,11 @@ from typing import Never
 class FrozenDict(dict):
     """Prevent ordinary mapping mutations while preserving JSON serialization.
 
-    Parameters
-    ----------
-    value : dict
-        Mapping whose values have already been validated as immutable.
+    Notes
+    -----
+    Construction follows ``dict`` and accepts a mapping, iterable of pairs,
+    or keyword items. Values must already have been validated as immutable;
+    this wrapper prevents mapping updates but does not freeze nested values.
     """
 
     def _immutable(self, *args: object, **kwargs: object) -> Never:

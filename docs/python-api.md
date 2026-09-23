@@ -15,7 +15,21 @@ related:
 
 The HTTP API is the supported boundary for an external telemetry consumer. Its JSON shapes come from Python Pydantic classes, but an external service does not need to import the simulator package. This page explains those classes so you can read a response, validate a fixture, or change the implementation without confusing public measurements with private model state.
 
-Start with [the API consumer guide](api.md) if you want to fetch live data. The [generated public schema](../schemas/public-api.v1.schema.json) and [configuration and data contracts](contracts.md) are the exact field references. The class names below are an implementation map for version `0.1.0`.
+Start with [the API consumer guide](api.md) if you want to fetch live data. The [generated public schema](../schemas/public-api.v1.schema.json) and [configuration and data contracts](contracts.md) are the exact field references. The object guide below explains the boundaries; the generated reference pages read the current Python source directly.
+
+## Browse the Generated Reference
+
+The reference renders class signatures, methods, typed attributes, source links, and
+NumPy-style `Parameters`, `Returns`, `Raises`, and `Notes` sections directly from
+Python docstrings on every documentation build. Internal type annotations link to
+the corresponding documented objects.
+
+- [Configuration and loading](reference/configuration.md)
+- [Public telemetry and responses](reference/public-data.md)
+- [Physics and simulation engine](reference/physics.md)
+- [Application services](reference/application.md)
+- [Persistence and cursor reads](reference/persistence.md)
+- [HTTP and runtime](reference/runtime.md)
 
 ## Follow the Object Flow
 

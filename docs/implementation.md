@@ -23,7 +23,7 @@ flowchart LR
   database --> api[REST cursor and snapshot reads]
   database --> visual[Bounded visual stream]
   api --> consumer[Telemetry consumer]
-  visual --> viewer[React and Cesium viewer]
+  visual --> viewer[Flutter and Cesium viewer]
   viewer --> controls[Run controls]
   controls --> runner
 ```
@@ -40,16 +40,17 @@ backend/src/metis_sim/
   adapters/       # Safe configuration parsing and PostgreSQL storage
   api/            # FastAPI routes, authentication, WebSocket, static UI
   cli.py          # metis-sim init, migrate, serve, demo
-frontend/src/
+frontend/lib/
   api/            # Browser session, visual stream, generated API types
-  scene/          # Cesium scene and committed-time playback
-  panels/         # Selected spacecraft telemetry
+  scene/          # Flutter platform view and committed-time playback
+frontend/web/     # Local Cesium renderer bridge and bundled assets
+  main.dart       # Flutter mission shell and selected spacecraft telemetry
 configs/          # Demo and matched healthy configuration
 schemas/          # Generated JSON Schema; do not edit by hand
 tests/            # Physics, contracts, and integration checks
 ```
 
-For example, start in `models/power.py` to understand a battery calculation, then read `application/measurement.py` to see which results become public channels. Start in `frontend/src/scene/playback.ts` to understand how a committed sample reaches the viewer.
+For example, start in `models/power.py` to understand a battery calculation, then read `application/measurement.py` to see which results become public channels. Start in `frontend/lib/scene/playback.dart` to understand how a committed sample reaches the viewer.
 
 ## Follow the Service Boundary
 
@@ -60,7 +61,7 @@ For example, start in `models/power.py` to understand a battery calculation, the
 `backend/src/metis_sim/api` composes FastAPI routes, role authentication, scoped viewer sessions, WebSocket presentation, and static frontend serving.
 
 The contract source is Python Pydantic models.
-`scripts/generate_contracts.py` generates JSON Schema and the frontend TypeScript API types from those models.
+`scripts/generate_contracts.py` generates JSON Schema and the frontend Dart API types from those models.
 Do not hand-edit generated files.
 
 ## Follow One Measurement
@@ -79,7 +80,7 @@ The private scenario may affect generated power, but its settings, seed, and out
 |---|---|---|
 | One application process and one writer | A single committed clock avoids conflicting ticks and partial publication. | Add new model behavior within the existing runner and repository boundary. |
 | Pure physical model modules | Orbit and power calculations can be checked without HTTP or database setup. | Put new equations in `models/` and connect them through the engine. |
-| Generated public contracts | Python validation and TypeScript consumers use the same shapes. | Change the Pydantic source, regenerate artifacts, then check the diff. |
+| Generated public contracts | Python validation and Dart consumers use the same shapes. | Change the Pydantic source, regenerate artifacts, then check the diff. |
 | Separate public and private projections | A viewer or telemetry consumer cannot receive evaluation answers. | Add public fields through explicit response models and projection tests. |
 | PostgreSQL frame log and cursors | A consumer can recover after disconnecting without requiring a broker. | Read with stable stream identities and save the returned cursor after processing. |
 
@@ -97,7 +98,7 @@ The exact envelope, cursor, idempotency, and privacy rules are in [Configuration
 
 ## Use the Viewer Safely
 
-The compiled React/Cesium application is served from `frontend/dist` by the FastAPI process.
+The compiled Flutter/Cesium application is served from `frontend/build/web` by the FastAPI process.
 Browser controls use a restricted run-scoped session, CSRF token, and explicit origin allowlist.
 Local `metis-sim demo` is intentionally loopback-only.
 
@@ -106,12 +107,13 @@ A trusted operator-facing workflow forwards that cookie to the authorized browse
 The browser receives no operator bearer credential; it receives only the scoped HttpOnly session and its control CSRF token.
 The deployment must allow the browser's exact origin and should set secure cookies when it is served over HTTPS.
 
-The development Vite server proxies API and health requests to the local service.
-The production container instead serves the precompiled frontend and API together.
+Build Flutter web and serve it through the local FastAPI process so API calls, session cookies, and WebSockets share an origin.
+Rebuild the frontend after changes and reload the page.
+The production container serves the same precompiled frontend and API together.
 
 ## Build and Operate One Process
 
-The [Dockerfile](../Dockerfile) uses pinned Python 3.12.12 and Node 22.23.0 image digests, installs uv 0.10.2, resolves the frozen Python lockfile, compiles the frontend, and runs as a non-root user.
+The [Dockerfile](../Dockerfile) uses a pinned Python 3.12.12 image digest, Node 22.23.0, and Flutter 3.47.5 verified against its Git revision, installs uv 0.10.2, resolves the frozen Python lockfile, compiles the frontend, and runs as a non-root user.
 The [application Compose overlay](../compose.app.yaml) joins the base PostgreSQL service from [compose.yaml](../compose.yaml), migrates before serving, reads ignored local secrets, exposes only localhost, and runs one Uvicorn worker.
 
 Do not add multiprocess workers for this service.

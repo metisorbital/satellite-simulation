@@ -1,14 +1,12 @@
-"""Generate JSON Schema and TypeScript wire contracts from Pydantic models.
+"""Generate JSON Schema and Dart wire contracts from Pydantic models.
 
 Run from the repository root with ``uv run python scripts/generate_contracts.py``.
-The TypeScript compiler is the pinned ``json-schema-to-typescript`` package from
-the frontend development dependencies.
+Dart classes contain public viewer contracts only; configuration stays server-side.
 """
 
 from __future__ import annotations
 
 import json
-import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -32,7 +30,7 @@ from pydantic.json_schema import JsonSchemaMode
 
 ROOT = Path(__file__).resolve().parents[1]
 SCHEMA_DIR = ROOT / "schemas"
-TS_OUTPUT = ROOT / "frontend/src/api/generated.ts"
+DART_OUTPUT = ROOT / "frontend/lib/api/generated.dart"
 MODELS: dict[str, tuple[type[BaseModel], JsonSchemaMode]] = {
     "SimulationConfig": (SimulationConfig, "validation"),
     "MeasurementFrame": (MeasurementFrame, "serialization"),
@@ -62,7 +60,7 @@ def _schema(model: type[BaseModel], title: str) -> dict[str, Any]:
 
 
 def _draft7_tuple_compatibility(value: Any) -> Any:
-    """Translate fixed tuple schemas for the TypeScript compiler's draft-07 subset."""
+    """Translate fixed tuples to preserve the published draft-07 schema format."""
     if isinstance(value, list):
         return [_draft7_tuple_compatibility(item) for item in value]
     if not isinstance(value, dict):
@@ -79,8 +77,152 @@ def _write_json(path: Path, payload: dict[str, Any]) -> None:
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n")
 
 
+def public_definitions() -> dict[str, Any]:
+    """Collect the transitive public model schema definitions.
+
+    Returns
+    -------
+    dict of str to dict
+        Public schemas, excluding private simulation configuration models.
+    """
+    definitions: dict[str, Any] = {}
+    for name, (model, mode) in MODELS.items():
+        if name == "SimulationConfig":
+            continue
+        schema = model.model_json_schema(mode=mode, ref_template="#/$defs/{model}")
+        definitions.update(schema.pop("$defs", {}))
+        definitions[name] = schema
+    for name, (model, mode) in MODELS.items():
+        if mode == "serialization":
+            definitions[name]["required"] = list(model.model_fields)
+    return definitions
+
+
+def _dart_type(schema: dict[str, Any]) -> str:
+    """Resolve the limited schema vocabulary used by public contracts."""
+    if "$ref" in schema:
+        return str(schema["$ref"]).rsplit("/", 1)[-1]
+    if "anyOf" in schema:
+        alternatives = schema["anyOf"]
+        nonnull = [item for item in alternatives if item.get("type") != "null"]
+        types = {_dart_type(item) for item in nonnull}
+        base = types.pop() if len(types) == 1 else "Object"
+        return base + ("?" if len(nonnull) < len(alternatives) else "")
+    kind = schema.get("type")
+    if kind == "array":
+        item = schema.get("items") or schema.get("prefixItems", [{}])[0]
+        return f"List<{_dart_type(item)}>"
+    if kind == "object":
+        item = schema.get("additionalProperties")
+        if isinstance(item, dict):
+            return f"Map<String, {_dart_type(item)}>"
+        raise ValueError(f"Unsupported anonymous object schema: {schema}")
+    primitive_types = {"string": "String", "number": "double", "integer": "int", "boolean": "bool"}
+    if kind not in primitive_types:
+        raise ValueError(f"Unsupported public schema: {schema}")
+    return primitive_types[kind]
+
+
+def _decode(schema: dict[str, Any], value: str) -> str:
+    """Render a JSON-to-Dart expression for one schema value."""
+    dart_type = _dart_type(schema)
+    if dart_type.endswith("?"):
+        nonnull = [item for item in schema["anyOf"] if item.get("type") != "null"]
+        inner = nonnull[0] if len(nonnull) == 1 else {"anyOf": nonnull}
+        return f"{value} == null ? null : {_decode(inner, value)}"
+    if "$ref" in schema:
+        return f"{dart_type}.fromJson(Map<String, dynamic>.from({value} as Map))"
+    if dart_type == "double":
+        return f"({value} as num).toDouble()"
+    if dart_type.startswith("List<"):
+        item = schema.get("items") or schema["prefixItems"][0]
+        return f"({value} as List).map((item) => {_decode(item, 'item')}).toList()"
+    if dart_type.startswith("Map<"):
+        inner = _decode(schema["additionalProperties"], "item")
+        return f"({value} as Map<String, dynamic>).map((key, item) => MapEntry(key, {inner}))"
+    return f"{value} as {dart_type}"
+
+
+def _encode(schema: dict[str, Any], value: str) -> str:
+    """Render a Dart-to-JSON expression for one schema value."""
+    if "$ref" in schema:
+        return f"{value}.toJson()"
+    if "anyOf" in schema:
+        nonnull = [item for item in schema["anyOf"] if item.get("type") != "null"]
+        if len(nonnull) == 1:
+            return f"{value} == null ? null : {_encode(nonnull[0], value + '!')}"
+        return value
+    if schema.get("type") == "array":
+        item = schema.get("items") or schema["prefixItems"][0]
+        return f"{value}.map((item) => {_encode(item, 'item')}).toList()"
+    if schema.get("type") == "object":
+        inner = _encode(schema["additionalProperties"], "item")
+        return f"{value}.map((key, item) => MapEntry(key, {inner}))"
+    return value
+
+
+def render_dart(definitions: dict[str, Any]) -> str:
+    """Render deterministic named Dart classes from public schemas.
+
+    Parameters
+    ----------
+    definitions : dict of str to dict
+        Named Pydantic JSON Schema definitions.
+
+    Returns
+    -------
+    str
+        Dart source with wire-preserving snake-case fields and JSON methods.
+
+    Notes
+    -----
+    Timestamps remain strings to preserve the original wire representation.
+    Heterogeneous unions use JSON-native ``Object`` values. Server-side
+    Pydantic validation remains authoritative for numeric and enum constraints.
+    """
+    lines = [
+        "// Generated from Pydantic v2 contracts. Do not edit by hand.",
+        "// dart format off",
+        "// Regenerate: uv run python scripts/generate_contracts.py",
+        "// ignore_for_file: non_constant_identifier_names, unnecessary_non_null_assertion, prefer_null_aware_operators, use_null_aware_elements",
+        "",
+    ]
+    for name, schema in sorted(definitions.items()):
+        properties = schema.get("properties")
+        if properties is None:
+            raise ValueError(f"Expected named object schema for {name}")
+        required = schema.get("required", [])
+        summary = schema.get("description", name).split("\n", 1)[0]
+        lines.extend([f"/// {summary}", f"class {name} {{", f"  const {name}({{"])
+        for field in properties:
+            prefix = "required " if field in required else ""
+            lines.append(f"    {prefix}this.{field},")
+        lines.append("  });")
+        lines.append("")
+        for field, spec in properties.items():
+            dart_type = _dart_type(spec)
+            if field not in required and not dart_type.endswith("?"):
+                dart_type += "?"
+            lines.append(f"  final {dart_type} {field};")
+        lines.extend(["", f"  factory {name}.fromJson(Map<String, dynamic> json) => {name}("])
+        for field, spec in properties.items():
+            value = f"json['{field}']"
+            expression = _decode(spec, value)
+            if field not in required and not _dart_type(spec).endswith("?"):
+                expression = f"{value} == null ? null : {expression}"
+            lines.append(f"    {field}: {expression},")
+        lines.extend(["  );", "", "  Map<String, dynamic> toJson() => {"])
+        for field, spec in properties.items():
+            optional = field not in required
+            value = field + ("!" if optional and not _dart_type(spec).endswith("?") else "")
+            prefix = f"if ({field} != null) " if optional else ""
+            lines.append(f"    {prefix}'{field}': {_encode(spec, value)},")
+        lines.extend(["  };", "}", ""])
+    return "\n".join(lines)
+
+
 def main() -> None:
-    """Generate public JSON Schemas and compile the TypeScript contracts."""
+    """Generate JSON Schemas and public Dart contracts."""
     SCHEMA_DIR.mkdir(parents=True, exist_ok=True)
     individual = {
         "simulation.v1.schema.json": _schema(SimulationConfig, "simulation.v1"),
@@ -115,20 +257,8 @@ def main() -> None:
     public_schema = _draft7_tuple_compatibility(public_schema)
     _write_json(SCHEMA_DIR / "public-api.v1.schema.json", public_schema)
 
-    TS_OUTPUT.parent.mkdir(parents=True, exist_ok=True)
-    command = [
-        "npx",
-        "--no-install",
-        "json-schema-to-typescript",
-        str(SCHEMA_DIR / "public-api.v1.schema.json"),
-        "--output",
-        str(TS_OUTPUT),
-        "--cwd",
-        str(ROOT / "frontend"),
-        "--bannerComment",
-        "/* Generated from Pydantic v2 contracts. Do not edit by hand. */",
-    ]
-    subprocess.run(command, check=True, cwd=ROOT / "frontend")
+    DART_OUTPUT.parent.mkdir(parents=True, exist_ok=True)
+    DART_OUTPUT.write_text(render_dart(public_definitions()))
 
 
 if __name__ == "__main__":

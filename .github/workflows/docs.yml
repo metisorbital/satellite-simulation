@@ -27,7 +27,7 @@ jobs:
         with:
           version: "0.10.2"
       - run: uv sync --frozen
-      - run: uv run zensical build --clean
+      - run: uv run zensical build --clean --strict
       - uses: actions/configure-pages@v5
         if: github.event_name != 'pull_request'
       - uses: actions/upload-pages-artifact@v5

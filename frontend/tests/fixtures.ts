@@ -1,4 +1,5 @@
-import type { MeasurementFrame, PublicRunStatus } from '../src/api/generated';
+type PublicRunStatus = Record<string, any>;
+type MeasurementFrame = Record<string, any>;
 
 export const EPOCH = '2026-09-21T00:00:00Z';
 export function statusAt(

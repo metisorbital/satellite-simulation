@@ -41,6 +41,19 @@ class SimulationEngine:
     event loop. ``sample`` and ``trajectory`` subsequently read cached arrays
     only. No database, HTTP, wall-clock pacing, or unseeded randomness enters
     the physical model. Precomputed future health is never part of preview.
+
+    Examples
+    --------
+    Prepare a validated local configuration, then read the initial sample.
+    Returned samples contain private truth and are for internal use only.
+
+    >>> from pathlib import Path
+    >>> from metis_sim.adapters.configuration import load_configuration
+    >>> config = load_configuration(Path("configs/demo.yaml").read_text())
+    >>> engine = SimulationEngine(config).initialize()
+    >>> samples = engine.sample(0)
+    >>> len(samples) == len(config.satellites)
+    True
     """
 
     def __init__(self, config: SimulationConfig) -> None:

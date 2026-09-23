@@ -227,3 +227,11 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Flutter web sources and local tooling
+!frontend/lib/
+!frontend/lib/**
+frontend/.dart_tool/
+frontend/.flutter-plugins-dependencies
+frontend/web/cesium/
+frontend/build/

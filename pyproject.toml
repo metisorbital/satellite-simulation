@@ -23,6 +23,7 @@ dev = [
     "mypy>=1.15,<2",
     "types-PyYAML",
     "zensical>=0.0.64",
+    "mkdocstrings-python>=2,<3",
 ]
 
 [project.scripts]

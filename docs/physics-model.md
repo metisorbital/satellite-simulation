@@ -307,7 +307,7 @@ A full six-hour story in five minutes would require 72×, which P0 does not prom
 
 ## 8. Visualize the Authoritative State
 
-**VIS-02:** Use TypeScript, React, Vite, and CesiumJS.
+**VIS-02:** Use Flutter/Dart for the web application and CesiumJS through a rendering-only HTML platform view.
 Cesium provides geospatial ellipsoid/camera/time primitives and sampled time-varying positions, which reduces custom coordinate and globe work. [Cesium SampledPositionProperty](https://cesium.com/learn/cesiumjs/ref-doc/SampledPositionProperty.html)
 
 Provide ITRS positions in metres as `ReferenceFrame.FIXED`, time-tagged with the backend's UTC, using cubic Hermite interpolation with the corresponding ITRS velocity samples.
@@ -335,7 +335,7 @@ No faulty-component highlighting is required in P0.
 
 P0 uses an offline local Earth imagery asset with clear attribution, or an untextured WGS84 globe if no suitable asset is bundled.
 Do not require Cesium ion, paid terrain, access tokens, or external imagery to run the demo.
-Pin Cesium/Vite asset-copy configuration and test on the actual demo browser.
+Pin Flutter and Cesium versions and the local asset-copy configuration and test on the actual demo browser.
 Configure day/night lighting from the backend Sun vector transformed to ITRS, or explicitly label Cesium's visual lighting as approximate; backend shadow fraction always owns the EPS calculation.
 
 Future 3D assets attach via `asset_id` resolved by an allowlisted catalog; scale/orientation corrections belong to the asset descriptor.

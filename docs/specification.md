@@ -125,7 +125,7 @@ No particular ML detection score or warning lead time is an acceptance gate for 
 | Reference validation | SciPy high-accuracy integrator and analytic fixtures | Independent numerical checks; not a required production orchestration layer. |
 | Persistence | PostgreSQL 17 baseline, Psycopg, SQLAlchemy, Alembic | One durable transactional store for identity, history, configuration, and separate truth. |
 | Configuration | Safe YAML parsing → Pydantic → normalized JSON | Same validation path for files and a future configuration form. |
-| Viewer | TypeScript, React, Vite, CesiumJS | Earth/time/coordinate-aware rendering and camera controls; no browser orbital physics. |
+| Viewer | Flutter/Dart, CesiumJS through web interop | Earth/time/coordinate-aware rendering and camera controls; no browser orbital physics. |
 | Integration | REST cursor reads + JSON; bounded WebSocket viewer stream | Durable consumer replay and smooth presentation serve different access patterns. |
 | Local runtime | Docker Compose for backend/database; compiled UI served with API | Small reproducible deployment with a local-data/offline demo mode. |
 | Verification | pytest, focused numerical/property tests, schema fixtures, Playwright | Check physics, contracts, persistence failures, and browser behavior. |
@@ -187,7 +187,7 @@ The evaluator can observe hidden state without influencing public measurements.
 Every asynchronous boundary is explicit: command application, commit acknowledgement, and visual publication.
 Do not block the HTTP event loop with long propagation/precomputation; use a dedicated runner thread or worker loop with bounded queues, still owned by one application process.
 
-Proposed implementation layout (not existing code):
+Implementation layout:
 
 ```text
 backend/src/metis_sim/
@@ -196,10 +196,11 @@ backend/src/metis_sim/
   application/     # runner, command serialization, public projections
   adapters/        # PostgreSQL repositories, YAML loader, API transport
   api/             # FastAPI routes/auth and generated public schemas
-frontend/src/
+frontend/lib/
   api/             # generated types and bounded stream client
   scene/           # Cesium adapter, camera, trajectory and time handling
-  panels/          # run control, satellite list, selected measurements
+  main.dart        # Flutter run control, satellite list, selected measurements
+frontend/web/      # Cesium rendering bridge and local assets
 configs/           # reviewed example configurations
 tests/             # domain, contract, persistence, and end-to-end fixtures
 ```

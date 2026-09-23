@@ -1,12 +1,22 @@
 # syntax=docker/dockerfile:1
-FROM node:22.23.0-alpine@sha256:ab07539e0988b63558ff621f5fbe1077054c39d9809112974fb79993949d41cd AS frontend-build
+FROM node:22.23.0-bookworm@sha256:e0d149b4727ac0c20d9774e801e423d7a946a0bffced886f42cfe9cd3c67820a AS frontend-build
+
+ARG FLUTTER_REVISION=6a19cca56475dbfba1478ee68d7bd0c2ef891da1
+RUN apt-get update && apt-get install -y --no-install-recommends git curl unzip xz-utils libglu1-mesa ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && git clone --branch 3.47.5 --depth 1 https://github.com/flutter/flutter.git /opt/flutter \
+    && test "$(git -C /opt/flutter rev-parse HEAD)" = "$FLUTTER_REVISION"
+ENV PATH=/opt/flutter/bin:$PATH \
+    CI=true \
+    FLUTTER_SUPPRESS_ANALYTICS=true
+RUN flutter config --no-analytics && flutter precache --web
 
 WORKDIR /build/frontend
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
 COPY frontend/ ./
 COPY tests/fixtures/orbit-interpolation.json /build/tests/fixtures/orbit-interpolation.json
-RUN npm run build
+RUN npm run prepare:cesium && flutter pub get --enforce-lockfile && flutter build web --release --no-web-resources-cdn
 
 FROM python:3.12.12-slim@sha256:f3fa41d74a768c2fce8016b98c191ae8c1bacd8f1152870a3f9f87d350920b7c AS python-build
 
@@ -32,7 +42,7 @@ COPY --chown=metis:metis uv.lock ./
 COPY --chown=metis:metis backend/src ./backend/src
 COPY --chown=metis:metis backend/migrations ./backend/migrations
 COPY --chown=metis:metis configs ./configs
-COPY --chown=metis:metis --from=frontend-build /build/frontend/dist ./frontend/dist
+COPY --chown=metis:metis --from=frontend-build /build/frontend/build/web ./frontend/build/web
 USER metis
 EXPOSE 8000
 CMD ["metis-sim", "serve", "--host", "0.0.0.0", "--port", "8000"]

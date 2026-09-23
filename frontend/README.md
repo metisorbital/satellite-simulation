@@ -1,45 +1,37 @@
-# Metis Orbital viewer
+# Flutter mission viewer
 
-A React/TypeScript mission interface with a CesiumJS Earth scene. The Python backend owns all orbital, environmental, and electrical calculations. The browser presents committed measurements and an explicitly labelled orbit-only preview.
-
-## Run locally
-
-Follow the [repository setup guide](../docs/getting-started.md) to install dependencies, start PostgreSQL, initialize local credentials, and apply migrations. From the repository root, start a prepared local backend in one terminal:
-
-```bash
-uv run metis-sim demo --at 10
-```
-
-Then run these commands from `frontend/` in another terminal:
+Flutter owns the mission controls, state, transport, telemetry and charts. A narrow
+`HtmlElementView` bridge embeds locally bundled CesiumJS for the globe. It receives
+only backend Cartesian samples, orbit previews and Flutter's committed playback
+clock; it never computes orbital dynamics or future electrical health.
 
 ```sh
 npm ci
-npm run dev
+npm run prepare:cesium
+flutter pub get
+flutter analyze
+flutter test
+flutter build web --no-web-resources-cdn
 ```
 
-Open <http://127.0.0.1:5173>. Vite proxies `/v1` and `/health` to the backend, including the visual WebSocket. The bootstrap endpoint prepares the scoped HttpOnly viewer session; the control client sends the supplied CSRF token and a fresh idempotency key.
+Serve `build/web` behind the same-origin proxy as `/v1` (see the root Compose stack).
+Direct `flutter run -d chrome` does not proxy backend routes. The production build
+bundles CanvasKit and Cesium, with no CDN or Cesium Ion dependency.
 
-`npm run build` creates `dist/`, which the backend can serve at the same origin. Cesium workers and assets are copied from the locked dependency into `dist/cesium/`. Earth imagery and the decorative starfield are bundled under `public/assets/`; no external runtime network service, imagery provider, ion token, or web font is required. Attribution and third-party licenses accompany those assets.
+`lib/api/generated.dart` is generated from Python models by
+`uv run python scripts/generate_contracts.py` from the repository root. Do not edit
+it manually. Public Python API reference is generated from NumPy-style docstrings
+in the Zensical docs; Dart comments use native Dart `///` documentation.
 
-## Presentation boundaries
+Playback holds at most 41 frames for interpolation and 600 history frames per
+spacecraft. All spacecraft share one bounded committed clock. The view freezes
+when disconnected or when no advancing commit arrives for 1.5 seconds. Pause and
+stop drain to the acknowledged snapshot. Reconnection refreshes a snapshot before
+resuming the stream; session expiry requires explicit reconnect.
 
-- `src/api/useMission.ts` owns bootstrap, reconnect, bounded snapshot resynchronization, and command acknowledgement.
-- `src/scene/playback.ts` owns committed-time clamping, freshness, nearest prior measurement selection, and bounded history. Each satellite retains 41 interpolation samples and at most 600 chart samples. Unknown or unavailable measurements remain unavailable.
-- `src/scene/Globe.tsx` uses backend ITRS positions and velocities in Cesium's `FIXED` frame, cubic Hermite interpolation, and no extrapolation. Its clock is updated in the same React commit as the textual readings. Pausing drains to the acknowledged committed endpoint.
-- `src/api/generated.ts` is generated from the backend's serialization schemas. Do not edit it by hand.
+`web/globe.js` only owns Cesium lifecycle, Hermite interpolation of supplied
+positions and velocities, camera controls and picking. Extrapolation is disabled.
+Prediction polylines are explicitly labelled and contain orbit-only backend data.
 
-The initial image uses an Earth-fixed camera. Drag to rotate, scroll to zoom, or use the labelled camera buttons. The satellite list and telemetry panels remain usable with a keyboard and when WebGL is unavailable. Power values retain their actual sample timestamp and interval-mean semantics. Lighting is an explicitly approximate visual aid; the backend owns eclipse and power values.
-
-## Validation
-
-```sh
-npm run build
-npm test
-npx playwright install chromium
-npm run test:e2e
-npm run format:check
-```
-
-The focused tests cover stale freeze, committed sample bounds, a shared spacecraft time bracket, pause acknowledgement, sequence deduplication, bounded buffers, snapshot races, quality handling, and fixed-frame Hermite interpolation. Browser tests check rendering, local-only runtime requests, controls/CSRF/idempotency headers, stale behavior, and keyboard selection in a compact viewport. Their fixtures exist only in `tests/`; the application never substitutes demonstration data for the backend.
-
-Cesium is loaded as a separate lazy bundle (approximately 4.1 MB before compression); the mission interface loads independently. Real browser frame rate depends on the graphics hardware and is a separate measured acceptance gate.
+Browser smoke tests use Playwright and the built Flutter semantics tree. Run
+`npm run test:e2e` after building. Native mobile/desktop renderers are not provided.
