@@ -109,6 +109,7 @@ That endpoint issues the HttpOnly cookie and returns the session-bound CSRF toke
 Use it only after the run is prepared and from an approved operator workflow that forwards the issued cookie to the authorized browser; never expose the operator bearer token to the browser.
 
 For a public hosted demonstration, set `METIS_PUBLIC_DEMO=1`, `METIS_LOCAL_DEMO=0`, `METIS_COOKIE_SECURE=1`, `METIS_ORIGINS` to the exact HTTPS site origin, and `METIS_DEMO_CONFIG=configs/public-demo.yaml`.
+On Render, set `METIS_SOURCE_ID_PER_COMMIT=1` so each zero-downtime deployment owns a distinct writer source while the previous instance drains. Render provides `RENDER_GIT_COMMIT` at runtime. A restart of the same commit still requires stopping the previous writer before the replacement can become ready.
 The application starts one short, shared run, issues read-only browser sessions, and replaces a completed run when a visitor reconnects.
 Public visitors can rotate and zoom the globe and inspect public telemetry; only operators can change run state or access private evaluation data.
 Set a database quota below the hosted PostgreSQL plan's capacity and keep `METIS_PUBLIC_VIEWER_LIMIT` small on resource-constrained plans. Terminal history is expired on restart and before the next public run.

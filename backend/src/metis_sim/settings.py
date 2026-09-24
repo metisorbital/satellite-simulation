@@ -51,9 +51,17 @@ class Settings:
     def from_env(cls) -> "Settings":
         """Load explicit deployment settings from environment variables."""
         default = cls()
+        source_id = os.getenv("METIS_SOURCE_ID", default.source_id)
+        if os.getenv("METIS_SOURCE_ID_PER_COMMIT", "0") == "1":
+            commit = os.getenv("RENDER_GIT_COMMIT", "")
+            if len(commit) != 40 or any(
+                character not in "0123456789abcdef" for character in commit
+            ):
+                raise ValueError("METIS_SOURCE_ID_PER_COMMIT requires RENDER_GIT_COMMIT")
+            source_id = f"{source_id[:51]}-{commit[:12]}"
         return cls(
             database_url=os.getenv("METIS_DATABASE_URL", default.database_url),
-            source_id=os.getenv("METIS_SOURCE_ID", default.source_id),
+            source_id=source_id,
             session_secret=os.getenv("METIS_SESSION_SECRET", ""),
             operator_token=os.getenv("METIS_OPERATOR_TOKEN", ""),
             consumer_token=os.getenv("METIS_CONSUMER_TOKEN", ""),
