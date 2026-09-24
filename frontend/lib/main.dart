@@ -649,102 +649,109 @@ class _MissionPageState extends State<MissionPage> {
           'failed',
           'aborted',
         ].contains(status['status']);
-    final controls = mission.canControl ? Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        SizedBox(
-          height: 34,
-          child: FilledButton.icon(
-            onPressed: disabled || !mission.canPerform(primaryAction)
-                ? null
-                : () => mission.control(primaryAction),
-            style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xffa9d5cb),
-              foregroundColor: const Color(0xff122a2e),
-              disabledBackgroundColor: const Color(0xff263b42),
-              disabledForegroundColor: muted,
-              padding: const EdgeInsets.symmetric(horizontal: 13),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(4),
-              ),
-              textStyle: const TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            icon: Icon(active ? Icons.pause : Icons.play_arrow, size: 14),
-            label: Text(
-              mission.busy
-                  ? 'Applying…'
-                  : active
-                  ? 'Pause'
-                  : starting
-                  ? 'Start run'
-                  : 'Resume',
-            ),
-          ),
-        ),
-        if (mission.canPerform('set_speed')) ...[
-          const SizedBox(width: 10),
-          Container(
-          height: 34,
-          padding: const EdgeInsets.all(3),
-          decoration: box(color: const Color(0xff0c1721)),
-          child: Row(
+    final controls = mission.canControl
+        ? Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              for (final speed in [1, 5, 20])
-                ChoiceChip(
-                  label: Text('$speed×'),
-                  selected: status?['requested_speed'] == speed,
-                  onSelected: disabled
+              SizedBox(
+                height: 34,
+                child: FilledButton.icon(
+                  onPressed: disabled || !mission.canPerform(primaryAction)
                       ? null
-                      : (_) => mission.control('set_speed', speed),
-                  showCheckmark: false,
-                  visualDensity: const VisualDensity(
-                    horizontal: -4,
-                    vertical: -4,
+                      : () => mission.control(primaryAction),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xffa9d5cb),
+                    foregroundColor: const Color(0xff122a2e),
+                    disabledBackgroundColor: const Color(0xff263b42),
+                    disabledForegroundColor: muted,
+                    padding: const EdgeInsets.symmetric(horizontal: 13),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    textStyle: const TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
-                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  padding: const EdgeInsets.symmetric(horizontal: 3),
-                  labelPadding: const EdgeInsets.symmetric(horizontal: 5),
-                  backgroundColor: Colors.transparent,
-                  selectedColor: const Color(0xff2c4551),
-                  disabledColor: Colors.transparent,
-                  side: BorderSide.none,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                  labelStyle: TextStyle(
-                    fontSize: 10,
-                    color: status?['requested_speed'] == speed
-                        ? textColor
-                        : muted,
+                  icon: Icon(active ? Icons.pause : Icons.play_arrow, size: 14),
+                  label: Text(
+                    mission.busy
+                        ? 'Applying…'
+                        : active
+                        ? 'Pause'
+                        : starting
+                        ? 'Start run'
+                        : 'Resume',
                   ),
                 ),
+              ),
+              if (mission.canPerform('set_speed')) ...[
+                const SizedBox(width: 10),
+                Container(
+                  height: 34,
+                  padding: const EdgeInsets.all(3),
+                  decoration: box(color: const Color(0xff0c1721)),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      for (final speed in [1, 5, 20])
+                        ChoiceChip(
+                          label: Text('$speed×'),
+                          selected: status?['requested_speed'] == speed,
+                          onSelected: disabled
+                              ? null
+                              : (_) => mission.control('set_speed', speed),
+                          showCheckmark: false,
+                          visualDensity: const VisualDensity(
+                            horizontal: -4,
+                            vertical: -4,
+                          ),
+                          materialTapTargetSize:
+                              MaterialTapTargetSize.shrinkWrap,
+                          padding: const EdgeInsets.symmetric(horizontal: 3),
+                          labelPadding: const EdgeInsets.symmetric(
+                            horizontal: 5,
+                          ),
+                          backgroundColor: Colors.transparent,
+                          selectedColor: const Color(0xff2c4551),
+                          disabledColor: Colors.transparent,
+                          side: BorderSide.none,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                          labelStyle: TextStyle(
+                            fontSize: 10,
+                            color: status?['requested_speed'] == speed
+                                ? textColor
+                                : muted,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+              if (mission.canPerform('stop')) ...[
+                const SizedBox(width: 10),
+                Container(
+                  width: 34,
+                  height: 34,
+                  decoration: box(),
+                  child: IconButton(
+                    tooltip: 'Stop simulation',
+                    padding: EdgeInsets.zero,
+                    onPressed: disabled || starting
+                        ? null
+                        : () => mission.control('stop'),
+                    icon: const Icon(Icons.crop_square, size: 14),
+                    color: const Color(0xffa3b8c7),
+                  ),
+                ),
+              ],
             ],
-          ),
-          ),
-        ],
-        if (mission.canPerform('stop')) ...[
-          const SizedBox(width: 10),
-          Container(
-          width: 34,
-          height: 34,
-          decoration: box(),
-          child: IconButton(
-            tooltip: 'Stop simulation',
-            padding: EdgeInsets.zero,
-            onPressed: disabled || starting
-                ? null
-                : () => mission.control('stop'),
-            icon: const Icon(Icons.crop_square, size: 14),
-            color: const Color(0xffa3b8c7),
-          ),
-          ),
-        ],
-      ],
-    ) : status == null ? const SizedBox.shrink() : badge('VIEW ONLY', muted);
+          )
+        : status == null
+        ? const SizedBox.shrink()
+        : badge('VIEW ONLY', muted);
     final title = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,

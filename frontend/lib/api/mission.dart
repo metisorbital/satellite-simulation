@@ -49,11 +49,15 @@ class Mission extends ChangeNotifier {
       _terminalRunId = terminal ? id : null;
       _demoRefreshAttempts = 0;
     }
-    if (!_publicDemoSession || !terminal || connecting ||
-        _demoRefresh != null || _demoRefreshAttempts >= 6) {
+    if (!_publicDemoSession ||
+        !terminal ||
+        connecting ||
+        _demoRefresh != null ||
+        _demoRefreshAttempts >= 6) {
       return;
     }
-    final delay = min(12000, 1500 * (1 << _demoRefreshAttempts)) +
+    final delay =
+        min(12000, 1500 * (1 << _demoRefreshAttempts)) +
         Random.secure().nextInt(1200);
     _demoRefresh = Timer(Duration(milliseconds: delay), () {
       _demoRefresh = null;
