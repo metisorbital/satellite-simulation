@@ -613,7 +613,14 @@ class _MissionPageState extends State<MissionPage> {
         ),
         if (desktop) ...[
           SizedBox(width: desktop ? 18 : 9),
-          badge('LOCAL', muted),
+          badge(
+            status == null
+                ? 'CONNECTING'
+                : mission.canControl
+                ? 'CONTROL'
+                : 'PUBLIC DEMO',
+            muted,
+          ),
         ] else
           IconButton(
             tooltip: 'Model & credits',
@@ -628,31 +635,29 @@ class _MissionPageState extends State<MissionPage> {
     final active = status?['status'] == 'running';
     final starting =
         status?['status'] == 'created' || status?['committed_tick'] == -1;
+    final primaryAction = active
+        ? 'pause'
+        : starting
+        ? 'start'
+        : 'resume';
     final disabled =
         status == null ||
         mission.busy ||
-        !mission.canControl ||
         [
           'completed',
           'stopped',
           'failed',
           'aborted',
         ].contains(status['status']);
-    final controls = Row(
+    final controls = mission.canControl ? Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         SizedBox(
           height: 34,
           child: FilledButton.icon(
-            onPressed: disabled
+            onPressed: disabled || !mission.canPerform(primaryAction)
                 ? null
-                : () => mission.control(
-                    active
-                        ? 'pause'
-                        : starting
-                        ? 'start'
-                        : 'resume',
-                  ),
+                : () => mission.control(primaryAction),
             style: FilledButton.styleFrom(
               backgroundColor: const Color(0xffa9d5cb),
               foregroundColor: const Color(0xff122a2e),
@@ -679,8 +684,9 @@ class _MissionPageState extends State<MissionPage> {
             ),
           ),
         ),
-        const SizedBox(width: 10),
-        Container(
+        if (mission.canPerform('set_speed')) ...[
+          const SizedBox(width: 10),
+          Container(
           height: 34,
           padding: const EdgeInsets.all(3),
           decoration: box(color: const Color(0xff0c1721)),
@@ -718,9 +724,11 @@ class _MissionPageState extends State<MissionPage> {
                 ),
             ],
           ),
-        ),
-        const SizedBox(width: 10),
-        Container(
+          ),
+        ],
+        if (mission.canPerform('stop')) ...[
+          const SizedBox(width: 10),
+          Container(
           width: 34,
           height: 34,
           decoration: box(),
@@ -733,9 +741,10 @@ class _MissionPageState extends State<MissionPage> {
             icon: const Icon(Icons.crop_square, size: 14),
             color: const Color(0xffa3b8c7),
           ),
-        ),
+          ),
+        ],
       ],
-    );
+    ) : status == null ? const SizedBox.shrink() : badge('VIEW ONLY', muted);
     final title = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,

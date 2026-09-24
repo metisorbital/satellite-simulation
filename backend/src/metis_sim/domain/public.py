@@ -304,11 +304,14 @@ class ViewerBootstrap(PublicModel):
     ----------
     csrf_token : str
         Token required on browser control requests for this session.
+    allowed_actions : list of Action
+        Controls permitted for this session; empty for a shared public demo.
     run : PublicRunStatus
         Public status of the session's one scoped run.
     """
 
     csrf_token: str
+    allowed_actions: list[Action]
     run: PublicRunStatus
 
 

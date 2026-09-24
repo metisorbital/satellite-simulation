@@ -639,19 +639,23 @@ class Trajectory {
 class ViewerBootstrap {
   const ViewerBootstrap({
     required this.csrf_token,
+    required this.allowed_actions,
     required this.run,
   });
 
   final String csrf_token;
+  final List<String> allowed_actions;
   final PublicRunStatus run;
 
   factory ViewerBootstrap.fromJson(Map<String, dynamic> json) => ViewerBootstrap(
     csrf_token: json['csrf_token'] as String,
+    allowed_actions: (json['allowed_actions'] as List).map((item) => item as String).toList(),
     run: PublicRunStatus.fromJson(Map<String, dynamic>.from(json['run'] as Map)),
   );
 
   Map<String, dynamic> toJson() => {
     'csrf_token': csrf_token,
+    'allowed_actions': allowed_actions.map((item) => item).toList(),
     'run': run.toJson(),
   };
 }

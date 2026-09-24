@@ -230,7 +230,7 @@ The application must not need the reference websites, a live TLE fetch, external
 Provide `/health/live` and `/health/ready`, a reproducibility manifest, and a clean shutdown that stops on a committed boundary.
 
 **NFR-05 — Access:** default to localhost for development; use deployment-provided operator/consumer/evaluator credentials and separate response projections.
-The viewer has read access plus a narrowly scoped run-control session, not evaluator credentials.
+The viewer has read access plus a narrowly scoped session, not evaluator credentials. Operator-issued viewer sessions may control one run; an explicitly enabled shared public demo grants no run controls and is started by the server.
 For a networked demo use TLS, explicit CORS/origin allowlists, and server-validated authentication; do not put evaluator/long-lived operator secrets into a built frontend bundle or WebSocket query string.
 An HttpOnly same-origin session is an appropriate browser transport; backend secrets stay in environment/configuration outside version control.
 Full SaaS tenancy/SSO is deferred.

@@ -5,6 +5,7 @@ import secrets
 import time
 from dataclasses import dataclass
 from typing import Any
+from urllib.parse import urlsplit
 
 from fastapi import Request, WebSocket
 from itsdangerous import BadData, URLSafeTimedSerializer
@@ -25,6 +26,7 @@ class Principal:
     allowed_actions: tuple[str, ...] = ()
     expires_at: float | None = None
     csrf_token: str | None = None
+    public_demo: bool = False
 
     def require(
         self, roles: set[str], run_id: str | None = None, action: str | None = None
@@ -81,12 +83,19 @@ class Auth:
                     payload.get("allowed_actions", [])
                 ) - set(ACTIONS):
                     raise BadData("invalid claims")
+                if not isinstance(payload.get("public_demo", False), bool):
+                    raise BadData("invalid demo claim")
+                if payload.get("public_demo", False) and payload["allowed_actions"]:
+                    raise BadData("public demo cannot control a shared run")
+                if payload.get("public_demo", False) and not self.settings.public_demo:
+                    raise BadData("public demo access is disabled")
                 principal = Principal(
                     role="viewer_control",
                     run_id=payload["run_id"],
                     allowed_actions=tuple(payload["allowed_actions"]),
                     expires_at=payload["expires_at"],
                     csrf_token=payload["csrf_token"],
+                    public_demo=payload.get("public_demo", False),
                 )
                 principal.require({"viewer_control"})
                 return principal
@@ -96,13 +105,15 @@ class Auth:
                 ) from error
         raise ServiceError("unauthorized", "Authentication is required.", 401)
 
-    def issue(self, run_id: str) -> tuple[str, Principal]:
+    def issue(self, run_id: str, *, public_demo: bool = False) -> tuple[str, Principal]:
         """Mint a fixed run-scoped capability after the caller authorizes issuance.
 
         Parameters
         ----------
         run_id : str
             Run authorized by an operator or explicit loopback demo bootstrap.
+        public_demo : bool, default=False
+            Issue a read-only session for the shared public demonstration.
 
         Returns
         -------
@@ -112,16 +123,18 @@ class Auth:
         principal = Principal(
             "viewer_control",
             run_id,
-            ACTIONS,
+            () if public_demo else ACTIONS,
             time.time() + self.settings.session_lifetime_s,
             secrets.token_urlsafe(32),
+            public_demo,
         )
         claims: dict[str, Any] = dict(
             role=principal.role,
             run_id=run_id,
-            allowed_actions=list(ACTIONS),
+            allowed_actions=list(principal.allowed_actions),
             expires_at=principal.expires_at,
             csrf_token=principal.csrf_token,
+            public_demo=principal.public_demo,
         )
         return self.serializer.dumps(claims), principal
 
@@ -155,3 +168,29 @@ class Auth:
             raise ServiceError(
                 "forbidden", "Demo session issuance is available only on local loopback.", 403
             )
+
+    def public_bootstrap(self, request: Request) -> None:
+        """Permit anonymous demo issuance only on an allowed HTTPS host.
+
+        Parameters
+        ----------
+        request : Request
+            Browser request whose host and optional Origin must be allowed.
+
+        Raises
+        ------
+        ServiceError
+            If public demo access is disabled or the request is untrusted.
+        """
+        self.origin(request)
+        allowed_hosts = {
+            urlsplit(origin).netloc
+            for origin in self.settings.origins
+            if urlsplit(origin).scheme == "https"
+        }
+        if (
+            not self.settings.public_demo
+            or not self.settings.cookie_secure
+            or request.headers.get("host") not in allowed_hosts
+        ):
+            raise ServiceError("forbidden", "Public demo access is unavailable.", 403)

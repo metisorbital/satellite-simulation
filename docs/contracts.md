@@ -215,10 +215,11 @@ The default analytics token can read only allowlisted channel/spacecraft descrip
 The simulation operator token can manage runs and configurations.
 The evaluation token can read truth and export labels; it is never shipped to the browser viewer or analytics client.
 The operator configuring scenarios can of course know the fault; this is a controlled evaluation boundary, not a claim that the demo presenter is blinded.
-The browser principal is a separate `viewer_control` role: its server-issued, expiring same-origin session binds one `run_id` and only the actions `start`, `pause`, `resume`, `set_speed`, and `stop` for that run, plus its public read routes.
+The browser principal is a separate `viewer_control` role: its server-issued, expiring same-origin session binds one `run_id` and an explicit `allowed_actions` set, plus its public read routes.
+Operator-issued sessions may use `start`, `pause`, `resume`, `set_speed`, and `stop` for that run. An explicitly enabled hosted public demo issues read-only sessions with no run actions; visitors can explore the globe and public telemetry while the server owns run lifecycle.
 The existing control endpoint accepts either a broad operator principal or this exact run/action-scoped principal; other run IDs/actions return `403`.
 Session issuance is handled by the deployment's authentication adapter during operator-authorized demo setup; it cannot mint broader permissions from browser-provided claims.
-Define its verified internal claims as `{role, run_id, allowed_actions, expires_at}` and enforce expiry server-side on HTTP requests and WebSocket reconnects; an active socket closes when its session expires.
+Define its verified internal claims as `{role, run_id, allowed_actions, expires_at, public_demo}` and enforce expiry server-side on HTTP requests and WebSocket reconnects; an active socket closes when its session expires. Disabling public demo issuance also invalidates outstanding public demo grants.
 Use an HttpOnly, SameSite session cookie, Secure on HTTPS deployments, with Origin/CSRF checks on control requests. No new public account/registration API is needed for the prepared demo.
 Acceptance fixtures issue this restricted principal through the auth adapter and prove control succeeds for its run but configuration/private routes and other runs remain forbidden.
 Use separate SQL schemas/roles or equivalently restricted repository access, distinct response models, and negative access tests.

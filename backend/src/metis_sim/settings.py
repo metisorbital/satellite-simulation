@@ -19,6 +19,10 @@ class Settings:
         Independent deployment-issued credentials; never sent to the browser.
     local_demo : bool
         Explicitly enable loopback-only prepared-run session issuance.
+    public_demo : bool
+        Explicitly enable a shared, read-only HTTPS demo.
+    public_viewer_limit : int
+        Maximum simultaneous public demo visual streams per process.
     """
 
     database_url: str = "postgresql+psycopg://metis:metis-local@127.0.0.1:55432/metis"
@@ -28,6 +32,8 @@ class Settings:
     consumer_token: str = ""
     evaluator_token: str = ""
     local_demo: bool = False
+    public_demo: bool = False
+    public_viewer_limit: int = 5
     cookie_secure: bool = False
     session_lifetime_s: int = 7200
     origins: tuple[str, ...] = (
@@ -53,6 +59,8 @@ class Settings:
             consumer_token=os.getenv("METIS_CONSUMER_TOKEN", ""),
             evaluator_token=os.getenv("METIS_EVALUATOR_TOKEN", ""),
             local_demo=os.getenv("METIS_LOCAL_DEMO", "0") == "1",
+            public_demo=os.getenv("METIS_PUBLIC_DEMO", "0") == "1",
+            public_viewer_limit=max(1, int(os.getenv("METIS_PUBLIC_VIEWER_LIMIT", "5"))),
             cookie_secure=os.getenv("METIS_COOKIE_SECURE", "0") == "1",
             origins=tuple(os.getenv("METIS_ORIGINS", ",".join(default.origins)).split(",")),
             frontend_path=Path(os.getenv("METIS_FRONTEND_PATH", str(default.frontend_path))),

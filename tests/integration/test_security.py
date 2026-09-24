@@ -3,11 +3,14 @@
 import threading
 import time
 from dataclasses import replace
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from metis_sim.adapters import tables
 from metis_sim.api.app import create_app
 from metis_sim.api.auth import COOKIE
+from sqlalchemy import func, select
 from starlette.websockets import WebSocketDisconnect
 
 from tests.integration.conftest import create_run, operator_headers
@@ -269,6 +272,124 @@ def test_deployed_bootstrap_requires_issued_session(settings, configuration):
         assert client.get("/v1/viewer/bootstrap").status_code == 403
         _issue_viewer(client, run["run_id"])
         assert client.get("/v1/viewer/bootstrap").json()["run"]["run_id"] == run["run_id"]
+
+
+def test_public_demo_is_read_only_and_rotates_after_terminal(settings):
+    """Issue an HTTPS demo grant without exposing shared controls or old history."""
+    public_settings = replace(
+        settings,
+        local_demo=False,
+        public_demo=True,
+        cookie_secure=True,
+        origins=("https://demo.test",),
+        demo_config=Path("configs/public-demo.yaml"),
+    )
+    app = create_app(public_settings, setup_schema=True)
+    with TestClient(app, base_url="https://demo.test") as client:
+        first = client.get("/v1/viewer/bootstrap")
+        assert first.status_code == 200, first.text
+        first_run_id = first.json()["run"]["run_id"]
+        assert first.json()["run"]["status"] == "running"
+        assert first.json()["allowed_actions"] == []
+        assert "HttpOnly" in first.headers["set-cookie"]
+        assert "SameSite=strict" in first.headers["set-cookie"]
+        assert "; Secure" in first.headers["set-cookie"]
+        for action in ("start", "pause", "resume", "set_speed", "stop"):
+            body = {"action": action}
+            if action == "set_speed":
+                body["speed"] = 1
+            response = client.post(
+                f"/v1/runs/{first_run_id}/control",
+                json=body,
+                headers={
+                    "Origin": "https://demo.test",
+                    "X-CSRF-Token": first.json()["csrf_token"],
+                    "Idempotency-Key": f"public-{action}",
+                },
+            )
+            assert response.status_code == 403, response.text
+        assert client.get(f"/v1/operator/runs/{first_run_id}/manifest").status_code == 403
+        assert (
+            client.get(
+                "/v1/viewer/bootstrap", headers={"Origin": "https://foreign.test"}
+            ).status_code
+            == 403
+        )
+        stopped = client.post(
+            f"/v1/runs/{first_run_id}/control",
+            json={"action": "stop"},
+            headers=operator_headers("operator-stop"),
+        )
+        assert stopped.status_code == 200, stopped.text
+        second = client.get("/v1/viewer/bootstrap")
+        assert second.status_code == 200, second.text
+        assert second.json()["run"]["run_id"] != first_run_id
+        assert second.json()["run"]["status"] == "running"
+        assert app.state.repository.status(first_run_id)["status"] == "stopped"
+        with app.state.database.engine.connect() as connection:
+            assert (
+                connection.scalar(
+                    select(func.count())
+                    .select_from(tables.frames)
+                    .where(tables.frames.c.run_id == first_run_id)
+                )
+                == 0
+            )
+        public_cookie = client.cookies.get(COOKIE)
+    disabled = create_app(replace(public_settings, public_demo=False), prepare_demo=False)
+    with TestClient(disabled, base_url="https://demo.test") as client:
+        client.cookies.set(COOKIE, public_cookie)
+        assert client.get("/v1/viewer/bootstrap").status_code == 403
+
+
+def test_public_demo_requires_secure_allowed_host(settings):
+    """Keep anonymous remote issuance closed unless HTTPS settings match the host."""
+    for secure, host, expected in (
+        (False, "demo.test", 403),
+        (True, "wrong.test", 403),
+        (True, "demo.test", 200),
+    ):
+        public_settings = replace(
+            settings,
+            local_demo=False,
+            public_demo=True,
+            cookie_secure=secure,
+            origins=("https://demo.test",),
+            demo_config=Path("configs/public-demo.yaml"),
+            database_url=settings.database_url.replace(
+                "test.sqlite", f"public-{secure}-{host}.sqlite"
+            ),
+        )
+        app = create_app(public_settings, setup_schema=True)
+        with TestClient(app, base_url=f"https://{host}") as client:
+            response = client.get("/v1/viewer/bootstrap")
+            assert response.status_code == expected, response.text
+
+
+def test_public_demo_limits_visual_connections(settings):
+    """Reject excess public sockets and release the slot on disconnect."""
+    public_settings = replace(
+        settings,
+        local_demo=False,
+        public_demo=True,
+        cookie_secure=True,
+        origins=("https://demo.test",),
+        demo_config=Path("configs/public-demo.yaml"),
+        public_viewer_limit=1,
+    )
+    app = create_app(public_settings, setup_schema=True)
+    with TestClient(app, base_url="https://demo.test") as client:
+        run_id = client.get("/v1/viewer/bootstrap").json()["run"]["run_id"]
+        path = f"wss://demo.test/v1/runs/{run_id}/visual"
+        headers = {"Origin": "https://demo.test"}
+        with client.websocket_connect(path, headers=headers) as first:
+            assert first.receive_json()["run_id"] == run_id
+            with pytest.raises(WebSocketDisconnect) as error:
+                with client.websocket_connect(path, headers=headers):
+                    pass
+            assert error.value.code == 1013
+        with client.websocket_connect(path, headers=headers) as replacement:
+            assert replacement.receive_json()["run_id"] == run_id
 
 
 @pytest.mark.parametrize("local", [True, False])

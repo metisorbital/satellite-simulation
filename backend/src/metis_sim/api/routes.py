@@ -10,7 +10,7 @@ from starlette.concurrency import run_in_threadpool
 
 from metis_sim.adapters.configuration import normalize_configuration
 from metis_sim.adapters.records import prior_result, record_result
-from metis_sim.api.auth import COOKIE
+from metis_sim.api.auth import ACTIONS, COOKIE
 from metis_sim.api.requests import (
     CreateRunRequest,
     body_text,
@@ -214,7 +214,7 @@ def manifest(run_id: str, request: Request) -> dict:
 
 @router.get("/v1/viewer/bootstrap", response_model=ViewerBootstrap)
 def bootstrap(request: Request, response: Response) -> ViewerBootstrap:
-    """Resume a scoped session, preferring the prepared demo only on local loopback."""
+    """Resume a scoped session or issue an explicitly enabled demo grant."""
     context = request.app.state
     try:
         principal = context.auth.principal(request)
@@ -222,12 +222,22 @@ def bootstrap(request: Request, response: Response) -> ViewerBootstrap:
         context.auth.origin(request)
     except ServiceError:
         principal = None
+    public_demo = False
     try:
         context.auth.local_bootstrap(request)
     except ServiceError:
-        if principal is None:
-            raise
-        run_id = principal.run_id
+        try:
+            context.auth.public_bootstrap(request)
+        except ServiceError:
+            if principal is None:
+                raise
+            run_id = principal.run_id
+        else:
+            if principal is not None and not principal.public_demo:
+                run_id = principal.run_id
+            else:
+                run_id = context.service.ensure_public_demo(context.settings.demo_config)
+                public_demo = True
     else:
         run_id = context.service.demo_run_id or (
             principal.run_id if principal is not None else None
@@ -237,7 +247,7 @@ def bootstrap(request: Request, response: Response) -> ViewerBootstrap:
             "demo_not_prepared", "Start the server with an explicitly prepared demo.", 503
         )
     if principal is None or principal.run_id != run_id:
-        cookie, principal = context.auth.issue(run_id)
+        cookie, principal = context.auth.issue(run_id, public_demo=public_demo)
         response.set_cookie(
             COOKIE,
             cookie,
@@ -250,6 +260,7 @@ def bootstrap(request: Request, response: Response) -> ViewerBootstrap:
     response.headers["Cache-Control"] = "no-store"
     return ViewerBootstrap(
         csrf_token=principal.csrf_token,
+        allowed_actions=list(principal.allowed_actions),
         run=PublicRunStatus.model_validate(context.repository.status(run_id)),
     )
 
@@ -282,7 +293,11 @@ async def issue_viewer_session(
             result = {
                 "cookie": cookie,
                 "expires_at": viewer.expires_at,
-                "bootstrap": {"csrf_token": viewer.csrf_token, "run": status},
+                "bootstrap": {
+                    "csrf_token": viewer.csrf_token,
+                    "allowed_actions": list(viewer.allowed_actions),
+                    "run": status,
+                },
             }
             record_result(connection, *token, result)
             return result
@@ -297,4 +312,4 @@ async def issue_viewer_session(
         samesite="strict",
         path="/",
     )
-    return ViewerBootstrap.model_validate(result["bootstrap"])
+    return ViewerBootstrap.model_validate({**result["bootstrap"], "allowed_actions": list(ACTIONS)})

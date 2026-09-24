@@ -108,6 +108,11 @@ Instead, an authenticated operator provisions a fixed run-scoped viewer session 
 That endpoint issues the HttpOnly cookie and returns the session-bound CSRF token needed for viewer controls.
 Use it only after the run is prepared and from an approved operator workflow that forwards the issued cookie to the authorized browser; never expose the operator bearer token to the browser.
 
+For a public hosted demonstration, set `METIS_PUBLIC_DEMO=1`, `METIS_LOCAL_DEMO=0`, `METIS_COOKIE_SECURE=1`, `METIS_ORIGINS` to the exact HTTPS site origin, and `METIS_DEMO_CONFIG=configs/public-demo.yaml`.
+The application starts one short, shared run, issues read-only browser sessions, and replaces a completed run when a visitor reconnects.
+Public visitors can rotate and zoom the globe and inspect public telemetry; only operators can change run state or access private evaluation data.
+Set a database quota below the hosted PostgreSQL plan's capacity and keep `METIS_PUBLIC_VIEWER_LIMIT` small on resource-constrained plans. Terminal history is expired on restart and before the next public run.
+
 ## Check the Running Service
 
 Use liveness and readiness separately:

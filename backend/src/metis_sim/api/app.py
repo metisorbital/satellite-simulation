@@ -1,6 +1,7 @@
 """FastAPI composition root for one writer and one local mission viewer."""
 
 import logging
+import threading
 import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -95,10 +96,12 @@ def create_app(
                 database.create_test_schema()
             database.acquire_writer()
             repository.recover()
-            repository.expire_terminal()
+            repository.expire_terminal(days=0 if settings.public_demo else 7)
             if settings.local_demo and prepare_demo:
                 await run_in_threadpool(service.prepare_demo, settings.demo_config, demo_at)
             runner.start()
+            if settings.public_demo and prepare_demo:
+                await run_in_threadpool(service.ensure_public_demo, settings.demo_config)
             yield
         finally:
             await run_in_threadpool(runner.close)
@@ -118,6 +121,7 @@ def create_app(
         reader=PublicReader(database, settings.session_secret),
         runner=runner,
         service=service,
+        public_viewer_slots=threading.BoundedSemaphore(settings.public_viewer_limit),
     ).items():
         setattr(app.state, key, value)
     app.add_middleware(

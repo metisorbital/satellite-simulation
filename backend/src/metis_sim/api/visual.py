@@ -33,12 +33,16 @@ async def visual_socket(websocket: WebSocket, run_id: str) -> None:
         logger.error("visual_failed", extra={"run_id": run_id, "error_type": type(error).__name__})
         await websocket.close(code=1011, reason="Visual stream is unavailable")
         return
-    await websocket.accept()
+    public_slot = principal.public_demo
+    if public_slot and not context.public_viewer_slots.acquire(blocking=False):
+        await websocket.close(code=1013, reason="Public demo is at capacity")
+        return
     last_tick, last_state, last_speed = -1, None, None
     resync_count = 0
     first = True
     lifetime = None if principal.expires_at is None else max(0, principal.expires_at - time.time())
     try:
+        await websocket.accept()
         # Expiry must also interrupt slow reads and sends, not only idle loops.
         async with asyncio.timeout(lifetime):
             while True:
@@ -114,3 +118,6 @@ async def visual_socket(websocket: WebSocket, run_id: str) -> None:
     except Exception as error:
         logger.error("visual_failed", extra={"run_id": run_id, "error_type": type(error).__name__})
         await websocket.close(code=1011, reason="Visual stream is unavailable")
+    finally:
+        if public_slot:
+            context.public_viewer_slots.release()

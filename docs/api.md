@@ -93,7 +93,7 @@ The viewer's WebSocket can skip delivery frames while preserving committed histo
 
 ## Authenticate Requests
 
-Deployment-issued credentials use `Authorization: Bearer <token>`. `metis-sim init` writes distinct local role tokens to `.local/runtime.env`; keep that file out of commits and browser code. A local demo browser can obtain a scoped `metis_viewer` HttpOnly cookie from `GET /v1/viewer/bootstrap` only on loopback. An authenticated operator can provision the same fixed run-scoped session with `POST /v1/operator/runs/{run_id}/viewer-session` and an empty JSON object.
+Deployment-issued credentials use `Authorization: Bearer <token>`. `metis-sim init` writes distinct local role tokens to `.local/runtime.env`; keep that file out of commits and browser code. A local demo browser can obtain a scoped `metis_viewer` HttpOnly cookie from `GET /v1/viewer/bootstrap` only on loopback. When `METIS_PUBLIC_DEMO=1` and secure cookies plus an exact HTTPS origin are configured, that endpoint issues a read-only session for the server-owned shared demo. The bootstrap response includes `allowed_actions`; it is empty for public visitors. An authenticated operator can provision a run-scoped control session with `POST /v1/operator/runs/{run_id}/viewer-session` and an empty JSON object.
 
 | Credential | Permitted work |
 |---|---|

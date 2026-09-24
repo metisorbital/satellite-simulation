@@ -15,7 +15,7 @@ from metis_sim.adapters.configuration import (
     normalize_configuration,
 )
 from metis_sim.adapters.records import canonical_hash, utc_now
-from metis_sim.adapters.repository import Idempotent, Repository
+from metis_sim.adapters.repository import TERMINAL, Idempotent, Repository
 from metis_sim.application.errors import ServiceError
 from metis_sim.application.measurement import MeasurementProjector
 from metis_sim.application.runner import PreparedRun, Runner
@@ -309,6 +309,47 @@ class SimulationService:
             },
         )
         return self.demo_run_id
+
+    def ensure_public_demo(self, path: Path) -> str:
+        """Keep one bounded shared demo running and expire terminal history.
+
+        Parameters
+        ----------
+        path : Path
+            Validated configuration file for the hosted demonstration.
+
+        Returns
+        -------
+        str
+            Run identifier of the current public demonstration.
+        """
+        with self.mutations:
+            run_id = self.demo_run_id
+            if run_id is not None:
+                status = self.repository.status(run_id)
+                if status["status"] == "running":
+                    return run_id
+                if status["status"] in {"created", "paused"}:
+                    action = "start" if status["status"] == "created" else "resume"
+                    self.runner.command(
+                        run_id,
+                        action,
+                        None,
+                        ("public:demo", f"{run_id}:{action}", canonical_hash({"action": action})),
+                    )
+                    return run_id
+                if status["status"] not in TERMINAL:
+                    raise ServiceError("demo_unavailable", "Public demo is unavailable.", 503)
+            expired = self.repository.expire_terminal(days=0)
+            run_id = self.prepare_demo(path)
+            self.runner.command(
+                run_id,
+                "start",
+                None,
+                ("public:demo", f"{run_id}:start", canonical_hash({"action": "start"})),
+            )
+            logger.info("public_demo_started", extra={"run_id": run_id, "expired_runs": expired})
+            return run_id
 
     @staticmethod
     def _file_hash(path: Path) -> str | None:

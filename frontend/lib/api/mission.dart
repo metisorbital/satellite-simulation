@@ -15,13 +15,53 @@ class Mission extends ChangeNotifier {
   String? error;
   bool busy = false;
   bool connecting = false;
-  bool get canControl => _token.isNotEmpty;
+  bool get canControl => _token.isNotEmpty && _allowedActions.isNotEmpty;
+  bool canPerform(String action) =>
+      _token.isNotEmpty && _allowedActions.contains(action);
   String _token = '';
+  Set<String> _allowedActions = {};
+  bool _publicDemoSession = false;
+  String? _terminalRunId;
+  int _demoRefreshAttempts = 0;
   int _generation = 0, _backoff = 1000, _nextTrajectory = 0;
   Timer? _reconnect;
+  Timer? _demoRefresh;
   WebSocketChannel? _socket;
   JsonMap? get status => playback.status;
   double get now => clock.elapsedMicroseconds / 1000;
+
+  void _clearSession() {
+    _token = '';
+    _allowedActions = {};
+  }
+
+  void _scheduleDemoRefresh(JsonMap run) {
+    final id = run['run_id'] as String;
+    final terminal = const {
+      'completed',
+      'stopped',
+      'failed',
+      'aborted',
+    }.contains(run['status']);
+    if (_terminalRunId != id || !terminal) {
+      _demoRefresh?.cancel();
+      _demoRefresh = null;
+      _terminalRunId = terminal ? id : null;
+      _demoRefreshAttempts = 0;
+    }
+    if (!_publicDemoSession || !terminal || connecting ||
+        _demoRefresh != null || _demoRefreshAttempts >= 6) {
+      return;
+    }
+    final delay = min(12000, 1500 * (1 << _demoRefreshAttempts)) +
+        Random.secure().nextInt(1200);
+    _demoRefresh = Timer(Duration(milliseconds: delay), () {
+      _demoRefresh = null;
+      if (!_publicDemoSession || status?['run_id'] != id || connecting) return;
+      _demoRefreshAttempts++;
+      unawaited(connect());
+    });
+  }
 
   Future<JsonMap> _request(String path, {JsonMap? body}) async {
     final uri = Uri.base.resolve(path);
@@ -62,6 +102,7 @@ class Mission extends ChangeNotifier {
       incoming.map((f) => Map<String, dynamic>.from(f as Map)).toList(),
       now,
     );
+    _scheduleDemoRefresh(next);
     notifyListeners();
     if (next['committed_tick'] >= _nextTrajectory &&
         next['committed_tick'] < next['duration_s']) {
@@ -115,9 +156,11 @@ class Mission extends ChangeNotifier {
     connecting = true;
     final generation = ++_generation;
     _reconnect?.cancel();
+    _demoRefresh?.cancel();
+    _demoRefresh = null;
     _socket?.sink.close();
     playback.connected = false;
-    _token = '';
+    _clearSession();
     trajectory = null;
     _nextTrajectory = 0;
     busy = true;
@@ -129,6 +172,10 @@ class Mission extends ChangeNotifier {
       ).toJson();
       if (generation != _generation) return;
       _token = bootstrap['csrf_token'] as String;
+      _allowedActions = (bootstrap['allowed_actions'] as List<dynamic>)
+          .cast<String>()
+          .toSet();
+      _publicDemoSession = _allowedActions.isEmpty;
       _ingest(Map<String, dynamic>.from(bootstrap['run'] as Map), []);
       final id = status!['run_id'] as String;
       await _snapshot(generation, id);
@@ -139,6 +186,7 @@ class Mission extends ChangeNotifier {
       if (generation == _generation) {
         connecting = false;
         busy = false;
+        if (status != null) _scheduleDemoRefresh(status!);
         notifyListeners();
       }
     }
@@ -180,7 +228,7 @@ class Mission extends ChangeNotifier {
             });
           } else if (message['type'] == 'error') {
             playback.connected = false;
-            _token = '';
+            _clearSession();
             error = message['message'] as String? ?? 'Simulation stream error';
             notifyListeners();
           } else if (message['status'] != null &&
@@ -199,7 +247,7 @@ class Mission extends ChangeNotifier {
         if (!_current(generation, id)) return;
         playback.connected = false;
         if ([1008, 4401, 4403].contains(channel.closeCode)) {
-          _token = '';
+          _clearSession();
           error = 'Mission session expired. Reconnect to continue.';
         } else {
           _reconnect = Timer(Duration(milliseconds: _backoff), () async {
@@ -216,7 +264,7 @@ class Mission extends ChangeNotifier {
   }
 
   Future<void> control(String action, [int? speed]) async {
-    if (busy || status == null || _token.isEmpty) return;
+    if (busy || status == null || !canPerform(action)) return;
     final generation = _generation, id = status!['run_id'] as String;
     busy = true;
     error = null;
@@ -245,6 +293,7 @@ class Mission extends ChangeNotifier {
   void dispose() {
     _generation++;
     _reconnect?.cancel();
+    _demoRefresh?.cancel();
     _socket?.sink.close();
     super.dispose();
   }

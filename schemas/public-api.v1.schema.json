@@ -1502,8 +1502,22 @@
     },
     "ViewerBootstrap": {
       "additionalProperties": false,
-      "description": "One prepared run and session-bound CSRF token for the browser.\n\nAttributes\n----------\ncsrf_token : str\n    Token required on browser control requests for this session.\nrun : PublicRunStatus\n    Public status of the session's one scoped run.",
+      "description": "One prepared run and session-bound CSRF token for the browser.\n\nAttributes\n----------\ncsrf_token : str\n    Token required on browser control requests for this session.\nallowed_actions : list of Action\n    Controls permitted for this session; empty for a shared public demo.\nrun : PublicRunStatus\n    Public status of the session's one scoped run.",
       "properties": {
+        "allowed_actions": {
+          "items": {
+            "enum": [
+              "start",
+              "pause",
+              "resume",
+              "stop",
+              "set_speed"
+            ],
+            "type": "string"
+          },
+          "title": "Allowed Actions",
+          "type": "array"
+        },
         "csrf_token": {
           "title": "Csrf Token",
           "type": "string"
@@ -1514,6 +1528,7 @@
       },
       "required": [
         "csrf_token",
+        "allowed_actions",
         "run"
       ],
       "title": "ViewerBootstrap",
