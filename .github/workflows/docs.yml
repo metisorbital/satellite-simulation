@@ -29,11 +29,11 @@ jobs:
       - run: uv sync --frozen
       - run: uv run zensical build --clean --strict
       - uses: actions/configure-pages@v5
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' && vars.PUBLISH_DOCS == '1'
       - uses: actions/upload-pages-artifact@v5
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' && vars.PUBLISH_DOCS == '1'
         with:
           path: site
       - uses: actions/deploy-pages@v5
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' && vars.PUBLISH_DOCS == '1'
         id: deployment
