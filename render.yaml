@@ -1,0 +1,46 @@
+# Existing Render resource names are intentional: syncing this Blueprint updates
+# the deployed service and database instead of creating a second pair.
+services:
+  - type: web
+    name: satellite-simulation
+    runtime: docker
+    repo: https://github.com/metisorbital/satellite-simulation
+    branch: main
+    region: frankfurt
+    plan: free
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /health/ready
+    autoDeployTrigger: checksPass
+    envVars:
+      - key: METIS_SESSION_SECRET
+        generateValue: true
+      - key: METIS_OPERATOR_TOKEN
+        generateValue: true
+      - key: METIS_CONSUMER_TOKEN
+        generateValue: true
+      - key: METIS_EVALUATOR_TOKEN
+        generateValue: true
+      - key: METIS_PUBLIC_DEMO
+        value: "1"
+      - key: METIS_INTERACTIVE_PUBLIC_DEMO
+        value: "1"
+      - key: METIS_LOCAL_DEMO
+        value: "0"
+      - key: METIS_COOKIE_SECURE
+        value: "1"
+      - key: METIS_ORIGINS
+        value: https://satellite-simulation-cnhk.onrender.com
+      - key: METIS_DEMO_CONFIG
+        value: configs/public-demo.yaml
+      - key: METIS_SOURCE_ID_PER_COMMIT
+        value: "1"
+      - key: METIS_STORAGE_QUOTA_BYTES
+        value: "524288000"
+      - key: METIS_PUBLIC_VIEWER_LIMIT
+        value: "3"
+databases:
+  - name: satellite-simulation-db
+    region: frankfurt
+    plan: free
+    postgresMajorVersion: "17"

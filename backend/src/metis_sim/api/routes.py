@@ -13,6 +13,7 @@ from metis_sim.adapters.records import prior_result, record_result
 from metis_sim.api.auth import ACTIONS, COOKIE
 from metis_sim.api.requests import (
     CreateRunRequest,
+    ViewerConfigurationRequest,
     body_text,
     configuration_body,
     mutation_token,
@@ -114,6 +115,8 @@ async def control(run_id: str, request: Request) -> dict:
         raise ServiceError("invalid_control", "Only set_speed requires a speed value.", 422)
     principal.require(VIEWERS, run_id, command.action)
     context.auth.csrf(request, principal)
+    if command.action == "start" and principal.interactive:
+        await run_in_threadpool(context.service.ensure_prepared_viewer_run, run_id)
     return await run_in_threadpool(
         context.runner.command,
         run_id,
@@ -223,6 +226,7 @@ def bootstrap(request: Request, response: Response) -> ViewerBootstrap:
     except ServiceError:
         principal = None
     public_demo = False
+    interactive = False
     try:
         context.auth.local_bootstrap(request)
     except ServiceError:
@@ -235,19 +239,31 @@ def bootstrap(request: Request, response: Response) -> ViewerBootstrap:
         else:
             if principal is not None and not principal.public_demo:
                 run_id = principal.run_id
+                if principal.interactive:
+                    context.service.ensure_prepared_viewer_run(run_id)
+            elif context.settings.interactive_public_demo:
+                run_id = context.service.create_viewer_template_run(
+                    context.settings.demo_config, context.settings.session_lifetime_s
+                )["run_id"]
+                interactive = True
             else:
                 run_id = context.service.ensure_public_demo(context.settings.demo_config)
                 public_demo = True
     else:
-        run_id = context.service.demo_run_id or (
-            principal.run_id if principal is not None else None
+        run_id = (
+            principal.run_id
+            if principal is not None and principal.interactive
+            else context.service.demo_run_id
+            or (principal.run_id if principal is not None else None)
         )
     if run_id is None:
         raise ServiceError(
             "demo_not_prepared", "Start the server with an explicitly prepared demo.", 503
         )
     if principal is None or principal.run_id != run_id:
-        cookie, principal = context.auth.issue(run_id, public_demo=public_demo)
+        cookie, principal = context.auth.issue(
+            run_id, public_demo=public_demo, interactive=interactive
+        )
         response.set_cookie(
             COOKIE,
             cookie,
@@ -263,6 +279,73 @@ def bootstrap(request: Request, response: Response) -> ViewerBootstrap:
         allowed_actions=list(principal.allowed_actions),
         run=PublicRunStatus.model_validate(context.repository.status(run_id)),
     )
+
+
+@router.get("/v1/viewer/configuration")
+def viewer_configuration(request: Request) -> dict:
+    """Return editable spacecraft inputs without private configuration fields."""
+    context = request.app.state
+    principal = context.auth.principal(request)
+    principal.require({"viewer_control"}, action="start")
+    return {"satellites": context.service.editable_satellites(principal.run_id)}
+
+
+def _viewer_bootstrap_response(request: Request, response: Response, run: dict) -> ViewerBootstrap:
+    """Issue a fresh run-scoped cookie after a browser revision is prepared."""
+    context = request.app.state
+    cookie, principal = context.auth.issue(run["run_id"], interactive=True)
+    response.set_cookie(
+        COOKIE,
+        cookie,
+        max_age=context.settings.session_lifetime_s,
+        httponly=True,
+        secure=context.settings.cookie_secure or request.url.scheme == "https",
+        samesite="strict",
+        path="/",
+    )
+    response.headers["Cache-Control"] = "no-store"
+    return ViewerBootstrap(
+        csrf_token=principal.csrf_token,
+        allowed_actions=list(principal.allowed_actions),
+        run=PublicRunStatus.model_validate(run),
+    )
+
+
+@router.post("/v1/viewer/configuration", response_model=ViewerBootstrap)
+async def replace_viewer_configuration(request: Request, response: Response) -> ViewerBootstrap:
+    """Create a new run with edited spacecraft under the current viewer grant."""
+    context = request.app.state
+    principal = context.auth.principal(request)
+    principal.require({"viewer_control"}, action="start")
+    context.auth.csrf(request, principal)
+    body = parse_json(await body_text(request))
+    command = ViewerConfigurationRequest.model_validate(body)
+    run = await run_in_threadpool(
+        context.service.recreate_viewer_run,
+        principal.run_id,
+        command.satellites,
+        mutation_token(request, principal, body),
+    )
+    return _viewer_bootstrap_response(request, response, run)
+
+
+@router.post("/v1/viewer/reset", response_model=ViewerBootstrap)
+async def reset_viewer_run(request: Request, response: Response) -> ViewerBootstrap:
+    """Restart from tick zero by allocating fresh run and stream identities."""
+    context = request.app.state
+    principal = context.auth.principal(request)
+    principal.require({"viewer_control"}, action="start")
+    context.auth.csrf(request, principal)
+    body = parse_json(await body_text(request))
+    if body:
+        raise ServiceError("invalid_reset", "Reset request must be an empty object.", 422)
+    run = await run_in_threadpool(
+        context.service.recreate_viewer_run,
+        principal.run_id,
+        None,
+        mutation_token(request, principal, body),
+    )
+    return _viewer_bootstrap_response(request, response, run)
 
 
 @router.post("/v1/operator/runs/{run_id}/viewer-session", response_model=ViewerBootstrap)

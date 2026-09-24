@@ -33,6 +33,7 @@ class Settings:
     evaluator_token: str = ""
     local_demo: bool = False
     public_demo: bool = False
+    interactive_public_demo: bool = False
     public_viewer_limit: int = 5
     cookie_secure: bool = False
     session_lifetime_s: int = 7200
@@ -68,6 +69,7 @@ class Settings:
             evaluator_token=os.getenv("METIS_EVALUATOR_TOKEN", ""),
             local_demo=os.getenv("METIS_LOCAL_DEMO", "0") == "1",
             public_demo=os.getenv("METIS_PUBLIC_DEMO", "0") == "1",
+            interactive_public_demo=os.getenv("METIS_INTERACTIVE_PUBLIC_DEMO", "0") == "1",
             public_viewer_limit=max(1, int(os.getenv("METIS_PUBLIC_VIEWER_LIMIT", "5"))),
             cookie_secure=os.getenv("METIS_COOKIE_SECURE", "0") == "1",
             origins=tuple(os.getenv("METIS_ORIGINS", ",".join(default.origins)).split(",")),

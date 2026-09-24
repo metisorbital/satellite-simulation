@@ -109,10 +109,19 @@ That endpoint issues the HttpOnly cookie and returns the session-bound CSRF toke
 Use it only after the run is prepared and from an approved operator workflow that forwards the issued cookie to the authorized browser; never expose the operator bearer token to the browser.
 
 For a public hosted demonstration, set `METIS_PUBLIC_DEMO=1`, `METIS_LOCAL_DEMO=0`, `METIS_COOKIE_SECURE=1`, `METIS_ORIGINS` to the exact HTTPS site origin, and `METIS_DEMO_CONFIG=configs/public-demo.yaml`.
+Set `METIS_INTERACTIVE_PUBLIC_DEMO=1` to give each browser its own bounded editable mission and simulation controls. The shared public demo stays read-only when that flag is absent.
 On Render, set `METIS_SOURCE_ID_PER_COMMIT=1` so each zero-downtime deployment owns a distinct writer source while the previous instance drains. Render provides `RENDER_GIT_COMMIT` at runtime. A restart of the same commit still requires stopping the previous writer before the replacement can become ready.
-The application starts one short, shared run, issues read-only browser sessions, and replaces a completed run when a visitor reconnects.
-Public visitors can rotate and zoom the globe and inspect public telemetry; only operators can change run state or access private evaluation data.
+With `METIS_INTERACTIVE_PUBLIC_DEMO=0`, the application starts one short, shared run, issues read-only browser sessions, and replaces a completed run when a visitor reconnects. In interactive mode, browser sessions are scoped to their own missions and may use the exposed editing and run controls; operator credentials and private evaluation data remain server-side.
+The service advances one run at a time. If another visitor's run is active, Start returns a busy error until that run stops or finishes. Editing and Reset require stopping the current run first; each creates a new immutable run with fresh streams.
 Set a database quota below the hosted PostgreSQL plan's capacity and keep `METIS_PUBLIC_VIEWER_LIMIT` small on resource-constrained plans. Terminal history is expired on restart and before the next public run.
+
+### Render deployment
+
+The root [`render.yaml`](../render.yaml) describes the existing `satellite-simulation` web service and `satellite-simulation-db` database in Frankfurt. The Docker image builds the Flutter viewer and Python service together; Render checks `/health/ready` before routing traffic. The free PostgreSQL plan expires after 30 days, so move to a durable plan before relying on long-lived mission history.
+
+Connect the repository's `main` branch to this Render service and sync the Blueprint in Render. Set its **Auto-Deploy** mode to **After CI Checks Pass** (`autoDeployTrigger: checksPass`). Every push to `main` then runs the GitHub Actions simulation gates, including a Docker image build; Render deploys the commit only if those checks pass. Verify the deployed commit in Render's Deploys tab and request `/health/ready` after rollout. A commit with a failed check is not deployed.
+
+Set `METIS_DATABASE_URL` directly in Render to the PostgreSQL internal connection string with the SQLAlchemy `postgresql+psycopg://` scheme. Keep the existing value when syncing the Blueprint; Render's raw `fromDatabase.connectionString` uses `postgresql://`, which selects an unavailable driver here. Render generates the signing secret and three role tokens only when they do not exist, and preserves existing values. Keep these credentials in Render; never put them in GitHub or the browser. `METIS_ORIGINS` in the Blueprint names the existing `onrender.com` origin; update it to the exact HTTPS origin if the service URL or custom domain changes.
 
 ## Check the Running Service
 

@@ -27,6 +27,7 @@ class Principal:
     expires_at: float | None = None
     csrf_token: str | None = None
     public_demo: bool = False
+    interactive: bool = False
 
     def require(
         self, roles: set[str], run_id: str | None = None, action: str | None = None
@@ -85,6 +86,8 @@ class Auth:
                     raise BadData("invalid claims")
                 if not isinstance(payload.get("public_demo", False), bool):
                     raise BadData("invalid demo claim")
+                if not isinstance(payload.get("interactive", False), bool):
+                    raise BadData("invalid interactive claim")
                 if payload.get("public_demo", False) and payload["allowed_actions"]:
                     raise BadData("public demo cannot control a shared run")
                 if payload.get("public_demo", False) and not self.settings.public_demo:
@@ -96,6 +99,7 @@ class Auth:
                     expires_at=payload["expires_at"],
                     csrf_token=payload["csrf_token"],
                     public_demo=payload.get("public_demo", False),
+                    interactive=payload.get("interactive", False),
                 )
                 principal.require({"viewer_control"})
                 return principal
@@ -105,7 +109,9 @@ class Auth:
                 ) from error
         raise ServiceError("unauthorized", "Authentication is required.", 401)
 
-    def issue(self, run_id: str, *, public_demo: bool = False) -> tuple[str, Principal]:
+    def issue(
+        self, run_id: str, *, public_demo: bool = False, interactive: bool = False
+    ) -> tuple[str, Principal]:
         """Mint a fixed run-scoped capability after the caller authorizes issuance.
 
         Parameters
@@ -114,6 +120,8 @@ class Auth:
             Run authorized by an operator or explicit loopback demo bootstrap.
         public_demo : bool, default=False
             Issue a read-only session for the shared public demonstration.
+        interactive : bool, default=False
+            Mark a browser-owned run eligible for prepared-engine recovery.
 
         Returns
         -------
@@ -127,6 +135,7 @@ class Auth:
             time.time() + self.settings.session_lifetime_s,
             secrets.token_urlsafe(32),
             public_demo,
+            interactive,
         )
         claims: dict[str, Any] = dict(
             role=principal.role,
@@ -135,6 +144,7 @@ class Auth:
             expires_at=principal.expires_at,
             csrf_token=principal.csrf_token,
             public_demo=principal.public_demo,
+            interactive=principal.interactive,
         )
         return self.serializer.dumps(claims), principal
 

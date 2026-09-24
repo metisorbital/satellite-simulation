@@ -14,6 +14,13 @@ from metis_sim.application.errors import ServiceError
 from metis_sim.domain.config import SimulationConfig
 
 
+class ViewerConfigurationRequest(BaseModel):
+    """A bounded replacement constellation supplied by the browser."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+    satellites: list[dict[str, Any]]
+
+
 class CreateRunRequest(BaseModel):
     """A configuration revision and independent administrative retention policy."""
 

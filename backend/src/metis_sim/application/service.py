@@ -48,6 +48,7 @@ class SimulationService:
         self.repository, self.runner = repository, runner
         self.mutations = threading.RLock()
         self.demo_run_id: str | None = None
+        self.viewer_runs: set[str] = set()
 
     def create_configuration(self, config: SimulationConfig, token: Idempotent) -> dict[str, Any]:
         """Persist one fully resolved immutable configuration revision.
@@ -72,7 +73,206 @@ class SimulationService:
                 token,
             )
 
-    def create_run(self, configuration_id: str, retain: bool, token: Idempotent) -> dict[str, Any]:
+    def editable_satellites(self, run_id: str) -> list[dict[str, Any]]:
+        """Return only satellite inputs that a viewer may safely edit.
+
+        Parameters
+        ----------
+        run_id : str
+            Run authorized by the viewer session.
+
+        Returns
+        -------
+        list of dict
+            Public satellite definitions without private scenario or profile data.
+        """
+        config = self._run_config(run_id)
+        result = []
+        for sat in config.satellites:
+            profile = config.profiles[sat.profile_id]
+            result.append(
+                {
+                    **sat.model_dump(mode="json"),
+                    "power": {
+                        "panel_area_m2": profile.panel.area_m2,
+                        "panel_efficiency": profile.panel.efficiency,
+                        "battery_capacity_wh": profile.battery.usable_capacity_wh,
+                        "battery_initial_soc": profile.battery.initial_soc,
+                        "loads_w": dict(profile.loads_w),
+                    },
+                }
+            )
+        return result
+
+    def recreate_viewer_run(
+        self, run_id: str, satellites: list[dict[str, Any]] | None, token: Idempotent
+    ) -> dict[str, Any]:
+        """Create a fresh immutable revision and run for a viewer edit or reset.
+
+        Parameters
+        ----------
+        run_id : str
+            Source run authorized by the viewer session.
+        satellites : list of dict or None
+            Replacement constellation, or ``None`` to reset the current input.
+        token : Idempotent
+            Request identity shared by revision and run creation.
+
+        Returns
+        -------
+        dict[str, Any]
+            New public run status with independent stream identities.
+        """
+        with self.mutations:
+            existing = self.repository.existing((token[0] + ":run", token[1], token[2]))
+            if existing is not None:
+                return existing
+            source = self.repository.status(run_id)
+            if source["status"] in {"running", "paused"}:
+                raise ServiceError(
+                    "run_active", "Stop the current run before editing or resetting.", 409
+                )
+            config = self._run_config(run_id)
+            if satellites is not None:
+                if not 1 <= len(satellites) <= 10:
+                    raise ServiceError(
+                        "invalid_constellation", "Use between 1 and 10 satellites.", 422
+                    )
+                ids = [sat.get("satellite_id") for sat in satellites]
+                if any(not isinstance(item, str) or not item for item in ids):
+                    raise ServiceError(
+                        "invalid_constellation", "Satellite IDs must be strings.", 422
+                    )
+                if len(ids) != len(set(ids)):
+                    raise ServiceError(
+                        "invalid_constellation", "Satellite IDs must be unique.", 422
+                    )
+                # Remove hidden scenario inputs when editing their spacecraft.
+                updated = config.model_dump(mode="json")
+                updated["satellites"] = []
+                expected_power = {
+                    "panel_area_m2",
+                    "panel_efficiency",
+                    "battery_capacity_wh",
+                    "battery_initial_soc",
+                    "loads_w",
+                }
+                for satellite in satellites:
+                    definition = dict(satellite)
+                    power = definition.pop("power", None)
+                    if power is not None:
+                        if not isinstance(power, dict) or set(power) != expected_power:
+                            raise ServiceError(
+                                "invalid_power", "Power parameters are incomplete.", 422
+                            )
+                        profile_id = definition.get("profile_id")
+                        if profile_id not in updated["profiles"]:
+                            raise ServiceError(
+                                "invalid_profile", "Unknown spacecraft profile.", 422
+                            )
+                        unique_profile_id = (
+                            "v_"
+                            + hashlib.sha256(
+                                definition["satellite_id"].encode("utf-8")
+                            ).hexdigest()[:32]
+                        )
+                        profile = json.loads(json.dumps(updated["profiles"][profile_id]))
+                        profile["panel"]["area_m2"] = power["panel_area_m2"]
+                        profile["panel"]["efficiency"] = power["panel_efficiency"]
+                        profile["battery"]["usable_capacity_wh"] = power["battery_capacity_wh"]
+                        profile["battery"]["initial_soc"] = power["battery_initial_soc"]
+                        profile["loads_w"] = power["loads_w"]
+                        updated["profiles"][unique_profile_id] = profile
+                        definition["profile_id"] = unique_profile_id
+                    updated["satellites"].append(definition)
+                updated["constellations"] = [
+                    {**constellation, "satellite_ids": ids}
+                    for constellation in updated["constellations"]
+                ]
+                updated["scenario"] = []
+                config = load_configuration(json.dumps(updated), "json")
+            # Revalidate copied cross-object references and profile selections.
+            config = load_configuration(json.dumps(config.model_dump(mode="json")), "json")
+            revision = self.create_configuration(
+                config, (token[0] + ":configuration", token[1], token[2])
+            )
+            # An abandoned created run can be replaced without consuming a
+            # fourth prepared slot; restore it if preparation fails.
+            released = None
+            if source["status"] == "created" and len(self.runner.prepared) >= 3:
+                released = self.runner.prepared.pop(run_id, None)
+            try:
+                result = self.create_run(
+                    revision["configuration_id"],
+                    False,
+                    (token[0] + ":run", token[1], token[2]),
+                    viewer=True,
+                )
+            except Exception:
+                if released is not None:
+                    self.runner.prepared[run_id] = released
+                raise
+            if source["status"] == "created" or source["status"] in TERMINAL:
+                self.runner.prepared.pop(run_id, None)
+                self.viewer_runs.discard(run_id)
+            return result
+
+    def _run_config(self, run_id: str) -> SimulationConfig:
+        """Load the immutable configuration belonging to a run for internal use."""
+        run = self.repository.private_run(run_id)
+        revision = self.repository.configuration(run["configuration_id"])
+        return load_configuration(json.dumps(revision["configuration"]), "json")
+
+    def ensure_prepared_viewer_run(self, run_id: str) -> None:
+        """Restore an idle browser run's physical engine after slot eviction.
+
+        Parameters
+        ----------
+        run_id : str
+            Created run authorized by an interactive viewer cookie.
+
+        Raises
+        ------
+        ServiceError
+            If the run is no longer creatable or capacity is unavailable.
+        """
+        with self.mutations:
+            if run_id in self.runner.prepared:
+                return
+            status = self.repository.status(run_id)
+            if status["status"] != "created":
+                return
+            if len(self.runner.prepared) >= 3:
+                candidates = [
+                    candidate
+                    for candidate in self.runner.prepared
+                    if candidate in self.viewer_runs
+                    and candidate != self.runner.active_id
+                    and self.repository.status(candidate)["status"] == "created"
+                ]
+                if not candidates:
+                    raise ServiceError(
+                        "prepared_run_limit", "The simulator is busy; retry shortly.", 409
+                    )
+                evicted_id = candidates[0]
+                del self.runner.prepared[evicted_id]
+                self.viewer_runs.discard(evicted_id)
+            config = self._run_config(run_id)
+            engine = SimulationEngine(config).initialize()
+            self.runner.prepared[run_id] = PreparedRun(
+                config,
+                engine,
+                MeasurementProjector(
+                    config,
+                    self.repository.database.source_id,
+                    {sat["satellite_id"]: sat["stream_id"] for sat in status["satellites"]},
+                ),
+            )
+            self.viewer_runs.add(run_id)
+
+    def create_run(
+        self, configuration_id: str, retain: bool, token: Idempotent, *, viewer: bool = False
+    ) -> dict[str, Any]:
         """Prepare an independent run from a saved configuration revision.
 
         Parameters
@@ -83,6 +283,8 @@ class SimulationService:
             Whether durable run history remains after normal expiry cleanup.
         token : Idempotent
             Scope, idempotency key, and canonical request hash for retries.
+        viewer : bool, default=False
+            Whether the new run is browser-owned and may later be evicted while idle.
 
         Returns
         -------
@@ -111,11 +313,22 @@ class SimulationService:
                     in {"completed", "stopped", "failed", "aborted"}
                 ]
                 if not candidates:
+                    candidates = [
+                        run_id
+                        for run_id in self.runner.prepared
+                        if run_id in self.viewer_runs
+                        and run_id != self.runner.active_id
+                        and self.repository.status(run_id)["status"] == "created"
+                    ]
+                if not candidates:
                     raise ServiceError(
                         "prepared_run_limit",
-                        "At most three prepared runs may be held; stop an unused run.",
+                        "The simulator is busy; stop an unused run and retry.",
+                        409,
                     )
-                del self.runner.prepared[candidates[0]]
+                evicted_id = candidates[0]
+                del self.runner.prepared[evicted_id]
+                self.viewer_runs.discard(evicted_id)
             engine = SimulationEngine(config).initialize()
             run_id = str(uuid4())
             spacecraft = []
@@ -153,6 +366,7 @@ class SimulationService:
                 manifest_version="manifest.v1",
                 run_id=run_id,
                 source_kind="synthetic",
+                viewer_owned=viewer,
                 configuration=revision["configuration"],
                 resolved_configuration=revision["resolved"],
                 configuration_hash=revision["canonical_hash"],
@@ -178,6 +392,8 @@ class SimulationService:
                     {s.satellite_id: s.stream_id for s in spacecraft},
                 ),
             )
+            if viewer:
+                self.viewer_runs.add(run_id)
             return result
 
     def trajectory(self, run_id: str, start: int, end: int, step: int) -> Trajectory:
@@ -309,6 +525,50 @@ class SimulationService:
             },
         )
         return self.demo_run_id
+
+    def create_viewer_template_run(
+        self, path: Path, session_lifetime_s: int = 7200
+    ) -> dict[str, Any]:
+        """Prepare an independent browser run from the public deployment template.
+
+        Parameters
+        ----------
+        path : Path
+            Server-owned configuration file.
+        session_lifetime_s : int, default=7200
+            Cookie lifetime used to retain recoverable created runs.
+
+        Returns
+        -------
+        dict[str, Any]
+            Created public run status.
+        """
+        with self.mutations:
+            expired = self.repository.prune_abandoned_viewer_runs(session_lifetime_s * 2)
+            for run_id in expired:
+                self.runner.prepared.pop(run_id, None)
+                self.viewer_runs.discard(run_id)
+            config = load_configuration(path.read_text())
+            # Private scenario is never copied into an interactive user's revision.
+            config = load_configuration(
+                json.dumps(config.model_copy(update={"scenario": ()}).model_dump(mode="json")),
+                "json",
+            )
+            key = str(uuid4())
+            revision = self.create_configuration(
+                config,
+                (
+                    "viewer:template:configuration",
+                    key,
+                    canonical_hash(config.model_dump(mode="json")),
+                ),
+            )
+            return self.create_run(
+                revision["configuration_id"],
+                False,
+                ("viewer:template:run", key, canonical_hash(revision)),
+                viewer=True,
+            )
 
     def ensure_public_demo(self, path: Path) -> str:
         """Keep one bounded shared demo running and expire terminal history.

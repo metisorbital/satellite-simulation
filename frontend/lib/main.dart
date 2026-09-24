@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:pointer_interceptor/pointer_interceptor.dart';
 import 'package:flutter/semantics.dart';
@@ -131,6 +132,407 @@ class _MissionPageState extends State<MissionPage> {
       ),
     ),
   );
+
+  Future<void> showConstellationEditor() async {
+    final source = mission.editableSatellites;
+    if (source == null) return;
+    final draft = (jsonDecode(jsonEncode(source)) as List)
+        .map((item) => Map<String, dynamic>.from(item as Map))
+        .toList();
+    Map<String, TextEditingController> makeControllers(JsonMap satellite) {
+      final orbit = satellite['orbit'] as Map<String, dynamic>;
+      final power = satellite['power'] as Map<String, dynamic>?;
+      final values = <String, dynamic>{
+        'satellite_id': satellite['satellite_id'],
+        'name': satellite['name'],
+        'color': (satellite['visual'] as Map)['color'],
+        for (final key in [
+          'a_m',
+          'e',
+          'i_deg',
+          'raan_deg',
+          'argp_deg',
+          'true_anomaly_deg',
+        ])
+          key: orbit[key],
+        if (power != null) ...{
+          for (final key in [
+            'panel_area_m2',
+            'panel_efficiency',
+            'battery_capacity_wh',
+            'battery_initial_soc',
+          ])
+            key: power[key],
+          for (final key in ['nominal', 'payload_active', 'safe'])
+            key: (power['loads_w'] as Map)[key],
+        },
+      };
+      return values.map(
+        (key, value) => MapEntry(key, TextEditingController(text: '$value')),
+      );
+    }
+
+    final controllers = draft.map(makeControllers).toList();
+    final allocatedControllers = <TextEditingController>[
+      for (final item in controllers) ...item.values,
+    ];
+    const numericKeys = [
+      'a_m',
+      'e',
+      'i_deg',
+      'raan_deg',
+      'argp_deg',
+      'true_anomaly_deg',
+      'panel_area_m2',
+      'panel_efficiency',
+      'battery_capacity_wh',
+      'battery_initial_soc',
+      'nominal',
+      'payload_active',
+      'safe',
+    ];
+    bool syncDraft() {
+      for (var index = 0; index < draft.length; index++) {
+        final controls = controllers[index];
+        final satellite = draft[index];
+        final id = controls['satellite_id']!.text.trim();
+        final name = controls['name']!.text.trim();
+        final color = controls['color']!.text.trim();
+        if (!RegExp(r'^[A-Za-z0-9_-]{1,64}$').hasMatch(id) ||
+            name.isEmpty ||
+            !RegExp(r'^#[0-9A-Fa-f]{6}$').hasMatch(color) ||
+            numericKeys
+                .where(controls.containsKey)
+                .any((key) => double.tryParse(controls[key]!.text) == null)) {
+          return false;
+        }
+        satellite['satellite_id'] = id;
+        satellite['name'] = name;
+        (satellite['visual'] as Map<String, dynamic>)['color'] = color;
+        final orbit = satellite['orbit'] as Map<String, dynamic>;
+        for (final key in [
+          'a_m',
+          'e',
+          'i_deg',
+          'raan_deg',
+          'argp_deg',
+          'true_anomaly_deg',
+        ]) {
+          orbit[key] = double.parse(controls[key]!.text);
+        }
+        final power = satellite['power'] as Map<String, dynamic>?;
+        if (power != null) {
+          for (final key in [
+            'panel_area_m2',
+            'panel_efficiency',
+            'battery_capacity_wh',
+            'battery_initial_soc',
+          ]) {
+            power[key] = double.parse(controls[key]!.text);
+          }
+          final loads = power['loads_w'] as Map<String, dynamic>;
+          for (final key in ['nominal', 'payload_active', 'safe']) {
+            loads[key] = double.parse(controls[key]!.text);
+          }
+        }
+      }
+      return true;
+    }
+
+    final formKey = GlobalKey<FormState>();
+    var selectedIndex = 0;
+    String? issue;
+    final route = DialogRoute<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, update) {
+          final satellite = draft[selectedIndex];
+          final orbit = satellite['orbit'] as Map<String, dynamic>;
+          final power = satellite['power'] as Map<String, dynamic>?;
+          Widget field(
+            String title,
+            String key,
+            Map<String, dynamic> target, {
+            bool numeric = false,
+          }) => TextFormField(
+            key: ValueKey('$selectedIndex-$key'),
+            controller: controllers[selectedIndex][key],
+            decoration: InputDecoration(labelText: title, isDense: true),
+            keyboardType: numeric
+                ? const TextInputType.numberWithOptions(
+                    decimal: true,
+                    signed: true,
+                  )
+                : TextInputType.text,
+            validator: (value) {
+              if (value == null || value.trim().isEmpty) return 'Required';
+              if (numeric && double.tryParse(value) == null) {
+                return 'Enter a number';
+              }
+              if (key == 'satellite_id' &&
+                  !RegExp(r'^[A-Za-z0-9_-]{1,64}$').hasMatch(value)) {
+                return 'Use 1–64 letters, numbers, _ or -';
+              }
+              if (key == 'color' &&
+                  !RegExp(r'^#[0-9A-Fa-f]{6}$').hasMatch(value)) {
+                return 'Use a six-digit color, such as #8FD3FF';
+              }
+              return null;
+            },
+          );
+          return PointerInterceptor(
+            child: AlertDialog(
+              title: const Text('Edit constellation'),
+              content: SizedBox(
+                width: 620,
+                height: 520,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      mission.canReplaceRun
+                          ? 'Saving creates a new run and clears scheduled mode changes. The current run remains in history.'
+                          : 'Stop this run before saving constellation changes.',
+                      style: TextStyle(fontSize: 12, color: muted),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: DropdownButton<int>(
+                            isExpanded: true,
+                            value: selectedIndex,
+                            items: [
+                              for (var i = 0; i < draft.length; i++)
+                                DropdownMenuItem(
+                                  value: i,
+                                  child: Text(
+                                    '${draft[i]['satellite_id']} · ${draft[i]['name']}',
+                                  ),
+                                ),
+                            ],
+                            onChanged: (index) {
+                              if (index != null) {
+                                update(() {
+                                  selectedIndex = index;
+                                  issue = null;
+                                });
+                              }
+                            },
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: 'Add satellite',
+                          onPressed: draft.length >= 10
+                              ? null
+                              : () => update(() {
+                                  final copy = Map<String, dynamic>.from(
+                                    jsonDecode(jsonEncode(draft[selectedIndex]))
+                                        as Map,
+                                  );
+                                  var number = 1;
+                                  while (draft.any(
+                                    (item) =>
+                                        item['satellite_id'] == 'METIS-$number',
+                                  )) {
+                                    number++;
+                                  }
+                                  copy['satellite_id'] = 'METIS-$number';
+                                  copy['name'] = 'Metis $number';
+                                  copy['operations'] = [];
+                                  draft.add(copy);
+                                  final created = makeControllers(copy);
+                                  controllers.add(created);
+                                  allocatedControllers.addAll(created.values);
+                                  selectedIndex = draft.length - 1;
+                                  issue = null;
+                                }),
+                          icon: const Icon(Icons.add),
+                        ),
+                        IconButton(
+                          tooltip: 'Remove satellite',
+                          onPressed: draft.length <= 1
+                              ? null
+                              : () => update(() {
+                                  draft.removeAt(selectedIndex);
+                                  controllers.removeAt(selectedIndex);
+                                  selectedIndex = selectedIndex.clamp(
+                                    0,
+                                    draft.length - 1,
+                                  );
+                                  issue = null;
+                                }),
+                          icon: const Icon(Icons.delete_outline),
+                        ),
+                      ],
+                    ),
+                    Expanded(
+                      child: SingleChildScrollView(
+                        child: Form(
+                          key: formKey,
+                          child: Column(
+                            children: [
+                              field('Satellite ID', 'satellite_id', satellite),
+                              field('Name', 'name', satellite),
+                              field(
+                                'Marker color',
+                                'color',
+                                satellite['visual'] as Map<String, dynamic>,
+                              ),
+                              DropdownButtonFormField<String>(
+                                key: ValueKey('$selectedIndex-initial_mode'),
+                                initialValue:
+                                    satellite['initial_mode'] as String,
+                                decoration: const InputDecoration(
+                                  labelText: 'Initial mode',
+                                ),
+                                items: [
+                                  for (final mode in [
+                                    'nominal',
+                                    'payload_active',
+                                    'safe',
+                                  ])
+                                    DropdownMenuItem(
+                                      value: mode,
+                                      child: Text(mode.replaceAll('_', ' ')),
+                                    ),
+                                ],
+                                onChanged: (mode) {
+                                  if (mode != null) {
+                                    satellite['initial_mode'] = mode;
+                                  }
+                                },
+                              ),
+                              const SizedBox(height: 14),
+                              const Align(
+                                alignment: Alignment.centerLeft,
+                                child: Text(
+                                  'ORBIT',
+                                  style: TextStyle(color: muted, fontSize: 11),
+                                ),
+                              ),
+                              for (final entry in [
+                                ('Semi-major axis (m)', 'a_m'),
+                                ('Eccentricity', 'e'),
+                                ('Inclination (deg)', 'i_deg'),
+                                ('RAAN (deg)', 'raan_deg'),
+                                ('Argument of periapsis (deg)', 'argp_deg'),
+                                ('True anomaly (deg)', 'true_anomaly_deg'),
+                              ])
+                                field(entry.$1, entry.$2, orbit, numeric: true),
+                              if (power != null) ...[
+                                const SizedBox(height: 16),
+                                const Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: Text(
+                                    'POWER SYSTEM',
+                                    style: TextStyle(
+                                      color: muted,
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                ),
+                                field(
+                                  'Panel area (m²)',
+                                  'panel_area_m2',
+                                  power,
+                                  numeric: true,
+                                ),
+                                field(
+                                  'Panel efficiency',
+                                  'panel_efficiency',
+                                  power,
+                                  numeric: true,
+                                ),
+                                field(
+                                  'Battery capacity (Wh)',
+                                  'battery_capacity_wh',
+                                  power,
+                                  numeric: true,
+                                ),
+                                field(
+                                  'Initial battery charge (0–1)',
+                                  'battery_initial_soc',
+                                  power,
+                                  numeric: true,
+                                ),
+                                for (final entry in [
+                                  ('Nominal load (W)', 'nominal'),
+                                  ('Payload active load (W)', 'payload_active'),
+                                  ('Safe load (W)', 'safe'),
+                                ])
+                                  field(
+                                    entry.$1,
+                                    entry.$2,
+                                    power['loads_w'] as Map<String, dynamic>,
+                                    numeric: true,
+                                  ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    if (issue != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: Text(
+                          issue!,
+                          style: const TextStyle(color: gold, fontSize: 11),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: mission.canReplaceRun
+                      ? () {
+                          if (!(formKey.currentState?.validate() ?? false)) {
+                            return;
+                          }
+                          if (!syncDraft()) {
+                            update(
+                              () => issue =
+                                  'Check all satellite fields before saving.',
+                            );
+                            return;
+                          }
+                          final ids = draft
+                              .map((item) => item['satellite_id'])
+                              .toList();
+                          if (ids.toSet().length != ids.length) {
+                            update(
+                              () => issue = 'Satellite IDs must be unique.',
+                            );
+                            return;
+                          }
+                          for (final satellite in draft) {
+                            satellite['operations'] = <dynamic>[];
+                          }
+                          Navigator.pop(dialogContext);
+                          mission.replaceSatellites(draft);
+                        }
+                      : null,
+                  child: const Text('Save as new run'),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+    await Navigator.of(context, rootNavigator: true).push(route);
+    await route.completed;
+    for (final controller in allocatedControllers) {
+      controller.dispose();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final status = mission.status;
@@ -454,6 +856,12 @@ class _MissionPageState extends State<MissionPage> {
         Row(
           children: [
             Expanded(child: label('CONSTELLATION')),
+            if (mission.canEdit)
+              IconButton(
+                tooltip: 'Edit constellation',
+                onPressed: mission.busy ? null : showConstellationEditor,
+                icon: const Icon(Icons.edit_outlined, size: 16),
+              ),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
               decoration: box(
@@ -747,6 +1155,20 @@ class _MissionPageState extends State<MissionPage> {
                   ),
                 ),
               ],
+              const SizedBox(width: 10),
+              IconButton(
+                tooltip: 'Reset simulation with a new run',
+                onPressed: mission.busy || !mission.canReplaceRun
+                    ? null
+                    : mission.reset,
+                icon: const Icon(Icons.restart_alt, size: 19),
+              ),
+              if (!desktop && mission.canEdit)
+                IconButton(
+                  tooltip: 'Edit constellation',
+                  onPressed: mission.busy ? null : showConstellationEditor,
+                  icon: const Icon(Icons.edit_outlined, size: 18),
+                ),
             ],
           )
         : status == null
@@ -814,7 +1236,13 @@ class _MissionPageState extends State<MissionPage> {
                   ],
                 ),
                 const SizedBox(height: 15),
-                Align(alignment: Alignment.centerLeft, child: controls),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: controls,
+                  ),
+                ),
               ],
             ),
     );

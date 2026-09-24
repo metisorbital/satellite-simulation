@@ -5,7 +5,7 @@ from datetime import timedelta
 from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import delete, insert, select, update
+from sqlalchemy import delete, insert, or_, select, update
 
 from metis_sim.adapters import tables
 from metis_sim.adapters.database import Database
@@ -294,3 +294,65 @@ class Repository:
                 update(tables.streams).where(tables.streams.c.run_id.in_(ids)).values(expired=True)
             )
             return len(ids)
+
+    def prune_abandoned_viewer_runs(self, max_age_s: int) -> list[str]:
+        """Delete expired never-started browser runs and their private revisions.
+
+        Parameters
+        ----------
+        max_age_s : int
+            Minimum revision age; callers use longer than the cookie lifetime.
+
+        Returns
+        -------
+        list of str
+            Deleted run IDs whose in-memory engines may be released.
+
+        Notes
+        -----
+        Only viewer-owned ``created`` runs qualify. Their streams have no
+        samples, and valid browser cookies outlive neither the age threshold
+        nor this cleanup. Associated idempotency replies are removed only
+        after the same threshold, preventing stale run/config responses.
+        """
+        cutoff = utc_now() - timedelta(seconds=max_age_s)
+        with self.database.writer_transaction() as connection:
+            rows = list(
+                connection.execute(
+                    select(tables.runs.c.run_id, tables.runs.c.configuration_id)
+                    .join(
+                        tables.configurations,
+                        tables.runs.c.configuration_id == tables.configurations.c.configuration_id,
+                    )
+                    .where(
+                        tables.runs.c.source_id == self.database.source_id,
+                        tables.runs.c.status == "created",
+                        tables.runs.c.retain.is_(False),
+                        tables.runs.c.manifest["viewer_owned"].as_boolean().is_(True),
+                        tables.configurations.c.created_at < cutoff,
+                    )
+                    .limit(100)
+                ).mappings()
+            )
+            if not rows:
+                return []
+            run_ids = [row["run_id"] for row in rows]
+            configuration_ids = [row["configuration_id"] for row in rows]
+            connection.execute(
+                delete(tables.idempotency).where(
+                    or_(
+                        tables.idempotency.c.response["run_id"].as_string().in_(run_ids),
+                        tables.idempotency.c.response["configuration_id"]
+                        .as_string()
+                        .in_(configuration_ids),
+                    )
+                )
+            )
+            connection.execute(delete(tables.streams).where(tables.streams.c.run_id.in_(run_ids)))
+            connection.execute(delete(tables.runs).where(tables.runs.c.run_id.in_(run_ids)))
+            connection.execute(
+                delete(tables.configurations).where(
+                    tables.configurations.c.configuration_id.in_(configuration_ids)
+                )
+            )
+            return run_ids

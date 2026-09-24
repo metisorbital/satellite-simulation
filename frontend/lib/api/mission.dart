@@ -12,10 +12,14 @@ class Mission extends ChangeNotifier {
   final CommittedPlayback playback = CommittedPlayback();
   final Stopwatch clock = Stopwatch()..start();
   JsonMap? trajectory;
+  List<JsonMap>? editableSatellites;
   String? error;
   bool busy = false;
   bool connecting = false;
   bool get canControl => _token.isNotEmpty && _allowedActions.isNotEmpty;
+  bool get canEdit => canControl && editableSatellites != null;
+  bool get canReplaceRun =>
+      canControl && !{'running', 'paused'}.contains(status?['status']);
   bool canPerform(String action) =>
       _token.isNotEmpty && _allowedActions.contains(action);
   String _token = '';
@@ -183,6 +187,16 @@ class Mission extends ChangeNotifier {
       _ingest(Map<String, dynamic>.from(bootstrap['run'] as Map), []);
       final id = status!['run_id'] as String;
       await _snapshot(generation, id);
+      try {
+        final configuration = await _request('/v1/viewer/configuration');
+        if (_current(generation, id)) {
+          editableSatellites = (configuration['satellites'] as List)
+              .map((item) => Map<String, dynamic>.from(item as Map))
+              .toList();
+        }
+      } catch (_) {
+        if (_current(generation, id)) editableSatellites = null;
+      }
       if (_current(generation, id)) _openSocket(generation, id);
     } catch (exception) {
       if (generation == _generation) error = '$exception';
@@ -290,6 +304,41 @@ class Mission extends ChangeNotifier {
         busy = false;
         notifyListeners();
       }
+    }
+  }
+
+  Future<void> replaceSatellites(List<JsonMap> satellites) async {
+    if (busy || !canEdit || !canReplaceRun) return;
+    busy = true;
+    error = null;
+    notifyListeners();
+    try {
+      await _request(
+        '/v1/viewer/configuration',
+        body: {'satellites': satellites},
+      );
+      busy = false;
+      await connect();
+    } catch (exception) {
+      error = '$exception';
+      busy = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> reset() async {
+    if (busy || !canReplaceRun) return;
+    busy = true;
+    error = null;
+    notifyListeners();
+    try {
+      await _request('/v1/viewer/reset', body: {});
+      busy = false;
+      await connect();
+    } catch (exception) {
+      error = '$exception';
+      busy = false;
+      notifyListeners();
     }
   }
 

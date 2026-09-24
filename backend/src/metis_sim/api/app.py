@@ -100,7 +100,7 @@ def create_app(
             if settings.local_demo and prepare_demo:
                 await run_in_threadpool(service.prepare_demo, settings.demo_config, demo_at)
             runner.start()
-            if settings.public_demo and prepare_demo:
+            if settings.public_demo and prepare_demo and not settings.interactive_public_demo:
                 await run_in_threadpool(service.ensure_public_demo, settings.demo_config)
             yield
         finally:

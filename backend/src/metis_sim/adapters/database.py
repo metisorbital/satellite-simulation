@@ -29,6 +29,10 @@ class Database:
     """
 
     def __init__(self, url: str, source_id: str) -> None:
+        if url.startswith("postgresql://"):
+            url = "postgresql+psycopg://" + url[len("postgresql://") :]
+        elif url.startswith("postgres://"):
+            url = "postgresql+psycopg://" + url[len("postgres://") :]
         options: dict[str, Any] = {"pool_pre_ping": True}
         if url.startswith("sqlite"):
             options["connect_args"] = {"check_same_thread": False, "timeout": 2}
