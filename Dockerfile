@@ -8,7 +8,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends git curl unzip 
     && test "$(git -C /opt/flutter rev-parse HEAD)" = "$FLUTTER_REVISION"
 ENV PATH=/opt/flutter/bin:$PATH \
     CI=true \
-    FLUTTER_SUPPRESS_ANALYTICS=true
+    FLUTTER_SUPPRESS_ANALYTICS=true \
+    TAR_OPTIONS=--no-same-owner
 RUN flutter config --no-analytics && flutter precache --web
 
 WORKDIR /build/frontend
@@ -45,4 +46,4 @@ COPY --chown=metis:metis configs ./configs
 COPY --chown=metis:metis --from=frontend-build /build/frontend/build/web ./frontend/build/web
 USER metis
 EXPOSE 8000
-CMD ["metis-sim", "serve", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["sh", "-c", "metis-sim migrate && exec metis-sim serve --host 0.0.0.0 --port ${PORT:-8000}"]
