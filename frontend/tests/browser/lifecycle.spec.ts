@@ -93,7 +93,7 @@ test('late control acknowledgement cannot restore the replaced mission', async (
       }),
     }));
     await expect(page.getByText(/35\.0%/)).toBeVisible();
-    await expect(page.getByText(/825\.4 km/)).toBeVisible();
+    await expect(page.getByText('825.4 km', { exact: true })).toBeVisible();
     await expect(page.getByText(/T\+ 0.0 s/)).toBeVisible();
     expect(errors).toEqual([]);
   } finally {

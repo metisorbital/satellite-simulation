@@ -26,6 +26,7 @@ test('Flutter controls, telemetry, offline Cesium, and stale freeze', async ({ p
   await page.getByRole('button', {name:/METIS-02 Sunlit/}).click();
   await expect(page.getByRole('button', {name:/METIS-02 Sunlit/})).toHaveAttribute('aria-current', 'true');
   await page.getByRole('button', {name:'Follow selected satellite', exact:true}).click();
+  await page.mouse.move(0, 0);
   await page.getByRole('button', {name:'Reset Earth view', exact:true}).click();
   await page.getByRole('checkbox', {name:'5×', exact:true}).click();
   await expect.poll(() => commands.length).toBe(1);
