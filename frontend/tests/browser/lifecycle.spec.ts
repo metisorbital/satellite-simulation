@@ -4,7 +4,7 @@ import { frameAt, framesBetween, statusAt } from '../fixtures';
 async function pausedMission(page: Page): Promise<void> {
   const status = statusAt(40, 'paused');
   await page.route('**/v1/viewer/bootstrap', route =>
-    route.fulfill({ json: { csrf_token: 'test-csrf', run: status } }));
+    route.fulfill({ json: { csrf_token: 'test-csrf', allowed_actions: ['start', 'pause', 'resume', 'set_speed', 'stop'], run: status } }));
   await page.route('**/v1/runs/test-run/snapshot?history=41', route =>
     route.fulfill({ json: { status, frames: framesBetween(0, 40) } }));
   await page.route('**/v1/runs/test-run/trajectory?*', route => route.fulfill({
@@ -31,7 +31,7 @@ test('late control acknowledgement cannot restore the replaced mission', async (
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
   await page.route('**/v1/viewer/bootstrap', route => route.fulfill({
-    json: { csrf_token: reconnecting ? 'replacement-csrf' : 'test-csrf', run: reconnecting ? replacement : original },
+    json: { csrf_token: reconnecting ? 'replacement-csrf' : 'test-csrf', allowed_actions: ['start', 'pause', 'resume', 'set_speed', 'stop'], run: reconnecting ? replacement : original },
   }));
   await page.route('**/v1/runs/test-run/snapshot?history=41', route => {
     oldSnapshots++;

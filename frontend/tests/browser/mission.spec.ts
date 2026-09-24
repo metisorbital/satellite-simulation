@@ -9,7 +9,7 @@ test('Flutter controls, telemetry, offline Cesium, and stale freeze', async ({ p
   page.on('request', request => {
     if (/^https?:/.test(request.url()) && !request.url().startsWith('http://127.0.0.1:4173/')) external.push(request.url());
   });
-  await page.route('**/v1/viewer/bootstrap', route => route.fulfill({json: {csrf_token: 'test-csrf', run: current}}));
+  await page.route('**/v1/viewer/bootstrap', route => route.fulfill({json: {csrf_token: 'test-csrf', allowed_actions: ['start', 'pause', 'resume', 'set_speed', 'stop'], run: current}}));
   await page.route('**/v1/runs/test-run/snapshot?history=41', route => route.fulfill({json: {status: current, frames: framesBetween(Math.max(0, current.committed_tick-40), current.committed_tick)}}));
   await page.route('**/v1/runs/test-run/trajectory?*', route => route.fulfill({json: {run_id:'test-run', frame:'ITRS', kind:'predicted_orbit', satellites:[]}}));
   await page.route('**/v1/runs/test-run/control', async route => {
