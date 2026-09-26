@@ -12,6 +12,7 @@ import 'data_source_selector.dart';
 import 'mission_shell.dart';
 import 'observed_timeline.dart';
 import 'overview_inspector.dart';
+import 'payload_schedule.dart';
 import 'scene/globe.dart';
 import 'scene/playback.dart';
 import 'telemetry/dashboard.dart';
@@ -89,6 +90,7 @@ class MissionPage extends StatefulWidget {
 class _MissionPageState extends State<MissionPage> {
   late final Mission mission;
   Ticker? ticker;
+  DialogRoute<void>? _constellationEditorRoute;
   final historyFocus = FocusNode(debugLabel: "Measurement history");
   String selected = '', chart = 'eps.battery_soc';
   bool telemetryVisible = false;
@@ -135,6 +137,12 @@ class _MissionPageState extends State<MissionPage> {
 
   @override
   void dispose() {
+    final editor = _constellationEditorRoute;
+    if (editor != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (editor.isActive) editor.navigator?.removeRoute(editor);
+      });
+    }
     ticker?.dispose();
     historyFocus.dispose();
     mission.removeListener(refresh);
@@ -192,6 +200,14 @@ class _MissionPageState extends State<MissionPage> {
     final draft = (jsonDecode(jsonEncode(source)) as List)
         .map((item) => Map<String, dynamic>.from(item as Map))
         .toList();
+    final runDurationS = (mission.status!['duration_s'] as num).toInt();
+    final schedules = [
+      for (final satellite in draft)
+        PayloadScheduleDraft.fromOperations(
+          satellite['operations'] as List? ?? const [],
+        ),
+    ];
+    final allocatedSchedules = [...schedules];
     Map<String, TextEditingController> makeControllers(JsonMap satellite) {
       final orbit = satellite['orbit'] as Map<String, dynamic>;
       final power = satellite['power'] as Map<String, dynamic>?;
@@ -294,9 +310,11 @@ class _MissionPageState extends State<MissionPage> {
 
     final formKey = GlobalKey<FormState>();
     var selectedIndex = 0;
+    var saving = false;
     String? issue;
     final route = DialogRoute<void>(
       context: context,
+      barrierDismissible: false,
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, update) {
           final satellite = draft[selectedIndex];
@@ -336,7 +354,7 @@ class _MissionPageState extends State<MissionPage> {
               return null;
             },
           );
-          return PointerInterceptor(
+          final dialog = PointerInterceptor(
             child: AlertDialog(
               title: const Text('Edit constellation'),
               content: SizedBox(
@@ -402,6 +420,10 @@ class _MissionPageState extends State<MissionPage> {
                                   final created = makeControllers(copy);
                                   controllers.add(created);
                                   allocatedControllers.addAll(created.values);
+                                  final schedule =
+                                      PayloadScheduleDraft.fromOperations([]);
+                                  schedules.add(schedule);
+                                  allocatedSchedules.add(schedule);
                                   selectedIndex = draft.length - 1;
                                   issue = null;
                                 }),
@@ -414,6 +436,7 @@ class _MissionPageState extends State<MissionPage> {
                               : () => update(() {
                                   draft.removeAt(selectedIndex);
                                   controllers.removeAt(selectedIndex);
+                                  schedules.removeAt(selectedIndex);
                                   selectedIndex = selectedIndex.clamp(
                                     0,
                                     draft.length - 1,
@@ -437,13 +460,16 @@ class _MissionPageState extends State<MissionPage> {
                                 'color',
                                 satellite['visual'] as Map<String, dynamic>,
                               ),
-                              if (!mission.isObserved)
+                              if (!mission.isObserved) ...[
                                 DropdownButtonFormField<String>(
                                   key: ValueKey('$selectedIndex-initial_mode'),
                                   initialValue:
                                       satellite['initial_mode'] as String,
                                   decoration: const InputDecoration(
-                                    labelText: 'Initial mode',
+                                    labelText: 'Mode outside scheduled tasks',
+                                    helperText:
+                                        'Payload active here keeps the payload on between tasks.',
+                                    helperMaxLines: 2,
                                   ),
                                   items: [
                                     for (final mode in [
@@ -462,6 +488,14 @@ class _MissionPageState extends State<MissionPage> {
                                     }
                                   },
                                 ),
+                                const SizedBox(height: 16),
+                                PayloadScheduleEditor(
+                                  key: ObjectKey(schedules[selectedIndex]),
+                                  draft: schedules[selectedIndex],
+                                  runDurationS: runDurationS,
+                                  onChanged: () => update(() => issue = null),
+                                ),
+                              ],
                               const SizedBox(height: 14),
                               const Align(
                                 alignment: Alignment.centerLeft,
@@ -556,9 +590,14 @@ class _MissionPageState extends State<MissionPage> {
                     if (issue != null)
                       Padding(
                         padding: const EdgeInsets.only(top: 8),
-                        child: Text(
-                          issue!,
-                          style: const TextStyle(color: gold, fontSize: 11),
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxHeight: 84),
+                          child: SingleChildScrollView(
+                            child: Text(
+                              issue!,
+                              style: const TextStyle(color: gold, fontSize: 11),
+                            ),
+                          ),
                         ),
                       ),
                   ],
@@ -566,12 +605,30 @@ class _MissionPageState extends State<MissionPage> {
               ),
               actions: [
                 TextButton(
-                  onPressed: () => Navigator.pop(dialogContext),
+                  onPressed: saving ? null : () => Navigator.pop(dialogContext),
                   child: const Text('Cancel'),
                 ),
                 FilledButton(
-                  onPressed: mission.canReplaceRun
-                      ? () {
+                  onPressed: mission.canReplaceRun && !saving
+                      ? () async {
+                          if (!mission.isObserved) {
+                            for (
+                              var index = 0;
+                              index < schedules.length;
+                              index++
+                            ) {
+                              final error = schedules[index].validate(
+                                runDurationS,
+                              );
+                              if (error != null) {
+                                update(() {
+                                  selectedIndex = index;
+                                  issue = '${draft[index]['name']}: $error';
+                                });
+                                return;
+                              }
+                            }
+                          }
                           if (!(formKey.currentState?.validate() ?? false)) {
                             return;
                           }
@@ -591,22 +648,56 @@ class _MissionPageState extends State<MissionPage> {
                             );
                             return;
                           }
-                          Navigator.pop(dialogContext);
-                          mission.replaceSatellites(draft);
+                          if (!mission.isObserved) {
+                            for (var index = 0; index < draft.length; index++) {
+                              draft[index]['operations'] = schedules[index]
+                                  .toOperations();
+                            }
+                          }
+                          update(() {
+                            saving = true;
+                            issue = null;
+                          });
+                          FocusScope.of(dialogContext).unfocus();
+                          final saved = await mission.replaceSatellites(draft);
+                          if (!dialogContext.mounted) return;
+                          if (!mounted) {
+                            Navigator.pop(dialogContext);
+                            return;
+                          }
+                          update(() {
+                            saving = false;
+                            issue = saved
+                                ? null
+                                : mission.error ?? 'Could not save. Try again.';
+                          });
+                          if (saved) Navigator.pop(dialogContext);
                         }
                       : null,
-                  child: const Text('Save as new run'),
+                  child: Text(saving ? 'Saving…' : 'Save as new run'),
                 ),
               ],
+            ),
+          );
+          return PopScope(
+            canPop: !saving,
+            child: ExcludeFocus(
+              excluding: saving,
+              child: IgnorePointer(ignoring: saving, child: dialog),
             ),
           );
         },
       ),
     );
+    _constellationEditorRoute = route;
     await Navigator.of(context, rootNavigator: true).push(route);
     await route.completed;
+    _constellationEditorRoute = null;
     for (final controller in allocatedControllers) {
       controller.dispose();
+    }
+    for (final schedule in allocatedSchedules) {
+      schedule.dispose();
     }
   }
 

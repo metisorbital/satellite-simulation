@@ -65,7 +65,19 @@ class ViewerClient {
           : detail is Map && detail['message'] is String
           ? detail['message'] as String
           : 'Request failed (${response.statusCode}). Please try again.';
-      throw ViewerRequestException(message, response.statusCode);
+      final details = decoded is Map ? decoded['details'] : null;
+      final reasons = details is List
+          ? details
+                .whereType<Map>()
+                .map((item) => item['reason'])
+                .whereType<String>()
+                .where((reason) => reason.trim().isNotEmpty)
+                .toSet()
+          : <String>{};
+      throw ViewerRequestException(
+        [message, ...reasons].join('\n'),
+        response.statusCode,
+      );
     }
     if (decoded is! Map) {
       throw const ViewerRequestException(

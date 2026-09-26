@@ -147,12 +147,13 @@ class Mission extends ChangeNotifier {
     }
     _scheduleDemoRefresh(next);
     notifyListeners();
-    final position = max(
-      next['committed_tick'] as int,
-      next['playback_start_s'] as int? ?? 0,
-    );
+    final committed = next['committed_tick'] as int;
+    final observed = next['source_kind'] == 'observed';
+    final position = observed
+        ? max(committed, next['playback_start_s'] as int? ?? 0)
+        : committed;
     if (position >= _nextTrajectory &&
-        (position < next['duration_s'] || trajectory == null)) {
+        (position < next['duration_s'] || observed && trajectory == null)) {
       _loadTrajectory(_generation, next);
     }
   }
@@ -644,25 +645,29 @@ class Mission extends ChangeNotifier {
     _shiftRetryKeys.remove(intent);
   }
 
-  Future<void> replaceSatellites(List<JsonMap> satellites) async {
-    if (_closed || busy || !canEdit || !canReplaceRun) return;
+  /// Save a new run and report whether the editor can close successfully.
+  Future<bool> replaceSatellites(List<JsonMap> satellites) async {
+    if (_closed || busy || !canEdit || !canReplaceRun) return false;
     final generation = _generation;
     busy = true;
     error = null;
     notifyListeners();
     try {
-      await _request(
+      final replacement = await _request(
         '/v1/viewer/configuration',
         body: {'satellites': satellites},
       );
-      if (_closed || generation != _generation) return;
+      if (_closed || generation != _generation) return false;
       busy = false;
-      await connect();
+      await connect(initial: replacement);
+      // The POST already committed; a refresh error must not invite a second save.
+      return !_closed;
     } catch (exception) {
-      if (_closed || generation != _generation) return;
+      if (_closed || generation != _generation) return false;
       error = '$exception';
       busy = false;
       notifyListeners();
+      return false;
     }
   }
 
