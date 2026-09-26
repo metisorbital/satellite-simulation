@@ -481,11 +481,7 @@
         },
         "speed": {
           "default": 20,
-          "enum": [
-            1,
-            5,
-            20
-          ],
+          "minimum": 1,
           "title": "Speed",
           "type": "integer"
         },

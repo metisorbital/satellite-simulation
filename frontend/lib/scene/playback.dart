@@ -30,7 +30,51 @@ class CommittedPlayback {
   int revision = 0;
   final Map<String, List<JsonMap>> frames = {};
   final Map<String, List<JsonMap>> history = {};
+  final Map<String, int> _historyLimits = {};
   bool connected = false;
+
+  /// Reserve the selected time window plus the committed playback lag buffer.
+  void retainHistory(String satelliteId, int seconds) {
+    _historyLimits
+      ..clear()
+      ..[satelliteId] = seconds + 41;
+    for (final id in history.keys.toList()) {
+      final buffer = history[id]!;
+      history[id] = buffer
+          .skip(math.max(0, buffer.length - (_historyLimits[id] ?? 600)))
+          .toList();
+    }
+  }
+
+  /// Merge committed replay without changing the live clock or orbit buffer.
+  void mergeHistory(List<JsonMap> incoming) {
+    final current = status;
+    if (current == null) return;
+    for (final satellite in current['satellites'] as List) {
+      final id = satellite['satellite_id'] as String;
+      final accepted = incoming.where(
+        (frame) =>
+            frame['stream_id'] == satellite['stream_id'] &&
+            frame['sequence'] is int &&
+            frame['sequence'] >= 0 &&
+            frameSeconds(frame, current) <= current['committed_tick'],
+      );
+      if (accepted.isEmpty) continue;
+      final merged = <int, JsonMap>{
+        for (final frame in history[id] ?? <JsonMap>[])
+          frame['sequence'] as int: frame,
+        for (final frame in accepted) frame['sequence'] as int: frame,
+      };
+      final ordered = merged.values.toList()
+        ..sort(
+          (a, b) => (a['sequence'] as int).compareTo(b['sequence'] as int),
+        );
+      history[id] = ordered
+          .skip(math.max(0, ordered.length - (_historyLimits[id] ?? 600)))
+          .toList();
+    }
+  }
+
   double _anchorWall = 0, _anchorSeconds = 0, _lastAdvance = 0;
   double? _displayed;
   int _lastTick = -1;
@@ -46,25 +90,11 @@ class CommittedPlayback {
     }
     status = next;
     revision++;
+    mergeHistory(incoming);
     for (final satellite in next['satellites'] as List) {
       final id = satellite['satellite_id'] as String;
-      final merged = <int, JsonMap>{
-        for (final frame in history[id] ?? <JsonMap>[])
-          frame['sequence'] as int: frame,
-      };
-      for (final frame in incoming) {
-        if (frame['stream_id'] == satellite['stream_id'] &&
-            frame['sequence'] is int &&
-            frame['sequence'] >= 0 &&
-            frameSeconds(frame, next) <= next['committed_tick']) {
-          merged[frame['sequence'] as int] = frame;
-        }
-      }
-      final ordered = merged.values.toList()
-        ..sort(
-          (a, b) => (a['sequence'] as int).compareTo(b['sequence'] as int),
-        );
-      history[id] = ordered.skip(math.max(0, ordered.length - 600)).toList();
+      final ordered = history[id] ?? <JsonMap>[];
+      history.putIfAbsent(id, () => <JsonMap>[]);
       frames[id] = ordered.skip(math.max(0, ordered.length - 41)).toList();
     }
     if (next['committed_tick'] > _lastTick) {

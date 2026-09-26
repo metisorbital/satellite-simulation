@@ -165,7 +165,7 @@ class PublicRunStatus(PublicModel):
     committed_tick: int = -1
     status_revision: int = 0
     committed_at: datetime | None = None
-    requested_speed: Literal[1, 5, 20]
+    requested_speed: int = Field(ge=1, strict=True)
     effective_speed: float = 0
     wall_lag_s: float = 0
     satellites: list[PublicSpacecraft]
@@ -352,9 +352,9 @@ class ControlRequest(PublicModel):
     ----------
     action : Action
         Lifecycle command to apply to the run.
-    speed : {1, 5, 20} or None
+    speed : int or None
         Requested pacing multiplier for ``set_speed``; omitted otherwise.
     """
 
     action: Action
-    speed: Literal[1, 5, 20] | None = None
+    speed: int | None = Field(default=None, ge=1, strict=True)

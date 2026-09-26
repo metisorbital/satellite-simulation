@@ -327,7 +327,13 @@ Read limits default to 500 frames, maximum 2,000; trajectory requests allow at m
 Snapshot history is limited to committed telemetry instants; reject future health-state queries.
 An orbit-only future trajectory may extend beyond committed telemetry within the configured run interval because it contains no health prediction; label it `predicted_orbit` and never attach future EPS values.
 Historical snapshots return the nearest prior committed tick and the actual sample time; do not invent intermediate health values.
-The P0 viewer calls snapshot without `at` and renders the current committed buffer only.
+The viewer calls snapshot without `at` for current committed playback.
+Telemetry charts separately refill the selected window through public replay,
+without moving the playback clock. `GET /v1/telemetry` accepts inclusive
+`from_sequence` and `through_sequence` bounds (0–86,400) instead of `after`.
+The end cannot exceed the captured committed tick; omitted bounds default to
+zero and that tick. Each response still contains at most 2,000 frames. Continue
+a bounded read with the next numeric range; cursor replay remains unchanged.
 Historical `at` is for integration/debug verification; recorded-run UI seek remains P1.
 
 ## 7. Delivery, Replay, and Backpressure

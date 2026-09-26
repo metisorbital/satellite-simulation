@@ -167,9 +167,38 @@ def telemetry(
     stream_id: str,
     after: str | None = None,
     limit: int = Query(500, ge=1, le=2000),
+    from_sequence: int | None = Query(None, ge=0, le=86400),
+    through_sequence: int | None = Query(None, ge=0, le=86400),
 ) -> dict:
-    """Replay immutable frames with stream-scoped durable cursors."""
-    return _page(request, stream_id, after, limit, "telemetry")
+    """Replay immutable frames by cursor or a bounded committed sequence range.
+
+    Parameters
+    ----------
+    request : Request
+        Request carrying the authenticated reader capability.
+    stream_id : str
+        Public measurement stream to read.
+    after : str or None
+        Opaque replay cursor; cannot be combined with sequence bounds.
+    limit : int
+        Maximum returned frames, up to 2,000.
+    from_sequence, through_sequence : int or None
+        Inclusive range, defaulting to zero and the committed watermark.
+
+    Returns
+    -------
+    dict
+        Immutable public frames and pagination metadata.
+    """
+    return _page(
+        request,
+        stream_id,
+        after,
+        limit,
+        "telemetry",
+        from_sequence=from_sequence,
+        through_sequence=through_sequence,
+    )
 
 
 @router.get("/v1/events")
@@ -183,12 +212,28 @@ def events(
     return _page(request, stream_id, after, limit, "events")
 
 
-def _page(request: Request, stream_id: str, after: str | None, limit: int, kind: str) -> dict:
+def _page(
+    request: Request,
+    stream_id: str,
+    after: str | None,
+    limit: int,
+    kind: str,
+    *,
+    from_sequence: int | None = None,
+    through_sequence: int | None = None,
+) -> dict:
     context = request.app.state
     principal = context.auth.principal(request)
     principal.require(PUBLIC_READERS)
     principal.require(PUBLIC_READERS, context.reader.stream_run(stream_id))
-    return context.reader.page(stream_id, after, limit, kind)
+    return context.reader.page(
+        stream_id,
+        after,
+        limit,
+        kind,
+        from_sequence=from_sequence,
+        through_sequence=through_sequence,
+    )
 
 
 @router.get("/v1/runs/{run_id}/telemetry-report", response_model=TelemetryReport)

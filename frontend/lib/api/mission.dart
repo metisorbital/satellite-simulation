@@ -180,6 +180,73 @@ class Mission extends ChangeNotifier {
     }
   }
 
+  String? _historySatellite;
+  int _historySeconds = 60;
+  int _historyRequest = 0;
+  bool historyLoading = false;
+  String? historyError;
+
+  /// Fill a bounded telemetry window from committed public replay pages.
+  Future<void> loadTelemetryHistory(String satelliteId, int seconds) async {
+    final run = status;
+    if (_closed || run == null) return;
+    _historySatellite = satelliteId;
+    _historySeconds = seconds.clamp(1, 86400);
+    playback.retainHistory(satelliteId, _historySeconds);
+    final request = ++_historyRequest;
+    final generation = _generation;
+    final id = run['run_id'] as String;
+    final satellite = (run['satellites'] as List)
+        .cast<Map>()
+        .where((item) => item['satellite_id'] == satelliteId)
+        .firstOrNull;
+    if (satellite == null) {
+      historyLoading = false;
+      historyError = null;
+      notifyListeners();
+      return;
+    }
+    final stream = Uri.encodeQueryComponent(satellite['stream_id'] as String);
+    final end = run['committed_tick'] as int;
+    final start = max(0, end - _historySeconds - 40);
+    bool active() => _current(generation, id) && request == _historyRequest;
+    historyLoading = true;
+    historyError = null;
+    notifyListeners();
+    try {
+      for (var first = start; first <= end; first += 2000) {
+        final last = min(end, first + 1999);
+        final page = await _request(
+          '/v1/telemetry?stream_id=$stream&from_sequence=$first&through_sequence=$last&limit=2000',
+        );
+        if (!active()) return;
+        final items = (page['items'] as List)
+            .map((item) => Map<String, dynamic>.from(item as Map))
+            .toList();
+        if (page['has_more'] == true ||
+            items.any(
+              (frame) =>
+                  frame['stream_id'] != satellite['stream_id'] ||
+                  (frame['sequence'] as int) < first ||
+                  (frame['sequence'] as int) > last,
+            )) {
+          throw const FormatException(
+            'History response does not match the selected window.',
+          );
+        }
+        playback.mergeHistory(items);
+        notifyListeners();
+      }
+    } catch (exception) {
+      if (active()) historyError = 'History unavailable: $exception';
+    } finally {
+      if (active()) {
+        historyLoading = false;
+        notifyListeners();
+      }
+    }
+  }
+
   Future<void> _snapshot(
     int generation,
     String id, [
@@ -196,6 +263,9 @@ class Mission extends ChangeNotifier {
           : next,
       snapshot['frames'] as List,
     );
+    if (_historySatellite != null) {
+      unawaited(loadTelemetryHistory(_historySatellite!, _historySeconds));
+    }
   }
 
   Future<void> _loadTrajectory(int generation, JsonMap run) async {
@@ -225,6 +295,9 @@ class Mission extends ChangeNotifier {
     if (_closed || connecting) return;
     connecting = true;
     final generation = ++_generation;
+    _historyRequest++;
+    historyLoading = false;
+    historyError = null;
     _pendingCatalogs.clear();
     _reconnect?.cancel();
     _demoRefresh?.cancel();
@@ -458,6 +531,9 @@ class Mission extends ChangeNotifier {
     if (_closed) return;
     _closed = true;
     _generation++;
+    _historyRequest++;
+    historyLoading = false;
+    historyError = null;
     _reconnect?.cancel();
     _demoRefresh?.cancel();
     _socket?.sink.close();

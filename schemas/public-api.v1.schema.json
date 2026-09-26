@@ -219,7 +219,7 @@
     },
     "ControlRequest": {
       "additionalProperties": false,
-      "description": "A run command; speed is meaningful only for ``set_speed``.\n\nAttributes\n----------\naction : Action\n    Lifecycle command to apply to the run.\nspeed : {1, 5, 20} or None\n    Requested pacing multiplier for ``set_speed``; omitted otherwise.",
+      "description": "A run command; speed is meaningful only for ``set_speed``.\n\nAttributes\n----------\naction : Action\n    Lifecycle command to apply to the run.\nspeed : int or None\n    Requested pacing multiplier for ``set_speed``; omitted otherwise.",
       "properties": {
         "action": {
           "enum": [
@@ -235,11 +235,7 @@
         "speed": {
           "anyOf": [
             {
-              "enum": [
-                1,
-                5,
-                20
-              ],
+              "minimum": 1,
               "type": "integer"
             },
             {
@@ -1151,11 +1147,7 @@
           "$ref": "#/$defs/PublicModelProvenance"
         },
         "requested_speed": {
-          "enum": [
-            1,
-            5,
-            20
-          ],
+          "minimum": 1,
           "title": "Requested Speed",
           "type": "integer"
         },
@@ -1331,11 +1323,7 @@
         },
         "speed": {
           "default": 20,
-          "enum": [
-            1,
-            5,
-            20
-          ],
+          "minimum": 1,
           "title": "Speed",
           "type": "integer"
         },

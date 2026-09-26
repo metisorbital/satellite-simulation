@@ -76,7 +76,7 @@ class RunConfiguration(ContractModel):
     duration_s: Annotated[int, Field(ge=1, le=86_400)] = 21_600
     tick_s: Literal[1]
     telemetry_period_s: Literal[1]
-    speed: Literal[1, 5, 20] = 20
+    speed: Annotated[int, Field(ge=1, strict=True)] = 20
     seed: Annotated[int, Field(ge=0, le=MAX_SAFE_INTEGER)]
     earth_model: Literal["wgs84_j2_v1"]
     orbit_model: Literal["j2_cartesian"]

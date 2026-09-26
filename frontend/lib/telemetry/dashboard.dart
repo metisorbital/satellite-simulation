@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../api/mission.dart';
 import '../scene/playback.dart';
@@ -35,6 +36,84 @@ class _TelemetryDashboardState extends State<TelemetryDashboard> {
   TelemetryPanel? _expanded;
   bool _focusedBeforeExpansion = false;
   final _search = TextEditingController();
+
+  String? _historyKey;
+
+  @override
+  void initState() {
+    super.initState();
+    _scheduleHistory();
+  }
+
+  @override
+  void didUpdateWidget(covariant TelemetryDashboard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _scheduleHistory();
+  }
+
+  void _scheduleHistory() {
+    final mission = widget.mission;
+    final key = '${mission.status?['run_id']}:${widget.selected}:$_window';
+    if (mission.status == null || key == _historyKey) return;
+    _historyKey = key;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && key == _historyKey) {
+        mission.loadTelemetryHistory(widget.selected, _window);
+      }
+    });
+  }
+
+  void _setWindow(int seconds) {
+    setState(() => _window = seconds);
+    _scheduleHistory();
+  }
+
+  Future<void> _customWindow() async {
+    final form = GlobalKey<FormState>();
+    var minutes = '${_window ~/ 60}';
+    final seconds = await showDialog<int>(
+      context: context,
+      builder: (dialogContext) {
+        void apply() {
+          if (form.currentState!.validate()) {
+            Navigator.pop(dialogContext, int.parse(minutes.trim()) * 60);
+          }
+        }
+
+        return AlertDialog(
+          title: const Text('Custom buffered window'),
+          content: Form(
+            key: form,
+            child: TextFormField(
+              initialValue: minutes,
+              autofocus: true,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Minutes',
+                helperText: '1–1440 whole minutes (up to 24 hours)',
+              ),
+              onChanged: (value) => minutes = value,
+              validator: (value) {
+                final amount = int.tryParse(value?.trim() ?? '');
+                return amount == null || amount < 1 || amount > 1440
+                    ? 'Enter a whole number from 1 to 1440.'
+                    : null;
+              },
+              onFieldSubmitted: (_) => apply(),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(onPressed: apply, child: const Text('Apply')),
+          ],
+        );
+      },
+    );
+    if (mounted && seconds != null) _setWindow(seconds);
+  }
 
   void _expand(TelemetryPanel panel) {
     _focusedBeforeExpansion = widget.focused;
@@ -77,6 +156,17 @@ class _TelemetryDashboardState extends State<TelemetryDashboard> {
               )
               .toList();
     final end = eligible.isEmpty ? null : sampleTime(eligible.last);
+    final chartWindow = end == null || status == null
+        ? _window
+        : math.max(
+            1,
+            math.min(
+              _window,
+              end
+                  .difference(DateTime.parse(status['epoch_utc'] as String))
+                  .inSeconds,
+            ),
+          );
     final frames = end == null
         ? <JsonMap>[]
         : eligible
@@ -161,7 +251,7 @@ class _TelemetryDashboardState extends State<TelemetryDashboard> {
                   definitions: definitions,
                   frames: frames,
                   current: current,
-                  windowSeconds: _window,
+                  windowSeconds: chartWindow,
                   end: end,
                   expanded: true,
                 ),
@@ -380,10 +470,16 @@ class _TelemetryDashboardState extends State<TelemetryDashboard> {
                     ButtonSegment(value: 300, label: Text('5 min')),
                     ButtonSegment(value: 600, label: Text('10 min')),
                   ],
-                  selected: {_window},
+                  selected: {
+                    if (const [60, 300, 600].contains(_window)) _window,
+                  },
+                  emptySelectionAllowed: true,
                   showSelectedIcon: false,
-                  onSelectionChanged: (value) =>
-                      setState(() => _window = value.single),
+                  onSelectionChanged: (value) {
+                    if (value.isNotEmpty) {
+                      _setWindow(value.single);
+                    }
+                  },
                   style: SegmentedButton.styleFrom(
                     visualDensity: VisualDensity.compact,
                     textStyle: const TextStyle(fontSize: 11),
@@ -391,6 +487,15 @@ class _TelemetryDashboardState extends State<TelemetryDashboard> {
                     selectedBackgroundColor: telemetryAccent.withValues(
                       alpha: .1,
                     ),
+                  ),
+                ),
+                OutlinedButton(
+                  onPressed: _customWindow,
+                  child: Text(
+                    const [60, 300, 600].contains(_window)
+                        ? 'Custom'
+                        : 'Custom: ${_window ~/ 60} min',
+                    style: const TextStyle(fontSize: 11),
                   ),
                 ),
               ],
@@ -406,10 +511,34 @@ class _TelemetryDashboardState extends State<TelemetryDashboard> {
                     '${gaps > 0 ? ' · $gaps sequence gaps' : ''}',
           style: const TextStyle(fontSize: 10, color: telemetryMuted),
         ),
+        if (mission.historyLoading)
+          const Padding(
+            padding: EdgeInsets.only(top: 6),
+            child: Text(
+              'Loading selected history…',
+              style: TextStyle(fontSize: 10, color: telemetryMuted),
+            ),
+          ),
+        if (mission.historyError != null)
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  mission.historyError!,
+                  style: const TextStyle(fontSize: 10, color: telemetryMuted),
+                ),
+              ),
+              TextButton(
+                onPressed: () =>
+                    mission.loadTelemetryHistory(selected, _window),
+                child: const Text('Retry history'),
+              ),
+            ],
+          ),
         if (!widget.focused) const SizedBox(height: 5),
         if (!widget.focused)
           const Text(
-            'History builds as samples arrive (up to 600 per spacecraft). Gaps remain blank; diamonds mark saturated readings.',
+            'The selected window includes stored committed history. Gaps remain blank; diamonds mark saturated readings.',
             style: TextStyle(fontSize: 10, color: telemetryMuted, height: 1.5),
           ),
         const SizedBox(height: 17),
@@ -464,7 +593,7 @@ class _TelemetryDashboardState extends State<TelemetryDashboard> {
                         definitions: definitions,
                         frames: frames,
                         current: current,
-                        windowSeconds: _window,
+                        windowSeconds: chartWindow,
                         end: end,
                         onExpand: () => _expand(panel),
                       ),

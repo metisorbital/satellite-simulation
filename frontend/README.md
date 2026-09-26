@@ -23,8 +23,9 @@ bundles CanvasKit and Cesium, with no CDN or Cesium Ion dependency.
 it manually. Public Python API reference is generated from NumPy-style docstrings
 in the Zensical docs; Dart comments use native Dart `///` documentation.
 
-Playback holds at most 41 frames for interpolation and 600 history frames per
-spacecraft. All spacecraft share one bounded committed clock. The view freezes
+Playback holds at most 41 frames for interpolation. Telemetry retains the selected
+spacecraft’s window plus 41 samples for playback lag; other spacecraft retain
+600 history frames each. All spacecraft share one bounded committed clock. The view freezes
 when disconnected or when no advancing commit arrives for 1.5 seconds. Pause and
 stop drain to the acknowledged snapshot. Reconnection refreshes a snapshot before
 resuming the stream; session expiry requires explicit reconnect.
@@ -63,9 +64,12 @@ state. Panels retain channel quality, committed sample times, units, and gaps.
 The default `power-leo.v1` configuration also works, with only its available
 catalog channels.
 
-Buffered windows offer 1, 5, and 10 minute presets plus a custom duration from
-1 second to 10 minutes. Windows end at the displayed committed sample and use
-only received history; choosing a longer window does not fetch older samples.
+Buffered windows offer 1, 5, and 10 minute presets plus a custom whole-minute
+duration from 1 to 1440 minutes. Windows end at the displayed committed sample,
+with the start clamped to the run epoch for shorter runs. Selecting a spacecraft
+or window loads its stored committed samples in bounded pages. A 60-minute
+window includes 3601 samples at 1 Hz once that much history exists. Loading and
+retry messages distinguish pending or failed history reads from real gaps.
 
 The first demo login may prepare a complete simulation. Login allows up to
 three minutes for this preparation; ordinary API requests retain their
@@ -73,8 +77,8 @@ three minutes for this preparation; ordinary API requests retain their
 
 The dashboard groups committed measurements into Overview, EPS, Flight computer,
 Payload, ADCS, and Space weather. Channel search and 1/5/10-minute windows filter
-the received buffer; they do not query historical exports. Initial/reconnect
-snapshots contain up to 41 samples and the buffer holds at most 600 per satellite.
+committed history. Initial/reconnect snapshots contain up to 41 samples for
+playback; telemetry separately refills the selected window from public replay.
 The displayed sample UTC and actual coverage identify the data on screen.
 
 Units, frames, sampling semantics, and availability come from the authenticated

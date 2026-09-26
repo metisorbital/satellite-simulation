@@ -275,8 +275,8 @@ class Runner:
                 raise ServiceError("invalid_transition", "Stop requires a running or paused run.")
             return self._terminal(status, "stopped", command.token, command=command)
         elif action == "set_speed":
-            if command.speed not in {1, 5, 20}:
-                raise ServiceError("invalid_speed", "Speed must be 1, 5, or 20.", 422)
+            if type(command.speed) is not int or command.speed < 1:
+                raise ServiceError("invalid_speed", "Speed must be a positive whole number.", 422)
             status["requested_speed"] = command.speed
         else:
             raise ServiceError("invalid_action", "Unsupported control action.", 422)

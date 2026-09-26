@@ -604,6 +604,58 @@ class _MissionPageState extends State<MissionPage> {
     );
   }
 
+  Future<void> showCustomSpeed() async {
+    final form = GlobalKey<FormState>();
+    var value = '${mission.status?['requested_speed'] ?? 20}';
+    final speed = await showDialog<int>(
+      context: context,
+      builder: (dialogContext) {
+        void apply() {
+          if (form.currentState!.validate()) {
+            Navigator.pop(dialogContext, int.parse(value.trim()));
+          }
+        }
+
+        return PointerInterceptor(
+          child: AlertDialog(
+            title: const Text('Custom simulation speed'),
+            content: Form(
+              key: form,
+              child: TextFormField(
+                initialValue: value,
+                autofocus: true,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'Speed multiplier',
+                  suffixText: '×',
+                  helperText: 'Positive whole-number multiplier',
+                ),
+                onChanged: (text) => value = text,
+                validator: (text) {
+                  final number = int.tryParse(text?.trim() ?? '');
+                  return number == null || number < 1
+                      ? 'Enter a positive whole number.'
+                      : null;
+                },
+                onFieldSubmitted: (_) => apply(),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(onPressed: apply, child: const Text('Apply')),
+            ],
+          ),
+        );
+      },
+    );
+    if (mounted && speed != null && !mission.busy && mission.canPerform('set_speed')) {
+      await mission.control('set_speed', speed);
+    }
+  }
+
   Future<void> showSettings() async {
     final edit = await showDialog<bool>(
       context: context,
@@ -1004,6 +1056,18 @@ class _MissionPageState extends State<MissionPage> {
                           ),
                         ),
                     ],
+                  ),
+                ),
+              ],
+              if (mission.canPerform('set_speed')) ...[
+                const SizedBox(width: 6),
+                TextButton(
+                  onPressed: disabled ? null : showCustomSpeed,
+                  child: Text(
+                    const [1, 5, 20].contains(status?['requested_speed'])
+                        ? 'Custom'
+                        : '${status?['requested_speed']}× · Custom',
+                    style: const TextStyle(fontSize: 10),
                   ),
                 ),
               ],

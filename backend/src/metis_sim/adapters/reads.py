@@ -52,9 +52,16 @@ class PublicReader:
         return str(run_id)
 
     def page(
-        self, stream_id: str, after: str | None, limit: int, kind: str = "telemetry"
+        self,
+        stream_id: str,
+        after: str | None,
+        limit: int,
+        kind: str = "telemetry",
+        *,
+        from_sequence: int | None = None,
+        through_sequence: int | None = None,
     ) -> dict[str, Any]:
-        """Read retained public envelopes after a stream-scoped cursor.
+        """Read retained public envelopes by cursor or committed telemetry range.
 
         Parameters
         ----------
@@ -67,6 +74,10 @@ class PublicReader:
             Maximum number of items in this page.
         kind : str, default='telemetry'
             ``telemetry`` or ``events``; each has a separate sequence space.
+        from_sequence, through_sequence : int or None
+            Inclusive telemetry bounds, incompatible with ``after``. Omitted
+            endpoints default to zero and the captured committed watermark.
+            Continue a bounded read with another numeric range, not its cursor.
 
         Returns
         -------
@@ -77,8 +88,18 @@ class PublicReader:
         Raises
         ------
         ServiceError
-            If the stream or cursor is invalid, or retained history expired.
+            If the stream, cursor, or committed range is invalid, or history expired.
         """
+        bounded = from_sequence is not None or through_sequence is not None
+        if bounded and (after is not None or kind != "telemetry"):
+            raise ServiceError(
+                "invalid_window", "Sequence bounds require telemetry without a cursor.", 422
+            )
+        if bounded and any(
+            value is not None and (type(value) is not int or not 0 <= value <= 86400)
+            for value in (from_sequence, through_sequence)
+        ):
+            raise ServiceError("invalid_window", "Sequence bounds must be between 0 and 86400.", 422)
         table = tables.frames if kind == "telemetry" else tables.events
         sequence = table.c.sequence if kind == "telemetry" else table.c.event_sequence
         with self.database.engine.begin() as connection:
@@ -91,6 +112,20 @@ class PublicReader:
             )
             if stream is None:
                 raise ServiceError("stream_not_found", "Stream does not exist.", 404)
+            stop = None
+            start = 0 if from_sequence is None else from_sequence
+            if bounded:
+                status = connection.execute(
+                    select(tables.runs.c.public_status).where(
+                        tables.runs.c.run_id == stream["run_id"]
+                    )
+                ).scalar_one()
+                watermark = status["committed_tick"]
+                stop = watermark if through_sequence is None else through_sequence
+                if stop < start or stop > watermark:
+                    raise ServiceError(
+                        "invalid_window", "Sequence bounds must describe committed samples.", 422
+                    )
             bounds = connection.execute(
                 select(func.min(sequence), func.max(sequence)).where(table.c.stream_id == stream_id)
             ).one()
@@ -102,7 +137,7 @@ class PublicReader:
                     410,
                     [retained],
                 )
-            position = -1
+            position = start - 1 if bounded else -1
             if after == "latest":
                 position = bounds[1] if bounds[1] is not None else -1
             elif after:
@@ -130,13 +165,13 @@ class PublicReader:
                         410,
                         [retained],
                     )
+            statement = select(table.c.payload).where(
+                table.c.stream_id == stream_id, sequence > position
+            )
+            if stop is not None:
+                statement = statement.where(sequence <= stop)
             rows = list(
-                connection.execute(
-                    select(table.c.payload)
-                    .where(table.c.stream_id == stream_id, sequence > position)
-                    .order_by(sequence)
-                    .limit(limit + 1)
-                ).scalars()
+                connection.execute(statement.order_by(sequence).limit(limit + 1)).scalars()
             )
             more = len(rows) > limit
             items = rows[:limit]
