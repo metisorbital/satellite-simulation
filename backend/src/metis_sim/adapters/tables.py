@@ -39,6 +39,7 @@ runs = Table(
         nullable=False,
     ),
     Column("source_id", String(64), nullable=False),
+    Column("user_id", String(36), nullable=True),
     Column("status", String(16), nullable=False),
     Column("public_status", document, nullable=False),
     Column("manifest", document, nullable=False),

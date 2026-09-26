@@ -2,13 +2,22 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
 import 'package:web_socket_channel/web_socket_channel.dart';
 import '../scene/playback.dart';
 import 'generated.dart';
+import 'viewer_client.dart';
 
 /// Owns session, committed snapshots, reconnects, and guarded run controls.
 class Mission extends ChangeNotifier {
+  Mission({ViewerClient? client, this.onSessionExpired})
+    : _client = client ?? ViewerClient();
+
+  final ViewerClient _client;
+  final VoidCallback? onSessionExpired;
+  bool _closed = false;
+  String _lastToken = '';
+  String? _operatorUserId;
+  String get csrfToken => _lastToken;
   final CommittedPlayback playback = CommittedPlayback();
   final Stopwatch clock = Stopwatch()..start();
   JsonMap? trajectory;
@@ -72,37 +81,22 @@ class Mission extends ChangeNotifier {
   }
 
   Future<JsonMap> _request(String path, {JsonMap? body}) async {
-    final uri = Uri.base.resolve(path);
-    final response = body == null
-        ? await http.get(uri)
-        : await http.post(
-            uri,
-            headers: {
-              'Content-Type': 'application/json',
-              'X-CSRF-Token': _token,
-              'Idempotency-Key':
-                  '${DateTime.now().microsecondsSinceEpoch}-${Random.secure().nextInt(0x7fffffff)}',
-            },
-            body: jsonEncode(body),
-          );
-    final decoded = jsonDecode(response.body);
-    if (response.statusCode >= 400) {
-      final detail = decoded is Map ? decoded['detail'] : null;
-      throw Exception(
-        decoded is Map && decoded['message'] is String
-            ? decoded['message']
-            : detail is String
-            ? detail
-            : detail is Map
-            ? detail['message']
-            : 'Request failed (${response.statusCode})',
-      );
+    final generation = _generation;
+    try {
+      return await _client.request(path, body: body, csrfToken: _token);
+    } on ViewerRequestException catch (exception) {
+      if (exception.statusCode == 401 &&
+          !_closed &&
+          generation == _generation) {
+        suspend();
+        onSessionExpired?.call();
+      }
+      rethrow;
     }
-    return Map<String, dynamic>.from(decoded as Map);
   }
 
   bool _current(int generation, String id) =>
-      _generation == generation && status?['run_id'] == id;
+      !_closed && _generation == generation && status?['run_id'] == id;
 
   void _ingest(JsonMap next, List<dynamic> incoming) {
     playback.ingest(
@@ -159,8 +153,8 @@ class Mission extends ChangeNotifier {
     }
   }
 
-  Future<void> connect() async {
-    if (connecting) return;
+  Future<void> connect({JsonMap? initial}) async {
+    if (_closed || connecting) return;
     connecting = true;
     final generation = ++_generation;
     _reconnect?.cancel();
@@ -176,10 +170,18 @@ class Mission extends ChangeNotifier {
     notifyListeners();
     try {
       final bootstrap = ViewerBootstrap.fromJson(
-        await _request('/v1/viewer/bootstrap'),
+        initial ?? await _request('/v1/viewer/session'),
       ).toJson();
       if (generation != _generation) return;
+      final operatorId = (bootstrap['operator'] as Map?)?['user_id'] as String?;
+      if (_operatorUserId != null && operatorId != _operatorUserId) {
+        suspend();
+        onSessionExpired?.call();
+        return;
+      }
+      _operatorUserId = operatorId;
       _token = bootstrap['csrf_token'] as String;
+      _lastToken = _token;
       _allowedActions = (bootstrap['allowed_actions'] as List<dynamic>)
           .cast<String>()
           .toSet();
@@ -187,6 +189,7 @@ class Mission extends ChangeNotifier {
       _ingest(Map<String, dynamic>.from(bootstrap['run'] as Map), []);
       final id = status!['run_id'] as String;
       await _snapshot(generation, id);
+      if (!_current(generation, id)) return;
       try {
         final configuration = await _request('/v1/viewer/configuration');
         if (_current(generation, id)) {
@@ -265,8 +268,9 @@ class Mission extends ChangeNotifier {
         if (!_current(generation, id)) return;
         playback.connected = false;
         if ([1008, 4401, 4403].contains(channel.closeCode)) {
-          _clearSession();
-          error = 'Mission session expired. Reconnect to continue.';
+          suspend();
+          onSessionExpired?.call();
+          return;
         } else {
           _reconnect = Timer(Duration(milliseconds: _backoff), () async {
             try {
@@ -308,7 +312,8 @@ class Mission extends ChangeNotifier {
   }
 
   Future<void> replaceSatellites(List<JsonMap> satellites) async {
-    if (busy || !canEdit || !canReplaceRun) return;
+    if (_closed || busy || !canEdit || !canReplaceRun) return;
+    final generation = _generation;
     busy = true;
     error = null;
     notifyListeners();
@@ -317,9 +322,11 @@ class Mission extends ChangeNotifier {
         '/v1/viewer/configuration',
         body: {'satellites': satellites},
       );
+      if (_closed || generation != _generation) return;
       busy = false;
       await connect();
     } catch (exception) {
+      if (_closed || generation != _generation) return;
       error = '$exception';
       busy = false;
       notifyListeners();
@@ -327,27 +334,46 @@ class Mission extends ChangeNotifier {
   }
 
   Future<void> reset() async {
-    if (busy || !canReplaceRun) return;
+    if (_closed || busy || !canReplaceRun) return;
+    final generation = _generation;
     busy = true;
     error = null;
     notifyListeners();
     try {
       await _request('/v1/viewer/reset', body: {});
+      if (_closed || generation != _generation) return;
       busy = false;
       await connect();
     } catch (exception) {
+      if (_closed || generation != _generation) return;
       error = '$exception';
       busy = false;
       notifyListeners();
     }
   }
 
-  @override
-  void dispose() {
+  /// Stop transport and invalidate pending results before leaving the workspace.
+  void suspend() {
+    if (_closed) return;
+    _closed = true;
     _generation++;
     _reconnect?.cancel();
     _demoRefresh?.cancel();
     _socket?.sink.close();
+    _client.close();
+    clock.stop();
+    _clearSession();
+    playback.connected = false;
+    playback.status = null;
+    playback.frames.clear();
+    playback.history.clear();
+    editableSatellites = null;
+    trajectory = null;
+  }
+
+  @override
+  void dispose() {
+    suspend();
     super.dispose();
   }
 }

@@ -673,22 +673,51 @@ class ViewerBootstrap {
     required this.csrf_token,
     required this.allowed_actions,
     required this.run,
+    required this.operator,
   });
 
   final String csrf_token;
   final List<String> allowed_actions;
   final PublicRunStatus run;
+  final ViewerOperator? operator;
 
   factory ViewerBootstrap.fromJson(Map<String, dynamic> json) => ViewerBootstrap(
     csrf_token: json['csrf_token'] as String,
     allowed_actions: (json['allowed_actions'] as List).map((item) => item as String).toList(),
     run: PublicRunStatus.fromJson(Map<String, dynamic>.from(json['run'] as Map)),
+    operator: json['operator'] == null ? null : ViewerOperator.fromJson(Map<String, dynamic>.from(json['operator'] as Map)),
   );
 
   Map<String, dynamic> toJson() => {
     'csrf_token': csrf_token,
     'allowed_actions': allowed_actions.map((item) => item).toList(),
     'run': run.toJson(),
+    'operator': operator == null ? null : operator!.toJson(),
+  };
+}
+
+/// Mock operator identity disclosed only to its own browser session.
+class ViewerOperator {
+  const ViewerOperator({
+    required this.user_id,
+    required this.login,
+    required this.display_name,
+  });
+
+  final String user_id;
+  final String login;
+  final String display_name;
+
+  factory ViewerOperator.fromJson(Map<String, dynamic> json) => ViewerOperator(
+    user_id: json['user_id'] as String,
+    login: json['login'] as String,
+    display_name: json['display_name'] as String,
+  );
+
+  Map<String, dynamic> toJson() => {
+    'user_id': user_id,
+    'login': login,
+    'display_name': display_name,
   };
 }
 

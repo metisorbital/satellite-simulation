@@ -5,6 +5,7 @@ import json
 import logging
 import platform
 import threading
+import time
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -105,7 +106,12 @@ class SimulationService:
         return result
 
     def recreate_viewer_run(
-        self, run_id: str, satellites: list[dict[str, Any]] | None, token: Idempotent
+        self,
+        run_id: str,
+        satellites: list[dict[str, Any]] | None,
+        token: Idempotent,
+        *,
+        viewer_expires_at: float | None = None,
     ) -> dict[str, Any]:
         """Create a fresh immutable revision and run for a viewer edit or reset.
 
@@ -117,6 +123,8 @@ class SimulationService:
             Replacement constellation, or ``None`` to reset the current input.
         token : Idempotent
             Request identity shared by revision and run creation.
+        viewer_expires_at : float or None
+            Expiry of the replacement mock operator session and its private lease.
 
         Returns
         -------
@@ -207,6 +215,8 @@ class SimulationService:
                     False,
                     (token[0] + ":run", token[1], token[2]),
                     viewer=True,
+                    user_id=self.repository.private_run(run_id)["user_id"],
+                    viewer_expires_at=viewer_expires_at,
                 )
             except Exception:
                 if released is not None:
@@ -271,7 +281,14 @@ class SimulationService:
             self.viewer_runs.add(run_id)
 
     def create_run(
-        self, configuration_id: str, retain: bool, token: Idempotent, *, viewer: bool = False
+        self,
+        configuration_id: str,
+        retain: bool,
+        token: Idempotent,
+        *,
+        viewer: bool = False,
+        user_id: str | None = None,
+        viewer_expires_at: float | None = None,
     ) -> dict[str, Any]:
         """Prepare an independent run from a saved configuration revision.
 
@@ -285,6 +302,10 @@ class SimulationService:
             Scope, idempotency key, and canonical request hash for retries.
         viewer : bool, default=False
             Whether the new run is browser-owned and may later be evicted while idle.
+        user_id : str or None
+            Stable demo operator UUID persisted only in the private run record.
+        viewer_expires_at : float or None
+            Absolute expiry of a mock-owned run's browser session.
 
         Returns
         -------
@@ -380,6 +401,10 @@ class SimulationService:
                 random_generator="numpy.PCG64DXSM",
                 seed_derivation="SHA256(root_seed,satellite_id,sensor_channel_id); noise disabled in P0",
             )
+            if user_id is not None:
+                if viewer_expires_at is None:
+                    raise ValueError("Mock operator runs require a durable session expiry")
+                manifest["viewer_expires_at"] = viewer_expires_at
             result = self.repository.create_run(
                 configuration_id,
                 status.model_dump(mode="json"),
@@ -390,6 +415,7 @@ class SimulationService:
                     satellite.satellite_id: config.profiles[satellite.profile_id].sensors.catalog
                     for satellite in config.satellites
                 },
+                user_id=user_id,
             )
             self.runner.prepared[run_id] = PreparedRun(
                 config,
@@ -535,7 +561,12 @@ class SimulationService:
         return self.demo_run_id
 
     def create_viewer_template_run(
-        self, path: Path, session_lifetime_s: int = 7200
+        self,
+        path: Path,
+        session_lifetime_s: int = 7200,
+        *,
+        user_id: str | None = None,
+        viewer_expires_at: float | None = None,
     ) -> dict[str, Any]:
         """Prepare an independent browser run from the public deployment template.
 
@@ -545,6 +576,10 @@ class SimulationService:
             Server-owned configuration file.
         session_lifetime_s : int, default=7200
             Cookie lifetime used to retain recoverable created runs.
+        user_id : str or None
+            Stable mock operator identity; omitted for anonymous legacy grants.
+        viewer_expires_at : float or None
+            Absolute expiry shared by this run and its signed session cookie.
 
         Returns
         -------
@@ -552,6 +587,9 @@ class SimulationService:
             Created public run status.
         """
         with self.mutations:
+            if user_id is not None:
+                for run_id, owner in self.repository.expired_operator_runs(time.time()):
+                    self.stop_viewer_run(run_id, owner)
             expired = self.repository.prune_abandoned_viewer_runs(session_lifetime_s * 2)
             for run_id in expired:
                 self.runner.prepared.pop(run_id, None)
@@ -576,7 +614,50 @@ class SimulationService:
                 False,
                 ("viewer:template:run", key, canonical_hash(revision)),
                 viewer=True,
+                user_id=user_id,
+                viewer_expires_at=viewer_expires_at,
             )
+
+    def stop_viewer_run(self, run_id: str, user_id: str) -> None:
+        """Stop only the logging-out operator's active run at a durable boundary.
+
+        Parameters
+        ----------
+        run_id : str
+            Run scoped by the authenticated viewer session.
+        user_id : str
+            Mock identity that must match the private run owner.
+
+        Notes
+        -----
+        Created and terminal runs retain their history unchanged. A run that
+        completes while the stop is queued is already safe to leave alone.
+        Persistence failures propagate so logout never claims failed cleanup.
+        """
+        with self.mutations:
+            try:
+                run = self.repository.private_run(run_id)
+            except ServiceError as error:
+                if error.code == "run_not_found":
+                    return
+                raise
+            if run["user_id"] != user_id:
+                raise ServiceError("forbidden", "Viewer session belongs to another operator.", 403)
+            if run["status"] not in {"running", "paused"}:
+                return
+            try:
+                self.runner.command(
+                    run_id,
+                    "stop",
+                    None,
+                    ("viewer:logout", run_id, canonical_hash({"action": "stop"})),
+                )
+            except ServiceError as error:
+                if (
+                    error.code != "invalid_transition"
+                    or self.repository.status(run_id)["status"] not in TERMINAL
+                ):
+                    raise
 
     def ensure_public_demo(self, path: Path) -> str:
         """Keep one bounded shared demo running and expire terminal history.

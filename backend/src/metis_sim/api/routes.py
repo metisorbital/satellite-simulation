@@ -12,10 +12,11 @@ from starlette.concurrency import run_in_threadpool
 from metis_sim.adapters.configuration import normalize_configuration
 from metis_sim.adapters.records import prior_result, record_result
 from metis_sim.adapters.reports import telemetry_report
-from metis_sim.api.auth import ACTIONS, COOKIE
+from metis_sim.api.auth import ACTIONS, COOKIE, Principal
 from metis_sim.api.requests import (
     CreateRunRequest,
     ViewerConfigurationRequest,
+    ViewerLoginRequest,
     body_text,
     configuration_body,
     mutation_token,
@@ -263,6 +264,161 @@ def manifest(run_id: str, request: Request) -> dict:
     return context.repository.private_run(run_id)["manifest"]
 
 
+def _session_bootstrap(request: Request, principal: Principal) -> ViewerBootstrap:
+    """Project the session's run and its optional private operator identity."""
+    context = request.app.state
+    operator = None
+    if principal.user_id is not None:
+        try:
+            run = context.repository.private_run(principal.run_id)
+        except ServiceError as error:
+            if error.code == "run_not_found":
+                raise ServiceError(
+                    "session_expired", "Sign in to start a new demo session.", 401
+                ) from error
+            raise
+        if run["user_id"] != principal.user_id:
+            raise ServiceError("unauthorized", "Viewer session does not match the run owner.", 401)
+        operator = context.auth.operators_by_id[principal.user_id]
+    if principal.interactive:
+        context.service.ensure_prepared_viewer_run(principal.run_id)
+    return ViewerBootstrap.model_validate(
+        {
+            "csrf_token": principal.csrf_token,
+            "allowed_actions": list(principal.allowed_actions),
+            "run": context.repository.status(principal.run_id),
+            "operator": operator,
+        }
+    )
+
+
+@router.get("/v1/viewer/session", response_model=ViewerBootstrap)
+def viewer_session(request: Request) -> ViewerBootstrap:
+    """Resume a mock operator session without issuing an anonymous grant.
+
+    Parameters
+    ----------
+    request : Request
+        Browser request carrying an existing mock operator cookie.
+
+    Returns
+    -------
+    ViewerBootstrap
+        The same scoped run and identity used before page reload.
+
+    Raises
+    ------
+    ServiceError
+        With status 401 when a mock operator has not signed in.
+    """
+    context = request.app.state
+    principal = context.auth.session(request)
+    context.auth.origin(request)
+    if principal.user_id is None:
+        raise ServiceError("unauthorized", "Sign in with a demo operator.", 401)
+    return _session_bootstrap(request, principal)
+
+
+@router.post("/v1/viewer/login", response_model=ViewerBootstrap)
+async def viewer_login(request: Request, response: Response) -> ViewerBootstrap:
+    """Select a mock identity and prepare its independent interactive run.
+
+    Parameters
+    ----------
+    request : Request
+        Allowed demo-origin request containing a login and nonempty password.
+    response : Response
+        Response receiving the signed HttpOnly session cookie.
+
+    Returns
+    -------
+    ViewerBootstrap
+        Run-scoped controls and the selected mock operator identity.
+
+    Notes
+    -----
+    Passwords are not verified, logged, hashed, or persisted. Repeating login
+    for the current operator preserves its run; switching requires logout.
+    """
+    context = request.app.state
+    context.auth.login_issuance(request)
+    command = ViewerLoginRequest.model_validate(parse_json(await body_text(request)))
+    operator = context.auth.demo_operator(command.login)
+    user_id = str(operator.user_id)
+    try:
+        current = context.auth.session(request)
+    except ServiceError as error:
+        if error.status != 401:
+            raise
+    else:
+        if current.user_id is not None:
+            try:
+                resumed = await run_in_threadpool(_session_bootstrap, request, current)
+            except ServiceError as error:
+                if error.status != 401:
+                    raise
+            else:
+                if current.user_id == user_id:
+                    return resumed
+                raise ServiceError("logout_required", "Log out before switching operators.", 409)
+    expires_at = time.time() + context.settings.session_lifetime_s
+    run = await run_in_threadpool(
+        context.service.create_viewer_template_run,
+        context.settings.demo_config,
+        context.settings.session_lifetime_s,
+        user_id=user_id,
+        viewer_expires_at=expires_at,
+    )
+    return _viewer_bootstrap_response(request, response, run, user_id=user_id)
+
+
+@router.post("/v1/viewer/logout")
+async def viewer_logout(request: Request, response: Response) -> dict:
+    """End a browser session after stopping only its operator's active run.
+
+    Parameters
+    ----------
+    request : Request
+        Empty-object request with Origin and, for valid sessions, CSRF token.
+    response : Response
+        Response that clears the HttpOnly session cookie.
+
+    Returns
+    -------
+    dict
+        Empty acknowledgement after successful cleanup and cookie removal.
+
+    Notes
+    -----
+    Missing or expired cookies can be cleared without a CSRF token. Created
+    and terminal runs retain their history and private operator association.
+    """
+    context = request.app.state
+    context.auth.origin(request, required=True)
+    body = parse_json(await body_text(request))
+    if body:
+        raise ServiceError("invalid_logout", "Logout request must be an empty object.", 422)
+    try:
+        principal = context.auth.session(request)
+    except ServiceError as error:
+        if error.status != 401:
+            raise
+    else:
+        context.auth.csrf(request, principal)
+        if principal.user_id is not None:
+            await run_in_threadpool(
+                context.service.stop_viewer_run, principal.run_id, principal.user_id
+            )
+    response.delete_cookie(
+        COOKIE,
+        path="/",
+        httponly=True,
+        secure=context.settings.cookie_secure or request.url.scheme == "https",
+        samesite="strict",
+    )
+    return {}
+
+
 @router.get("/v1/viewer/bootstrap", response_model=ViewerBootstrap)
 def bootstrap(request: Request, response: Response) -> ViewerBootstrap:
     """Resume a scoped session or issue an explicitly enabled demo grant."""
@@ -273,6 +429,8 @@ def bootstrap(request: Request, response: Response) -> ViewerBootstrap:
         context.auth.origin(request)
     except ServiceError:
         principal = None
+    if principal is not None and principal.user_id is not None:
+        return _session_bootstrap(request, principal)
     public_demo = False
     interactive = False
     try:
@@ -338,14 +496,27 @@ def viewer_configuration(request: Request) -> dict:
     return {"satellites": context.service.editable_satellites(principal.run_id)}
 
 
-def _viewer_bootstrap_response(request: Request, response: Response, run: dict) -> ViewerBootstrap:
-    """Issue a fresh run-scoped cookie after a browser revision is prepared."""
+def _viewer_bootstrap_response(
+    request: Request,
+    response: Response,
+    run: dict,
+    *,
+    user_id: str | None = None,
+) -> ViewerBootstrap:
+    """Issue a cookie using the run's durable mock lease, including on retries."""
     context = request.app.state
-    cookie, principal = context.auth.issue(run["run_id"], interactive=True)
+    expires_at = (
+        context.repository.private_run(run["run_id"])["manifest"]["viewer_expires_at"]
+        if user_id is not None
+        else None
+    )
+    cookie, principal = context.auth.issue(
+        run["run_id"], interactive=True, user_id=user_id, expires_at=expires_at
+    )
     response.set_cookie(
         COOKIE,
         cookie,
-        max_age=context.settings.session_lifetime_s,
+        max_age=max(0, int(principal.expires_at - time.time())),
         httponly=True,
         secure=context.settings.cookie_secure or request.url.scheme == "https",
         samesite="strict",
@@ -356,6 +527,7 @@ def _viewer_bootstrap_response(request: Request, response: Response, run: dict) 
         csrf_token=principal.csrf_token,
         allowed_actions=list(principal.allowed_actions),
         run=PublicRunStatus.model_validate(run),
+        operator=context.auth.operators_by_id.get(user_id),
     )
 
 
@@ -368,13 +540,15 @@ async def replace_viewer_configuration(request: Request, response: Response) -> 
     context.auth.csrf(request, principal)
     body = parse_json(await body_text(request))
     command = ViewerConfigurationRequest.model_validate(body)
+    expires_at = time.time() + context.settings.session_lifetime_s if principal.user_id else None
     run = await run_in_threadpool(
         context.service.recreate_viewer_run,
         principal.run_id,
         command.satellites,
         mutation_token(request, principal, body),
+        viewer_expires_at=expires_at,
     )
-    return _viewer_bootstrap_response(request, response, run)
+    return _viewer_bootstrap_response(request, response, run, user_id=principal.user_id)
 
 
 @router.post("/v1/viewer/reset", response_model=ViewerBootstrap)
@@ -387,13 +561,15 @@ async def reset_viewer_run(request: Request, response: Response) -> ViewerBootst
     body = parse_json(await body_text(request))
     if body:
         raise ServiceError("invalid_reset", "Reset request must be an empty object.", 422)
+    expires_at = time.time() + context.settings.session_lifetime_s if principal.user_id else None
     run = await run_in_threadpool(
         context.service.recreate_viewer_run,
         principal.run_id,
         None,
         mutation_token(request, principal, body),
+        viewer_expires_at=expires_at,
     )
-    return _viewer_bootstrap_response(request, response, run)
+    return _viewer_bootstrap_response(request, response, run, user_id=principal.user_id)
 
 
 @router.post("/v1/operator/runs/{run_id}/viewer-session", response_model=ViewerBootstrap)

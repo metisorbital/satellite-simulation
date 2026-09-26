@@ -62,23 +62,26 @@ SQLite is limited to isolated tests and is not a substitute for the local applic
 
 ## Start the Browser Demo
 
-Prepare genuine persisted history through tick 18,000 and open a paused run:
-
-```bash
-uv run metis-sim demo --at 18000
-```
-
-Open `http://127.0.0.1:8000` in the same machine's browser.
-The shipped configuration is a deterministic six-hour, three-satellite run at one simulated sample per second.
-It includes a private synthetic solar-array derating scenario; it is not a claim about natural aging or a real mission.
-
-For a run that begins in the `created` state, use:
+Start the service with a fresh prepared template:
 
 ```bash
 uv run metis-sim demo --at 0
 ```
 
-Then use the viewer's Start control.
+Open `http://127.0.0.1:8000` in the same machine's browser.
+The first visit displays the operator login panel.
+Use `operator1`, `operator2`, or `operator3` and any nonempty demo password, then **Log in**.
+Passwords are not verified or stored.
+The stable IDs and names are defined in `backend/src/metis_sim/data/mock_operators.json`.
+Each login creates an independent editable run with `user_id` saved in `private.runs`;
+editing and resetting retain that ownership.
+Use **Start run** to begin the six-hour, three-satellite simulation.
+Interactive templates omit the private synthetic fault scenario.
+
+Reloading restores the current operator and run while the signed cookie is valid.
+**Log out** ends only that operator's active demo run, clears the session, and returns to login.
+Use the zero-tick startup above for operator demos: `--at` values above zero prepare
+a separate paused run for API evaluation, which occupies the service's one-active-run slot.
 The CLI binds only to `127.0.0.1`, `localhost`, or `::1` in demo mode because unauthenticated bootstrap can issue only a loopback browser session.
 `demo --port 8002` automatically allows that loopback browser origin, including IPv6.
 An explicit `METIS_ORIGINS` environment value takes precedence; keep it aligned with the browser's exact origin.
@@ -109,7 +112,8 @@ That endpoint issues the HttpOnly cookie and returns the session-bound CSRF toke
 Use it only after the run is prepared and from an approved operator workflow that forwards the issued cookie to the authorized browser; never expose the operator bearer token to the browser.
 
 For a public hosted demonstration, set `METIS_PUBLIC_DEMO=1`, `METIS_LOCAL_DEMO=0`, `METIS_COOKIE_SECURE=1`, `METIS_ORIGINS` to the exact HTTPS site origin, and `METIS_DEMO_CONFIG=configs/public-demo.yaml`.
-Set `METIS_INTERACTIVE_PUBLIC_DEMO=1` to give each browser its own bounded editable mission and simulation controls. The shared public demo stays read-only when that flag is absent.
+Set `METIS_INTERACTIVE_PUBLIC_DEMO=1` to enable the Flutter mock operator login and give each login its own bounded editable mission and simulation controls.
+Without that flag, the legacy shared public bootstrap remains read-only and mock operator login is unavailable.
 On Render, set `METIS_SOURCE_ID_PER_COMMIT=1` so each zero-downtime deployment owns a distinct writer source while the previous instance drains. Render provides `RENDER_GIT_COMMIT` at runtime. A restart of the same commit still requires stopping the previous writer before the replacement can become ready.
 With `METIS_INTERACTIVE_PUBLIC_DEMO=0`, the application starts one short, shared run, issues read-only browser sessions, and replaces a completed run when a visitor reconnects. In interactive mode, browser sessions are scoped to their own missions and may use the exposed editing and run controls; operator credentials and private evaluation data remain server-side.
 The service advances one run at a time. If another visitor's run is active, Start returns a busy error until that run stops or finishes. Editing and Reset require stopping the current run first; each creates a new immutable run with fresh streams.

@@ -22,13 +22,15 @@ npm ci --prefix frontend
 docker compose up -d --wait db
 uv run metis-sim init
 uv run metis-sim migrate
-uv run metis-sim demo --at 10
+uv run metis-sim demo --at 0
 ```
 
-Open `http://127.0.0.1:8000` after the demo has prepared its paused history.
-Use `demo --at 0` for a newly created run and start it with the viewer control.
-Use `demo --at 18000` to inspect the developing power deficit in a prepared run.
-The six-hour default contains three satellites and one synthetic solar-array derating scenario.
+Open `http://127.0.0.1:8000` and log in as `operator1`, `operator2`, or `operator3` with any nonempty demo password.
+Each login creates a separate editable run; use **Start run** to begin.
+The mock profiles and stable user IDs live in `backend/src/metis_sim/data/mock_operators.json`.
+Passwords are not checked or stored. This is a demo identity picker, not production authentication.
+The viewer shows the current operator; **Log out** ends that operator's active run and returns to the login panel.
+Run ownership is stored in `private.runs.user_id`, including replacement runs made by editing or resetting.
 
 See [Getting Started](docs/getting-started.md) for prerequisites, Docker use, and the authentication boundary.
 

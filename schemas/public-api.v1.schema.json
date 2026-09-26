@@ -1781,7 +1781,7 @@
     },
     "ViewerBootstrap": {
       "additionalProperties": false,
-      "description": "One prepared run and session-bound CSRF token for the browser.\n\nAttributes\n----------\ncsrf_token : str\n    Token required on browser control requests for this session.\nallowed_actions : list of Action\n    Controls permitted for this session; empty for a shared public demo.\nrun : PublicRunStatus\n    Public status of the session's one scoped run.",
+      "description": "One prepared run and session-bound CSRF token for the browser.\n\nAttributes\n----------\ncsrf_token : str\n    Token required on browser control requests for this session.\nallowed_actions : list of Action\n    Controls permitted for this session; empty for a shared public demo.\nrun : PublicRunStatus\n    Public status of the session's one scoped run.\noperator : ViewerOperator or None\n    Logged-in demo operator; absent for legacy viewer grants.",
       "properties": {
         "allowed_actions": {
           "items": {
@@ -1801,6 +1801,17 @@
           "title": "Csrf Token",
           "type": "string"
         },
+        "operator": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ViewerOperator"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "run": {
           "$ref": "#/$defs/PublicRunStatus"
         }
@@ -1808,9 +1819,36 @@
       "required": [
         "csrf_token",
         "allowed_actions",
-        "run"
+        "run",
+        "operator"
       ],
       "title": "ViewerBootstrap",
+      "type": "object"
+    },
+    "ViewerOperator": {
+      "additionalProperties": false,
+      "description": "Mock operator identity disclosed only to its own browser session.\n\nAttributes\n----------\nuser_id : UUID\n    Stable demo identity stored privately with the operator's runs.\nlogin : str\n    Canonical login name from the packaged demo directory.\ndisplay_name : str\n    Human-readable operator name.",
+      "properties": {
+        "display_name": {
+          "title": "Display Name",
+          "type": "string"
+        },
+        "login": {
+          "title": "Login",
+          "type": "string"
+        },
+        "user_id": {
+          "format": "uuid",
+          "title": "User Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "user_id",
+        "login",
+        "display_name"
+      ],
+      "title": "ViewerOperator",
       "type": "object"
     },
     "VisualConfiguration": {
@@ -1969,6 +2007,9 @@
     "ViewerBootstrap": {
       "$ref": "#/$defs/ViewerBootstrap"
     },
+    "ViewerOperator": {
+      "$ref": "#/$defs/ViewerOperator"
+    },
     "VisualMessage": {
       "$ref": "#/$defs/VisualMessage"
     }
@@ -1988,6 +2029,7 @@
     "SequenceRange",
     "VisualMessage",
     "ViewerBootstrap",
+    "ViewerOperator",
     "ControlRequest"
   ],
   "title": "MetisPublicContracts",

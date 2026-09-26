@@ -93,6 +93,7 @@ class Repository:
         retain: bool,
         token: Idempotent,
         *,
+        user_id: str | None = None,
         catalog_versions: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         """Allocate a new run and its independent streams in one transaction.
@@ -129,6 +130,7 @@ class Repository:
                     run_id=status["run_id"],
                     configuration_id=configuration_id,
                     source_id=self.database.source_id,
+                    user_id=user_id,
                     status=status["status"],
                     public_status=status,
                     manifest=manifest,
@@ -155,6 +157,31 @@ class Repository:
             )
             record_result(connection, *token, status)
         return status
+
+    def expired_operator_runs(self, at_time: float) -> list[tuple[str, str]]:
+        """Find active mock-owned runs whose durable browser lease has expired.
+
+        Parameters
+        ----------
+        at_time : float
+            Wall-clock UTC timestamp used to compare private lease deadlines.
+
+        Returns
+        -------
+        list of tuple of str and str
+            Run and operator IDs scoped to this service's source. Legacy runs
+            without a user or a lease are never selected.
+        """
+        with self.database.engine.connect() as connection:
+            rows = connection.execute(
+                select(tables.runs.c.run_id, tables.runs.c.user_id).where(
+                    tables.runs.c.source_id == self.database.source_id,
+                    tables.runs.c.user_id.is_not(None),
+                    tables.runs.c.status.in_({"running", "paused"}),
+                    tables.runs.c.manifest["viewer_expires_at"].as_float() <= at_time,
+                )
+            )
+            return [(row.run_id, row.user_id) for row in rows]
 
     def private_run(self, run_id: str) -> dict[str, Any]:
         """Load a private record; callers must project any public output."""

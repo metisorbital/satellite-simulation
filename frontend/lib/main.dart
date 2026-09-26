@@ -5,6 +5,7 @@ import 'package:pointer_interceptor/pointer_interceptor.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter/scheduler.dart';
 import 'api/mission.dart';
+import 'auth/operator_gate.dart';
 import 'scene/globe.dart';
 import 'scene/playback.dart';
 
@@ -40,7 +41,13 @@ class MetisApp extends StatelessWidget {
             brightness: Brightness.dark,
           ),
         ),
-    home: const MissionPage(),
+    home: OperatorGate(
+      missionBuilder: (context, bootstrap, logout, expired) => MissionPage(
+        bootstrap: bootstrap,
+        onLogout: logout,
+        onSessionExpired: expired,
+      ),
+    ),
   );
 }
 
@@ -58,13 +65,21 @@ String environment(JsonMap? frame) {
 }
 
 class MissionPage extends StatefulWidget {
-  const MissionPage({super.key});
+  const MissionPage({
+    super.key,
+    required this.bootstrap,
+    required this.onLogout,
+    required this.onSessionExpired,
+  });
+  final JsonMap bootstrap;
+  final Future<void> Function(String csrfToken) onLogout;
+  final VoidCallback onSessionExpired;
   @override
   State<MissionPage> createState() => _MissionPageState();
 }
 
 class _MissionPageState extends State<MissionPage> {
-  final mission = Mission();
+  late final Mission mission;
   Ticker? ticker;
   final historyFocus = FocusNode(debugLabel: "Measurement history");
   String selected = '', chart = 'eps.battery_soc';
@@ -72,8 +87,9 @@ class _MissionPageState extends State<MissionPage> {
   @override
   void initState() {
     super.initState();
+    mission = Mission(onSessionExpired: widget.onSessionExpired);
     mission.addListener(refresh);
-    mission.connect();
+    mission.connect(initial: widget.bootstrap);
     ticker = Ticker((_) => refresh())..start();
   }
 
@@ -559,6 +575,7 @@ class _MissionPageState extends State<MissionPage> {
                 child: Column(
                   children: [
                     header(status, desktop),
+                    operatorBar(),
                     toolbar(status, utc, desktop),
                     if (mission.error != null)
                       Container(
@@ -982,6 +999,48 @@ class _MissionPageState extends State<MissionPage> {
           ),
         ),
         onTap: () => setState(() => selected = id),
+      ),
+    );
+  }
+
+  Widget operatorBar() {
+    final operator = widget.bootstrap['operator'] as Map;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 3),
+      decoration: const BoxDecoration(
+        color: panel,
+        border: Border(bottom: BorderSide(color: line)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.person_outline, size: 16, color: mint),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              '${operator['display_name']} · ${operator['login']}',
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: textColor, fontSize: 11),
+            ),
+          ),
+          Tooltip(
+            message: mission.busy
+                ? 'Wait for the current mission request to finish'
+                : 'Log out and end this demo run',
+            child: TextButton.icon(
+              onPressed: mission.busy
+                  ? null
+                  : () {
+                      final token = mission.csrfToken.isNotEmpty
+                          ? mission.csrfToken
+                          : widget.bootstrap['csrf_token'] as String;
+                      mission.suspend();
+                      widget.onLogout(token);
+                    },
+              icon: const Icon(Icons.logout, size: 15),
+              label: const Text('Log out'),
+            ),
+          ),
+        ],
       ),
     );
   }

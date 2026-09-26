@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.openapi.utils import get_openapi
 from pydantic import BaseModel
 
-from metis_sim.api.requests import CreateRunRequest
+from metis_sim.api.requests import CreateRunRequest, ViewerLoginRequest
 from metis_sim.domain.config import SimulationConfig
 from metis_sim.domain.public import ControlRequest
 
@@ -24,6 +24,7 @@ def install_openapi(app: FastAPI) -> None:
             ("/v1/configurations/validate", SimulationConfig),
             ("/v1/configurations", SimulationConfig),
             ("/v1/runs", CreateRunRequest),
+            ("/v1/viewer/login", ViewerLoginRequest),
             ("/v1/runs/{run_id}/control", ControlRequest),
         ]
         for path, model in bodies:
@@ -52,9 +53,12 @@ def install_openapi(app: FastAPI) -> None:
             "viewerSession": {"type": "apiKey", "in": "cookie", "name": "metis_viewer"},
         }
         for path, methods in document["paths"].items():
-            if path.startswith("/v1/") and path != "/v1/viewer/bootstrap":
+            if path.startswith("/v1/") and path not in {"/v1/viewer/bootstrap", "/v1/viewer/login"}:
                 for operation in methods.values():
                     if isinstance(operation, dict):
+                        if path in {"/v1/viewer/session", "/v1/viewer/logout"}:
+                            operation["security"] = [{"viewerSession": []}]
+                            continue
                         operation["security"] = [{"bearer": []}]
                         if (
                             not path.startswith(
