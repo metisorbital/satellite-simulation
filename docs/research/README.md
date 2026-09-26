@@ -6,6 +6,7 @@ This is a preparation-time record from 2026-09-21. For current delivered behavio
 
 | Document | Purpose |
 |---|---|
+| [SatelliteCOTS recorded telemetry](satellitecots.md) | BUPT-1 source assessment and additive Postgres replay boundaries (2026-09-26). |
 | [Physics research](physics-research.md) | Orbit-engine, frame, eclipse, power, Cesium, and OrbitSmith investigation. |
 | [Contract research](contracts-research.md) | Database alternatives, sizing, producer identity, replay, and transport tradeoffs. |
 | [Product research](product-research.md) | Scope, dataset evidence, market-reference limits, and predictive-claim distinctions. |
