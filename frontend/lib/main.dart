@@ -8,6 +8,7 @@ import 'api/mission.dart';
 import 'auth/operator_gate.dart';
 import 'scene/globe.dart';
 import 'scene/playback.dart';
+import 'telemetry/dashboard.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -83,6 +84,8 @@ class _MissionPageState extends State<MissionPage> {
   Ticker? ticker;
   final historyFocus = FocusNode(debugLabel: "Measurement history");
   String selected = '', chart = 'eps.battery_soc';
+  bool telemetryVisible = false;
+  int lastDashboardSecond = -1;
   double? seconds;
   @override
   void initState() {
@@ -90,7 +93,13 @@ class _MissionPageState extends State<MissionPage> {
     mission = Mission(onSessionExpired: widget.onSessionExpired);
     mission.addListener(refresh);
     mission.connect(initial: widget.bootstrap);
-    ticker = Ticker((_) => refresh())..start();
+    ticker = Ticker((_) {
+      final second = mission.clock.elapsed.inSeconds;
+      if (!telemetryVisible || second != lastDashboardSecond) {
+        lastDashboardSecond = second;
+        refresh();
+      }
+    })..start();
   }
 
   void refresh() {
@@ -577,6 +586,27 @@ class _MissionPageState extends State<MissionPage> {
                     header(status, desktop),
                     operatorBar(),
                     toolbar(status, utc, desktop),
+                    if (!desktop)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        child: SegmentedButton<bool>(
+                          segments: const [
+                            ButtonSegment(
+                              value: false,
+                              icon: Icon(Icons.public, size: 16),
+                              label: Text('Orbit'),
+                            ),
+                            ButtonSegment(
+                              value: true,
+                              icon: Icon(Icons.dashboard_outlined, size: 16),
+                              label: Text('Telemetry'),
+                            ),
+                          ],
+                          selected: {telemetryVisible},
+                          onSelectionChanged: (value) =>
+                              setState(() => telemetryVisible = value.first),
+                        ),
+                      ),
                     if (mission.error != null)
                       Container(
                         padding: const EdgeInsets.symmetric(
@@ -645,36 +675,42 @@ class _MissionPageState extends State<MissionPage> {
                         ),
                       ),
                     Expanded(
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Expanded(
-                            child: Column(
+                      child: telemetryVisible
+                          ? TelemetryDashboard(
+                              mission: mission,
+                              selected: selected,
+                              seconds: seconds,
+                            )
+                          : Row(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
                                 Expanded(
-                                  child: orbitStage(
-                                    status,
-                                    frame,
-                                    satellites.length,
-                                    desktop,
+                                  child: Column(
+                                    children: [
+                                      Expanded(
+                                        child: orbitStage(
+                                          status,
+                                          frame,
+                                          satellites.length,
+                                          desktop,
+                                        ),
+                                      ),
+                                      Focus(
+                                        focusNode: historyFocus,
+                                        child: historyPanel(),
+                                      ),
+                                    ],
                                   ),
                                 ),
-                                Focus(
-                                  focusNode: historyFocus,
-                                  child: historyPanel(),
-                                ),
+                                if (desktop)
+                                  SizedBox(
+                                    width: 286,
+                                    child: telemetry(descriptor, frame),
+                                  ),
                               ],
                             ),
-                          ),
-                          if (desktop)
-                            SizedBox(
-                              width: 286,
-                              child: telemetry(descriptor, frame),
-                            ),
-                        ],
-                      ),
                     ),
-                    if (!desktop)
+                    if (!desktop && !telemetryVisible)
                       SizedBox(
                         height: 720,
                         child: telemetry(descriptor, frame),
@@ -685,7 +721,7 @@ class _MissionPageState extends State<MissionPage> {
               ),
             ],
           );
-          return desktop
+          return desktop || telemetryVisible
               ? dashboard
               : SingleChildScrollView(
                   child: SizedBox(
@@ -721,12 +757,18 @@ class _MissionPageState extends State<MissionPage> {
           ),
         ),
         const SizedBox(height: 40),
-        railIcon(Icons.public, 'Orbital overview', active: true),
+        railIcon(
+          Icons.public,
+          'Orbital overview',
+          active: !telemetryVisible,
+          action: () => setState(() => telemetryVisible = false),
+        ),
         const SizedBox(height: 16),
         railIcon(
           Icons.show_chart,
-          'Measurement history',
-          action: historyFocus.requestFocus,
+          'Telemetry dashboard',
+          active: telemetryVisible,
+          action: () => setState(() => telemetryVisible = true),
         ),
         const SizedBox(height: 16),
         railIcon(
@@ -836,39 +878,9 @@ class _MissionPageState extends State<MissionPage> {
         const SizedBox(height: 34),
         label('MISSION WORKSPACE'),
         const SizedBox(height: 16),
-        Container(
-          height: 39,
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          decoration: box(
-            color: const Color(0xff1b2d37),
-            border: Colors.transparent,
-          ),
-          child: Row(
-            children: [
-              const Icon(Icons.public, size: 16, color: Color(0xffa8cbd6)),
-              const SizedBox(width: 10),
-              Expanded(
-                child: txt(
-                  'Orbital overview',
-                  size: 11,
-                  color: const Color(0xffb9d2dc),
-                ),
-              ),
-              txt('01', size: 8, color: muted),
-            ],
-          ),
-        ),
-        SizedBox(
-          height: 42,
-          child: Row(
-            children: [
-              const SizedBox(width: 12),
-              const Icon(Icons.show_chart, size: 17, color: muted),
-              const SizedBox(width: 10),
-              txt('Measurement history', size: 11, color: muted),
-            ],
-          ),
-        ),
+        workspaceLink('Orbital overview', Icons.public, false),
+        const SizedBox(height: 5),
+        workspaceLink('Telemetry dashboard', Icons.show_chart, true),
         divider(22),
         Row(
           children: [
@@ -949,6 +961,27 @@ class _MissionPageState extends State<MissionPage> {
       ],
     ),
   );
+  Widget workspaceLink(String title, IconData icon, bool telemetryPage) {
+    final active = telemetryVisible == telemetryPage;
+    return Semantics(
+      selected: active,
+      child: TextButton.icon(
+        onPressed: () => setState(() => telemetryVisible = telemetryPage),
+        style: TextButton.styleFrom(
+          alignment: Alignment.centerLeft,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 15),
+          foregroundColor: active ? const Color(0xffb9d2dc) : muted,
+          backgroundColor: active
+              ? const Color(0xff1b2d37)
+              : Colors.transparent,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+        ),
+        icon: Icon(icon, size: 16),
+        label: Text(title, style: const TextStyle(fontSize: 11)),
+      ),
+    );
+  }
+
   Widget satelliteCard(JsonMap satellite) {
     final id = satellite['satellite_id'] as String;
     final frame = mission.playback.frameAt(id, seconds);
@@ -1064,7 +1097,10 @@ class _MissionPageState extends State<MissionPage> {
           SizedBox(width: desktop ? 18 : 9),
           txt('/', color: line),
           SizedBox(width: desktop ? 18 : 9),
-          txt('Orbital overview', size: 10),
+          txt(
+            telemetryVisible ? 'Telemetry dashboard' : 'Orbital overview',
+            size: 10,
+          ),
         ],
         const Spacer(),
         badge('SYNTHETIC', gold),
@@ -1237,7 +1273,10 @@ class _MissionPageState extends State<MissionPage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        label('METIS / EARTH ORBIT', size: 8),
+        label(
+          telemetryVisible ? 'METIS / TELEMETRY' : 'METIS / EARTH ORBIT',
+          size: 8,
+        ),
         const SizedBox(height: 10),
         Row(
           mainAxisSize: MainAxisSize.min,
@@ -1245,7 +1284,7 @@ class _MissionPageState extends State<MissionPage> {
             Semantics(
               header: true,
               child: txt(
-                'Orbital overview',
+                telemetryVisible ? 'Telemetry dashboard' : 'Orbital overview',
                 size: 23,
                 weight: FontWeight.w500,
                 spacing: -.7,

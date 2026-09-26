@@ -35,3 +35,33 @@ Prediction polylines are explicitly labelled and contain orbit-only backend data
 
 Browser smoke tests use Playwright and the built Flutter semantics tree. Run
 `npm run test:e2e` after building. Native mobile/desktop renderers are not provided.
+
+## Open the Telemetry Dashboard
+
+After building the viewer and preparing PostgreSQL, launch the optional spacecraft
+models from the repository root:
+
+```sh
+uv run metis-sim demo --config configs/telemetry-demo.yaml --at 0 --port 8002
+```
+
+Open `http://127.0.0.1:8002`, log in with a local demo operator, start the run, and
+choose **Telemetry dashboard** in the sidebar (or **Telemetry** on narrow screens).
+Satellite selection, simulation time, pause/resume, and speed remain shared with
+the orbital overview. The default `power-leo.v1` configuration also works, with
+only its available catalog channels.
+
+The dashboard groups committed measurements into Overview, EPS, Flight computer,
+Payload, ADCS, and Space weather. Channel search and 1/5/10-minute windows filter
+the received buffer; they do not query historical exports. Initial/reconnect
+snapshots contain up to 41 samples and the buffer holds at most 600 per satellite.
+The displayed sample UTC and actual coverage identify the data on screen.
+
+Units, frames, sampling semantics, and availability come from the authenticated
+public catalog. Missing and invalid readings are gaps; saturated readings retain
+their quality label. Unsupported channels remain explicitly unavailable. The
+41 modeled and 12 unavailable `spacecraft.v1` channels are synthetic model output,
+not a replay or calibrated mapping of the 210 source-export fields. ADCS's ideal
+attitude and the three thermal nodes retain their documented model limits.
+See [spacecraft telemetry](../docs/reference/spacecraft-telemetry.md) and
+[sample evidence](../docs/reference/sample-telemetry.md) for the source boundaries.

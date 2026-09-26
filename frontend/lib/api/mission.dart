@@ -22,6 +22,11 @@ class Mission extends ChangeNotifier {
   final Stopwatch clock = Stopwatch()..start();
   JsonMap? trajectory;
   List<JsonMap>? editableSatellites;
+  final Map<String, JsonMap> catalogs = {};
+  final Set<String> _pendingCatalogs = {};
+  final Map<String, String> _catalogErrors = {};
+  bool get catalogLoading => _pendingCatalogs.isNotEmpty;
+  String? get catalogError => _catalogErrors.values.firstOrNull;
   String? error;
   bool busy = false;
   bool connecting = false;
@@ -99,16 +104,63 @@ class Mission extends ChangeNotifier {
       !_closed && _generation == generation && status?['run_id'] == id;
 
   void _ingest(JsonMap next, List<dynamic> incoming) {
+    final previousRun = status?['run_id'];
     playback.ingest(
       next,
       incoming.map((f) => Map<String, dynamic>.from(f as Map)).toList(),
       now,
     );
+    if (previousRun != status?['run_id']) {
+      _pendingCatalogs.clear();
+      _catalogErrors.clear();
+    }
+    for (final frames in playback.frames.values) {
+      final version = frames.lastOrNull?['catalog_version'];
+      if (version is String && !_catalogErrors.containsKey(version)) {
+        unawaited(loadCatalog(version));
+      }
+    }
     _scheduleDemoRefresh(next);
     notifyListeners();
     if (next['committed_tick'] >= _nextTrajectory &&
         next['committed_tick'] < next['duration_s']) {
       _loadTrajectory(_generation, next);
+    }
+  }
+
+  /// Load public metadata for a received catalog version, or retry a failure.
+  Future<void> loadCatalog(String version) async {
+    final id = status?['run_id'] as String?;
+    if (_closed ||
+        id == null ||
+        version.isEmpty ||
+        catalogs.containsKey(version) ||
+        _pendingCatalogs.contains(version)) {
+      return;
+    }
+    final generation = _generation;
+    _pendingCatalogs.add(version);
+    _catalogErrors.remove(version);
+    notifyListeners();
+    try {
+      final catalog = await _request(
+        '/v1/catalog?version=${Uri.encodeQueryComponent(version)}',
+      );
+      if (!_current(generation, id)) return;
+      if (catalog['catalog_version'] != version ||
+          catalog['channels'] is! List) {
+        throw const FormatException('Unexpected telemetry catalog response.');
+      }
+      catalogs[version] = catalog;
+    } catch (exception) {
+      if (_current(generation, id)) {
+        _catalogErrors[version] = 'Catalog $version unavailable: $exception';
+      }
+    } finally {
+      if (_current(generation, id)) {
+        _pendingCatalogs.remove(version);
+        notifyListeners();
+      }
     }
   }
 
@@ -157,6 +209,7 @@ class Mission extends ChangeNotifier {
     if (_closed || connecting) return;
     connecting = true;
     final generation = ++_generation;
+    _pendingCatalogs.clear();
     _reconnect?.cancel();
     _demoRefresh?.cancel();
     _demoRefresh = null;
@@ -369,6 +422,9 @@ class Mission extends ChangeNotifier {
     playback.history.clear();
     editableSatellites = null;
     trajectory = null;
+    catalogs.clear();
+    _pendingCatalogs.clear();
+    _catalogErrors.clear();
   }
 
   @override
