@@ -16,12 +16,16 @@ from pydantic import ValidationError
 from sqlalchemy.exc import SQLAlchemyError
 from starlette.exceptions import HTTPException
 
+from metis_sim.adapters.cases import CaseRepository
 from metis_sim.adapters.configuration import ConfigurationParsingError
 from metis_sim.adapters.database import Database
+from metis_sim.adapters.notifications import NotificationRepository
 from metis_sim.adapters.reads import PublicReader
 from metis_sim.adapters.repository import Repository
 from metis_sim.adapters.shift_log import ShiftLogRepository
 from metis_sim.api.auth import Auth
+from metis_sim.api.cases import router as cases_router
+from metis_sim.api.notifications import router as notifications_router
 from metis_sim.api.openapi import install_openapi
 from metis_sim.api.routes import router
 from metis_sim.api.shift_log import router as shift_log_router
@@ -67,6 +71,8 @@ def create_app(
     auth = Auth(settings)
     database = Database(settings.database_url, settings.source_id)
     repository = Repository(database)
+    cases = CaseRepository(database)
+    notifications = NotificationRepository(database)
     shift_logs = ShiftLogRepository(database)
 
     def check_capacity() -> None:
@@ -124,6 +130,8 @@ def create_app(
         auth=auth,
         database=database,
         repository=repository,
+        cases=cases,
+        notifications=notifications,
         shift_logs=shift_logs,
         reader=PublicReader(database, settings.session_secret),
         runner=runner,
@@ -254,6 +262,8 @@ def create_app(
         )
 
     app.include_router(router)
+    app.include_router(cases_router)
+    app.include_router(notifications_router)
     app.include_router(shift_log_router)
     app.include_router(visual_router)
     install_openapi(app)

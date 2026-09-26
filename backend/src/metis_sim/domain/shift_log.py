@@ -12,7 +12,7 @@ EntryKind = Literal["note", "decision", "action", "unresolved_issue", "event"]
 
 
 class ShiftLogModel(BaseModel):
-    """Allowlist immutable private records returned to the owning operator.
+    """Allowlist private draft and shared submitted records for named operators.
 
     Notes
     -----
@@ -98,7 +98,7 @@ class ShiftLog(ShiftLogModel):
 
 
 class ShiftLogList(ShiftLogModel):
-    """Return retained shifts belonging to the current run and operator.
+    """Return authorized drafts and retained submitted handovers.
 
     Attributes
     ----------

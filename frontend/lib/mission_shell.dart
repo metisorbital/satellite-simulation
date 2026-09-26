@@ -9,6 +9,24 @@ const _text = Color(0xffd4dfe8);
 const _muted = Color(0xff94a4b7);
 const _quiet = Color(0xff8091a5);
 
+/// Destinations share one mission session and committed simulation clock.
+enum MissionView {
+  overview('Overview', Icons.grid_view_rounded),
+  telemetry('Telemetry', Icons.show_chart_rounded),
+  warnings('Early warnings', Icons.warning_amber_rounded),
+  investigations('Investigations', Icons.search_rounded),
+  planning('Mission planning', Icons.event_note_outlined),
+  history('Case history', Icons.history_rounded),
+  shiftLog('Shift log', Icons.menu_book_outlined);
+
+  const MissionView(this.title, this.icon);
+  final String title;
+  final IconData icon;
+
+  bool get isCase =>
+      this == warnings || this == investigations || this == history;
+}
+
 /// The navigation and operator rail for the Metis mission control shell.
 ///
 /// The parent owns the rail width. Use [compact] when that width is reduced
@@ -19,29 +37,24 @@ class MissionSidebar extends StatelessWidget {
   /// Creates the mission navigation rail.
   const MissionSidebar({
     super.key,
-    required this.telemetrySelected,
-    required this.onOverview,
-    required this.onTelemetry,
+    required this.view,
+    required this.onNavigate,
     required this.onSettings,
     required this.onInfo,
     required this.onSwitchOperator,
-    required this.onShiftLog,
+    required this.operatorRecordsEnabled,
     required this.operatorName,
     required this.operatorLogin,
     required this.busy,
     required this.connected,
     required this.runLabel,
+    this.warningUnread = 0,
+    this.caseUnread = 0,
     this.compact = false,
   });
 
-  /// Whether the telemetry destination is selected.
-  final bool telemetrySelected;
-
-  /// Invoked when the Overview destination is selected.
-  final VoidCallback onOverview;
-
-  /// Invoked when the Telemetry destination is selected.
-  final VoidCallback onTelemetry;
+  final MissionView view;
+  final ValueChanged<MissionView> onNavigate;
 
   /// Invoked when the Settings control is selected.
   final VoidCallback onSettings;
@@ -52,9 +65,8 @@ class MissionSidebar extends StatelessWidget {
   /// Invoked when the operator selects another packaged demo identity.
   final ValueChanged<String> onSwitchOperator;
 
-  /// Invoked when Shift log is selected, or null when that screen is not
-  /// available in the current composition.
-  final VoidCallback? onShiftLog;
+  /// Private records require a named operator session.
+  final bool operatorRecordsEnabled;
 
   /// The operator's display name.
   final String operatorName;
@@ -70,6 +82,8 @@ class MissionSidebar extends StatelessWidget {
 
   /// Human-readable label for the current simulated run.
   final String runLabel;
+  final int warningUnread;
+  final int caseUnread;
 
   /// Whether to render the icon-only rail variant.
   final bool compact;
@@ -107,27 +121,24 @@ class MissionSidebar extends StatelessWidget {
                       )
                     else
                       const SizedBox(height: 10),
-                    _NavigationItem(
-                      icon: Icons.grid_view_rounded,
-                      label: 'Overview',
-                      selected: !telemetrySelected,
-                      compact: compact,
-                      onPressed: onOverview,
-                    ),
-                    _NavigationItem(
-                      icon: Icons.show_chart_rounded,
-                      label: 'Telemetry',
-                      selected: telemetrySelected,
-                      compact: compact,
-                      onPressed: onTelemetry,
-                    ),
-                    _NavigationItem(
-                      icon: Icons.menu_book_outlined,
-                      label: 'Shift log',
-                      selected: false,
-                      compact: compact,
-                      onPressed: onShiftLog,
-                    ),
+                    for (final destination in MissionView.values)
+                      _NavigationItem(
+                        icon: destination.icon,
+                        label: destination.title,
+                        selected: view == destination,
+                        compact: compact,
+                        badge: destination == MissionView.warnings
+                            ? warningUnread
+                            : destination == MissionView.investigations
+                            ? caseUnread
+                            : 0,
+                        onPressed:
+                            (destination.isCase ||
+                                    destination == MissionView.shiftLog) &&
+                                !operatorRecordsEnabled
+                            ? null
+                            : () => onNavigate(destination),
+                      ),
                     const Spacer(),
                     _RunStatus(
                       busy: busy,
@@ -174,7 +185,7 @@ class MissionHeader extends StatelessWidget {
   /// Creates the mission header.
   const MissionHeader({
     super.key,
-    required this.telemetrySelected,
+    required this.viewTitle,
     required this.runState,
     required this.connectionLabel,
     required this.utc,
@@ -183,8 +194,8 @@ class MissionHeader extends StatelessWidget {
     this.compact = false,
   });
 
-  /// Whether the breadcrumb identifies the Telemetry view.
-  final bool telemetrySelected;
+  /// Current destination's readable title.
+  final String viewTitle;
 
   /// Current run state, such as `Running` or `Paused`.
   final String runState;
@@ -225,8 +236,7 @@ class MissionHeader extends StatelessWidget {
             Flexible(
               flex: 3,
               child: Semantics(
-                label:
-                    'Mission control, ${telemetrySelected ? 'Telemetry' : 'Overview'}',
+                label: 'Mission control, $viewTitle',
                 excludeSemantics: true,
                 child: Text.rich(
                   TextSpan(
@@ -238,7 +248,7 @@ class MissionHeader extends StatelessWidget {
                         style: TextStyle(color: Color(0xff354555)),
                       ),
                       TextSpan(
-                        text: telemetrySelected ? 'Telemetry' : 'Overview',
+                        text: viewTitle,
                         style: const TextStyle(color: _text),
                       ),
                     ],
@@ -369,6 +379,7 @@ class _NavigationItem extends StatelessWidget {
     required this.selected,
     required this.compact,
     required this.onPressed,
+    required this.badge,
   });
 
   final IconData icon;
@@ -376,6 +387,7 @@ class _NavigationItem extends StatelessWidget {
   final bool selected;
   final bool compact;
   final VoidCallback? onPressed;
+  final int badge;
 
   @override
   Widget build(BuildContext context) {
@@ -389,6 +401,11 @@ class _NavigationItem extends StatelessWidget {
               : MainAxisAlignment.start,
           children: [
             Icon(icon, size: 19, color: selected ? _mint : _muted),
+            if (compact && badge > 0)
+              Transform.translate(
+                offset: const Offset(-7, -9),
+                child: _UnreadBadge(count: badge),
+              ),
             if (!compact) ...[
               const SizedBox(width: 12),
               Expanded(
@@ -401,6 +418,7 @@ class _NavigationItem extends StatelessWidget {
                   ),
                 ),
               ),
+              if (!compact && badge > 0) _UnreadBadge(count: badge),
             ],
           ],
         ),
@@ -429,6 +447,29 @@ class _NavigationItem extends StatelessWidget {
       child: compact ? Tooltip(message: label, child: item) : item,
     );
   }
+}
+
+class _UnreadBadge extends StatelessWidget {
+  const _UnreadBadge({required this.count});
+  final int count;
+  @override
+  Widget build(BuildContext context) => Container(
+    constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+    padding: const EdgeInsets.symmetric(horizontal: 5),
+    alignment: Alignment.center,
+    decoration: const BoxDecoration(
+      color: Color(0xffa84f44),
+      shape: BoxShape.circle,
+    ),
+    child: Text(
+      count > 99 ? '99+' : '$count',
+      style: const TextStyle(
+        color: Colors.white,
+        fontSize: 10,
+        fontWeight: FontWeight.w700,
+      ),
+    ),
+  );
 }
 
 class _BottomAction extends StatelessWidget {

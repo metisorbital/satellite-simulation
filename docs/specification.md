@@ -49,6 +49,12 @@ The service owns satellite configuration, the simulation clock, orbital/environm
 It does **not** own anomaly models, risk scores, estimated failure time, natural-language recommendations, notification delivery, a Grafana dashboard, or autonomous commands to real spacecraft.
 The viewer may show measured state and explicitly configured limit violations; it must not fabricate an AI health score.
 
+The September 26 [operator workflow extension](reference/operator-cases.md) adds
+private human-authored investigations, recommendations, decisions, and observed
+outcomes alongside configured mission planning and handover records.
+It preserves committed public evidence without implementing the separate
+automated analytics product or changing simulation physics.
+
 ## 3. Priorities and Completion Boundary
 
 This specification is prepared in advance for use during the hackathon.

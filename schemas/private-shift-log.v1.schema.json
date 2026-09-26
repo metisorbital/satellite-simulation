@@ -239,7 +239,7 @@
     },
     "ShiftLogList": {
       "additionalProperties": false,
-      "description": "Return retained shifts belonging to the current run and operator.\n\nAttributes\n----------\nitems : list of ShiftLog\n    Authorized shift records with their entries.",
+      "description": "Return authorized drafts and retained submitted handovers.\n\nAttributes\n----------\nitems : list of ShiftLog\n    Authorized shift records with their entries.",
       "properties": {
         "items": {
           "items": {

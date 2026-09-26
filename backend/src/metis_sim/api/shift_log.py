@@ -21,6 +21,28 @@ from metis_sim.domain.shift_log import (
 router = APIRouter(tags=["Private operator Shift Log"])
 
 
+def _named_operator(request: Request) -> Principal:
+    """Require a trusted-origin named interactive operator browser session.
+
+    Parameters
+    ----------
+    request : Request
+        Browser request whose signed cookie identifies the actor.
+
+    Returns
+    -------
+    Principal
+        Verified named interactive operator.
+    """
+    context = request.app.state
+    principal = context.auth.session(request)
+    principal.require({"viewer_control"})
+    context.auth.origin(request)
+    if principal.user_id is None or principal.public_demo or not principal.interactive:
+        raise ServiceError("forbidden", "Sign in with a named operator to access Shift Log.", 403)
+    return principal
+
+
 def _operator(request: Request, run_id: str, *, mutation: bool = False) -> Principal:
     """Require a named browser identity that owns the requested run.
 
@@ -31,7 +53,7 @@ def _operator(request: Request, run_id: str, *, mutation: bool = False) -> Princ
     run_id : str
         Requested run, which must match both session scope and stored owner.
     mutation : bool, default=False
-        Also require a trusted origin and matching CSRF token.
+        Also require a matching CSRF token.
 
     Returns
     -------
@@ -39,16 +61,36 @@ def _operator(request: Request, run_id: str, *, mutation: bool = False) -> Princ
         Verified, named operator permitted to access this private record.
     """
     context = request.app.state
-    principal = context.auth.session(request)
+    principal = _named_operator(request)
     principal.require({"viewer_control"}, run_id)
-    context.auth.origin(request)
-    if principal.user_id is None or principal.public_demo or not principal.interactive:
-        raise ServiceError("forbidden", "Sign in with a named operator to access Shift Log.", 403)
     run = context.repository.private_run(run_id)
     if run["user_id"] != principal.user_id:
         raise ServiceError("forbidden", "Shift Log belongs to another operator.", 403)
     if mutation:
         context.auth.csrf(request, principal)
+    return principal
+
+
+def _current_operator(request: Request) -> Principal:
+    """Require a named operator whose active session still owns its current run.
+
+    Parameters
+    ----------
+    request : Request
+        Browser request carrying the trusted-origin named session cookie.
+
+    Returns
+    -------
+    Principal
+        Named operator permitted to read shared submitted handovers.
+    """
+    context = request.app.state
+    principal = _named_operator(request)
+    if principal.run_id is None:
+        raise ServiceError("forbidden", "Shift Log session has no active run.", 403)
+    run = context.repository.private_run(principal.run_id)
+    if run["user_id"] != principal.user_id:
+        raise ServiceError("forbidden", "Shift Log session does not own its active run.", 403)
     return principal
 
 
@@ -92,6 +134,27 @@ def list_shift_logs(run_id: str, request: Request) -> dict:
     """
     principal = _operator(request, run_id)
     return request.app.state.shift_logs.list_logs(run_id, principal.user_id)
+
+
+@router.get("/v1/viewer/shift-logs", response_model=ShiftLogList)
+def list_shared_shift_logs(request: Request) -> dict:
+    """Read submitted handovers and the caller's active-run draft.
+
+    Parameters
+    ----------
+    request : Request
+        Trusted-origin request carrying a named interactive operator session.
+
+    Returns
+    -------
+    dict
+        All submitted logs across operators and runs in this application's
+        database, plus only the caller's current-run draft. Full entries and
+        summaries are intentionally included because submitted handovers are
+        shared records.
+    """
+    principal = _current_operator(request)
+    return request.app.state.shift_logs.list_shared_logs(principal.run_id, principal.user_id)
 
 
 @router.post("/v1/runs/{run_id}/shift-logs/entries", response_model=ShiftLog)
