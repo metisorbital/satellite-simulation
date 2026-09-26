@@ -43,14 +43,16 @@ ViewerClient transport(Future<http.Response> Function(http.Request) handler) =>
 
 void main() {
   testWidgets(
-    'first visit waits for session then shows login without mission flash',
+    'first visit waits for session then opens the default workspace',
     (tester) async {
       final response = Completer<http.Response>();
       final paths = <String>[];
       final session = OperatorSession(
         client: transport((request) {
           paths.add(request.url.path);
-          return response.future;
+          return request.url.path.endsWith('/session')
+              ? response.future
+              : Future.value(reply(bootstrap('operator1')));
         }),
       );
       var missionBuilds = 0;
@@ -65,129 +67,100 @@ void main() {
           ),
         ),
       );
-      expect(find.text('Opening your workspace…'), findsOneWidget);
+      expect(find.text('Opening operator workspace…'), findsOneWidget);
       expect(missionBuilds, 0);
       response.complete(reply({'detail': 'Log in'}, 401));
       await tester.pumpAndSettle();
-      expect(find.text('Operator login'), findsOneWidget);
-      expect(missionBuilds, 0);
-      expect(paths, ['/v1/viewer/session']);
+      expect(find.text('Mission'), findsOneWidget);
+      expect(missionBuilds, 1);
+      expect(paths, ['/v1/viewer/session', '/v1/viewer/login']);
+      expect(session.bootstrap!['operator']['login'], 'operator1');
       expect(session.error, isNull);
-      final password = tester.widget<TextFormField>(
-        find.widgetWithText(TextFormField, 'Password'),
-      );
-      expect(password.controller!.text, isEmpty);
-      final editable = tester.widget<EditableText>(
-        find.descendant(
-          of: find.widgetWithText(TextFormField, 'Password'),
-          matching: find.byType(EditableText),
-        ),
-      );
-      expect(editable.obscureText, isTrue);
     },
   );
 
+  testWidgets('automatic login and operator switch create fresh workspace', (
+    tester,
+  ) async {
+    final logins = <JsonMap>[];
+    final session = OperatorSession(
+      client: transport((request) async {
+        if (request.url.path.endsWith('/session')) return reply({}, 401);
+        if (request.url.path.endsWith('/logout')) {
+          expect(request.headers['X-CSRF-Token'], 'rotated-csrf');
+          return reply({});
+        }
+        final body = jsonDecode(request.body) as JsonMap;
+        logins.add(body);
+        return reply(bootstrap(body['login'] as String));
+      }),
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: OperatorGate(
+          session: session,
+          missionBuilder: (_, data, switchOperator, _) => _Workspace(
+            login: data['operator']['login'] as String,
+            switchOperator: () => switchOperator('operator2', 'rotated-csrf'),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('operator1 selection 0'), findsOneWidget);
+    await tester.tap(find.text('Select spacecraft'));
+    await tester.pump();
+    expect(find.text('operator1 selection 1'), findsOneWidget);
+    await tester.tap(find.text('Switch operator'));
+    await tester.pumpAndSettle();
+    expect(find.text('operator2 selection 0'), findsOneWidget);
+    expect(find.textContaining('operator1 selection'), findsNothing);
+    expect(logins, [
+      {'login': 'operator1', 'password': 'demo'},
+      {'login': 'operator2', 'password': 'demo'},
+    ]);
+  });
+
   testWidgets(
-    'keyboard login, logout and operator switch create fresh workspace',
+    'failed automatic login can be retried without narrow layout overflow',
     (tester) async {
-      final logins = <JsonMap>[];
+      tester.view.physicalSize = const Size(360, 780);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      var loginRequests = 0;
       final session = OperatorSession(
         client: transport((request) async {
           if (request.url.path.endsWith('/session')) return reply({}, 401);
-          if (request.url.path.endsWith('/logout')) {
-            expect(request.headers['X-CSRF-Token'], 'rotated-csrf');
-            return reply({});
-          }
-          final body = jsonDecode(request.body) as JsonMap;
-          logins.add(body);
-          return reply(bootstrap(body['login'] as String));
+          return ++loginRequests == 1
+              ? reply({'detail': 'Service unavailable'}, 503)
+              : reply(bootstrap('operator1'));
         }),
       );
       await tester.pumpWidget(
         MaterialApp(
           home: OperatorGate(
             session: session,
-            missionBuilder: (_, data, logout, _) => _Workspace(
-              login: data['operator']['login'] as String,
-              logout: () => logout('rotated-csrf'),
-            ),
+            missionBuilder: (_, _, _, _) => const Text('Mission'),
           ),
         ),
       );
       await tester.pumpAndSettle();
-      Future<void> login(String user) async {
-        await tester.ensureVisible(find.widgetWithText(ActionChip, user));
-        await tester.tap(find.widgetWithText(ActionChip, user));
-        await tester.enterText(
-          find.widgetWithText(TextFormField, 'Password'),
-          'anything',
-        );
-        await tester.testTextInput.receiveAction(TextInputAction.done);
-        await tester.pumpAndSettle();
-      }
-
-      await login('operator1');
-      expect(find.text('operator1 selection 0'), findsOneWidget);
-      await tester.tap(find.text('Select spacecraft'));
-      await tester.pump();
-      expect(find.text('operator1 selection 1'), findsOneWidget);
-      await tester.tap(find.text('Log out'));
+      expect(
+        find.text(
+          'Could not open the operator workspace. Check the connection and try again.',
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('Mission'), findsNothing);
+      expect(tester.takeException(), isNull);
+      await tester.tap(find.text('Retry'));
       await tester.pumpAndSettle();
-      expect(find.text('Operator login'), findsOneWidget);
-      await login('operator2');
-      expect(find.text('operator2 selection 0'), findsOneWidget);
-      expect(find.textContaining('operator1 selection'), findsNothing);
-      expect(logins, [
-        {'login': 'operator1', 'password': 'anything'},
-        {'login': 'operator2', 'password': 'anything'},
-      ]);
+      expect(find.text('Mission'), findsOneWidget);
+      expect(loginRequests, 2);
+      expect(tester.takeException(), isNull);
     },
   );
-
-  testWidgets('failed login is actionable and narrow layout has no overflow', (
-    tester,
-  ) async {
-    tester.view.physicalSize = const Size(360, 780);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-    final session = OperatorSession(
-      client: transport(
-        (request) async => request.url.path.endsWith('/session')
-            ? reply({}, 401)
-            : reply({'detail': 'Unknown demo operator'}, 401),
-      ),
-    );
-    await tester.pumpWidget(
-      MaterialApp(
-        home: OperatorGate(
-          session: session,
-          missionBuilder: (_, _, _, _) => const Text('Mission'),
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-    await tester.enterText(
-      find.widgetWithText(TextFormField, 'Login'),
-      'unknown',
-    );
-    await tester.enterText(
-      find.widgetWithText(TextFormField, 'Password'),
-      'test',
-    );
-    await tester.testTextInput.receiveAction(TextInputAction.done);
-    await tester.pumpAndSettle();
-    expect(find.text('Unknown demo operator'), findsOneWidget);
-    expect(find.text('Mission'), findsNothing);
-    expect(tester.takeException(), isNull);
-    expect(
-      tester
-          .widget<TextFormField>(find.widgetWithText(TextFormField, 'Password'))
-          .controller!
-          .text,
-      isEmpty,
-    );
-  });
 
   test(
     'failed logout clears workspace and requires retry before next login',
@@ -209,15 +182,16 @@ void main() {
       );
       addTearDown(session.dispose);
       await session.restore();
-      await session.logout(csrfToken: 'rotated');
+      await session.switchOperator('operator2', csrfToken: 'rotated');
       expect(session.bootstrap, isNull);
       expect(session.logoutPending, isTrue);
-      expect(session.error, contains('Retry'));
-      await session.login('operator2', 'test');
+      expect(session.error, contains('retry'));
+      await session.switchOperator('operator2');
       expect(loginRequests, 0);
-      await session.logout();
+      await session.retry();
       expect(session.logoutPending, isFalse);
-      await session.login('operator2', 'test');
+      expect(loginRequests, 1);
+      expect(logoutRequests, 2);
       expect(session.bootstrap!['operator']['login'], 'operator2');
     },
   );
@@ -233,8 +207,8 @@ void main() {
               : response.future,
         ),
       );
-      await session.restore();
-      final pending = session.login('operator1', 'test');
+      final pending = session.restore();
+      await Future<void>.delayed(Duration.zero);
       session.expire();
       session.dispose();
       response.complete(reply(bootstrap('operator1')));
@@ -333,9 +307,9 @@ void main() {
 }
 
 class _Workspace extends StatefulWidget {
-  const _Workspace({required this.login, required this.logout});
+  const _Workspace({required this.login, required this.switchOperator});
   final String login;
-  final VoidCallback logout;
+  final VoidCallback switchOperator;
   @override
   State<_Workspace> createState() => _WorkspaceState();
 }
@@ -351,7 +325,10 @@ class _WorkspaceState extends State<_Workspace> {
           onPressed: () => setState(() => selection++),
           child: const Text('Select spacecraft'),
         ),
-        TextButton(onPressed: widget.logout, child: const Text('Log out')),
+        TextButton(
+          onPressed: widget.switchOperator,
+          child: const Text('Switch operator'),
+        ),
       ],
     ),
   );
