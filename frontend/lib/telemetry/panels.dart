@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 
 import '../scene/playback.dart';
 
-const telemetrySurface = Color(0xff101923);
-const telemetryBorder = Color(0xff25313e);
-const telemetryMuted = Color(0xff96a7b8);
-const telemetryAccent = Color(0xff89d5c1);
+const telemetrySurface = Color(0xff081426);
+const telemetryBorder = Color(0xff1a315e);
+const telemetryMuted = Color(0xff8da4d8);
+const telemetryAccent = Color(0xff5d84ff);
 const telemetryColors = <Color>[
   Color(0xff81c9a4),
   Color(0xffffc568),

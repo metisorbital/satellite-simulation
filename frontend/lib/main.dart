@@ -46,7 +46,7 @@ class MetisApp extends StatelessWidget {
             ),
           ),
           colorScheme: ColorScheme.fromSeed(
-            seedColor: const Color(0xff8ccab9),
+            seedColor: const Color(0xff0040fc),
             brightness: Brightness.dark,
           ),
         ),
@@ -1171,9 +1171,9 @@ class _MissionPageState extends State<MissionPage> {
                       ? null
                       : () => mission.control(primaryAction),
                   style: FilledButton.styleFrom(
-                    backgroundColor: const Color(0xffa9d5cb),
-                    foregroundColor: const Color(0xff122a2e),
-                    disabledBackgroundColor: const Color(0xff263b42),
+                    backgroundColor: const Color(0xff5d84ff),
+                    foregroundColor: const Color(0xff040d1a),
+                    disabledBackgroundColor: const Color(0xff18284f),
                     disabledForegroundColor: muted,
                     padding: const EdgeInsets.symmetric(horizontal: 13),
                     shape: RoundedRectangleBorder(
@@ -1855,13 +1855,13 @@ class _MissionPageState extends State<MissionPage> {
   );
 }
 
-const background = Color(0xff070d15),
-    panel = Color(0xff0d151f),
-    line = Color(0xff202a36),
-    muted = Color(0xff718297),
-    mint = Color(0xff95cfbc),
-    gold = Color(0xffc7b985),
-    textColor = Color(0xffd4dfe8);
+const background = Color(0xff040d1a),
+    panel = Color(0xff081426),
+    line = Color(0xff1a315e),
+    muted = Color(0xff8da4d8),
+    mint = Color(0xff5d84ff),
+    gold = Color(0xff8eb4ff),
+    textColor = Color(0xffe3ebff);
 Widget txt(
   String text, {
   double size = 12,
