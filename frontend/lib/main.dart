@@ -19,6 +19,7 @@ import 'scene/playback.dart';
 import 'telemetry/dashboard.dart';
 import 'shift_log/shift_log_dialog.dart';
 import 'workflows/case_workspace.dart';
+import 'workflows/notification_controller.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -92,6 +93,7 @@ class MissionPage extends StatefulWidget {
 
 class _MissionPageState extends State<MissionPage> {
   late final Mission mission;
+  late final NotificationController notifications;
   Ticker? ticker;
   DialogRoute<void>? _constellationEditorRoute;
   final historyFocus = FocusNode(debugLabel: "Measurement history");
@@ -112,7 +114,11 @@ class _MissionPageState extends State<MissionPage> {
     super.initState();
     mission = Mission(onSessionExpired: widget.onSessionExpired);
     mission.addListener(refresh);
+    notifications = NotificationController(mission)..addListener(refresh);
     mission.connect(initial: widget.bootstrap);
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => notifications.refresh(),
+    );
     ticker = Ticker((_) {
       final second = mission.clock.elapsed.inSeconds;
       if (overviewVisible || second != lastDashboardSecond) {
@@ -156,6 +162,8 @@ class _MissionPageState extends State<MissionPage> {
     historyFocus.dispose();
     overviewScroll.dispose();
     mission.removeListener(refresh);
+    notifications.removeListener(refresh);
+    notifications.dispose();
     mission.dispose();
     super.dispose();
   }
@@ -997,6 +1005,14 @@ class _MissionPageState extends State<MissionPage> {
                     busy: mission.busy,
                     connected: mission.playback.connected && !stale,
                     runLabel: status?['status'] as String? ?? 'Connecting',
+                    warningUnread: notifications.items
+                        .where(
+                          (item) => item.category == 'warning' && item.unread,
+                        )
+                        .length,
+                    caseUnread: notifications.items
+                        .where((item) => item.category == 'case' && item.unread)
+                        .length,
                     compact: compact,
                   ),
                 ),
@@ -1028,6 +1044,7 @@ class _MissionPageState extends State<MissionPage> {
                           ? CaseWorkspace(
                               key: _caseWorkspaceKey,
                               mission: mission,
+                              notifications: notifications,
                               section: view.name,
                               selectedSatellite: selected,
                               onSelected: (id) => setState(() => selected = id),

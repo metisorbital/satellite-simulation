@@ -228,6 +228,42 @@ case_activities = Table(
 )
 Index("case_activities_case_created", case_activities.c.case_id, case_activities.c.created_at)
 
+# Notification state describes durable, public warning conditions.  Receipts are
+# deliberately per operator, so one operator viewing an item never clears it for
+# another operator.
+operator_notification_state = Table(
+    "operator_notification_state",
+    metadata,
+    Column("notification_key", String(256), primary_key=True),
+    Column("run_id", ForeignKey("private.runs.run_id"), nullable=False),
+    Column("satellite_id", String(64), nullable=False),
+    Column("kind", String(32), nullable=False),
+    Column("fingerprint", String(64), nullable=False),
+    Column("version", Integer, nullable=False),
+    Column("active", Boolean, nullable=False),
+    Column("updated_at", DateTime(timezone=True), nullable=False),
+    CheckConstraint("kind IN ('warning')"),
+    CheckConstraint("version >= 1"),
+    schema="private",
+)
+Index(
+    "operator_notification_state_run_active",
+    operator_notification_state.c.run_id,
+    operator_notification_state.c.active,
+)
+
+operator_notification_receipts = Table(
+    "operator_notification_receipts",
+    metadata,
+    Column("user_id", ForeignKey("private.users.user_id"), primary_key=True),
+    Column("notification_key", String(256), primary_key=True),
+    Column("read_version", Integer, nullable=False),
+    Column("read_at", DateTime(timezone=True), nullable=False),
+    CheckConstraint("read_version >= 1"),
+    schema="private",
+)
+Index("operator_notification_receipts_user", operator_notification_receipts.c.user_id)
+
 # Source corpora outlive run retention. Bounded compressed CSV chunks preserve
 # original lexical values without multiplying storage for millions of rows.
 observed_datasets = Table(

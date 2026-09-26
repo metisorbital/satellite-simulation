@@ -40,6 +40,23 @@ has changed. Approval never automatically establishes a supported outcome.
 Unsaved form edits prompt before navigation; failed saves retain the draft.
 A stale revision returns a conflict so the operator can reload before saving again.
 
+## Review Unread Workflow Items
+
+The sidebar badge comes from database-backed per-operator read receipts.
+`GET /v1/viewer/notifications` returns visible committed warnings for the current
+run and the named operator's open cases, with a versioned unread count.
+`POST /v1/viewer/notifications/read` records that operator's acknowledgement of
+one visible key and version; it does not resolve a warning, change telemetry, or
+close a case.
+
+Warnings keep a stable key while their committed condition remains active.
+They become unread again only when the condition reappears after clearing or its
+material fingerprint changes.
+Open cases become unread when their revision changes and disappear from the
+notification list when closed.
+Notification case items use the same latest-100-updated owned-case window as the
+case list; this does not extend case-history pagination.
+
 ## Review Evidence and History
 
 Initial evidence is immutable. A case created before its first committed sample
@@ -60,8 +77,10 @@ Every successful case creation, assessment, recommendation, decision, outcome,
 and evidence capture also appends an attributed entry to the originating run's
 [Shift Log](shift-log.md), in the same transaction.
 Idempotent retries cannot duplicate the case activity or handover entry.
-The Shift Log page still shows the current run; a historical case's complete
-workflow remains accessible through its case history.
+The Shift Log page shows the current operator's current-run draft and submitted
+handovers from all operators and runs. Submitting a handover shares its included
+case notes; the case itself and its complete workflow remain owner-only in case
+history.
 
 ## Review Mission Planning
 
@@ -87,6 +106,8 @@ Keep the same key and body when retrying an unconfirmed write.
 | --- | --- | --- |
 | GET | `/v1/viewer/cases` | Owned historical cases and list bounds |
 | GET | `/v1/viewer/cases/{case_id}` | Owned case detail, evidence, and bounded activities |
+| GET | `/v1/viewer/notifications` | Current-run warnings and owned open-case unread state |
+| POST | `/v1/viewer/notifications/read` | `key` and `version` acknowledgement receipt |
 | POST | `/v1/runs/{run_id}/cases` | `satellite_id`, `title`, `summary`, `priority`, optional `sequence` |
 | POST | `/v1/viewer/cases/{case_id}/assessment` | `revision`, `assessment`, `missing_information` |
 | POST | `/v1/viewer/cases/{case_id}/recommendation` | `revision`, `recommendation`, `expected_effect`, `tradeoffs` |

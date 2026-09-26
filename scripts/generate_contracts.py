@@ -26,6 +26,11 @@ from metis_sim.domain.cases import (
     RecommendationCaseRequest,
 )
 from metis_sim.domain.config import SimulationConfig
+from metis_sim.domain.notifications import (
+    MarkNotificationReadRequest,
+    NotificationList,
+    OperatorNotification,
+)
 from metis_sim.domain.public import (
     ControlRequest,
     DatasetList,
@@ -61,6 +66,7 @@ SCHEMA_DIR = ROOT / "schemas"
 DART_OUTPUT = ROOT / "frontend/lib/api/generated.dart"
 SHIFT_LOG_DART_OUTPUT = ROOT / "frontend/lib/api/shift_log_generated.dart"
 CASES_DART_OUTPUT = ROOT / "frontend/lib/api/cases_generated.dart"
+NOTIFICATIONS_DART_OUTPUT = ROOT / "frontend/lib/api/notifications_generated.dart"
 SHIFT_LOG_MODELS: dict[str, tuple[type[BaseModel], JsonSchemaMode]] = {
     "ShiftLogEntryDetails": (ShiftLogEntryDetails, "serialization"),
     "ShiftLogEntry": (ShiftLogEntry, "serialization"),
@@ -83,6 +89,11 @@ CASE_MODELS: dict[str, tuple[type[BaseModel], JsonSchemaMode]] = {
     "DecisionCaseRequest": (DecisionCaseRequest, "validation"),
     "OutcomeCaseRequest": (OutcomeCaseRequest, "validation"),
     "CaptureCaseEvidenceRequest": (CaptureCaseEvidenceRequest, "validation"),
+}
+NOTIFICATION_MODELS: dict[str, tuple[type[BaseModel], JsonSchemaMode]] = {
+    "OperatorNotification": (OperatorNotification, "serialization"),
+    "NotificationList": (NotificationList, "serialization"),
+    "MarkNotificationReadRequest": (MarkNotificationReadRequest, "validation"),
 }
 MODELS: dict[str, tuple[type[BaseModel], JsonSchemaMode]] = {
     "SimulationConfig": (SimulationConfig, "validation"),
@@ -366,6 +377,26 @@ def main() -> None:
         },
     )
     CASES_DART_OUTPUT.write_text(render_dart(case_definitions))
+
+    notification_definitions: dict[str, Any] = {}
+    for name, (model, mode) in NOTIFICATION_MODELS.items():
+        definition = model.model_json_schema(mode=mode, ref_template="#/$defs/{model}")
+        notification_definitions.update(definition.pop("$defs", {}))
+        notification_definitions[name] = definition
+    for name, (model, mode) in NOTIFICATION_MODELS.items():
+        if mode == "serialization":
+            notification_definitions[name]["required"] = list(model.model_fields)
+    _write_json(
+        SCHEMA_DIR / "private-notifications.v1.schema.json",
+        {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "$id": "https://metisorbital.local/schemas/private-notifications.v1.json",
+            "title": "MetisPrivateNotificationContracts",
+            "$defs": notification_definitions,
+            "oneOf": [{"$ref": f"#/$defs/{name}"} for name in NOTIFICATION_MODELS],
+        },
+    )
+    NOTIFICATIONS_DART_OUTPUT.write_text(render_dart(notification_definitions))
 
 
 if __name__ == "__main__":

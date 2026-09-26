@@ -25,6 +25,13 @@ decision, and observed outcome for an originating run. **Case activities** appen
 the submitted narrative and immutable public evidence snapshots.
 See [Operator cases](operator-cases.md) for ownership, retention, and list bounds.
 
+**Operator notification state** stores the lifecycle version of each active
+server-derived warning. **Operator notification receipts** store each named
+operator's acknowledged version of that warning or an open owned case.
+Receipts mark a version viewed; they do not resolve warning state or close cases.
+The receipt key is scoped by the application database and operator identity, while
+warning lifecycle state is scoped by its originating run.
+
 A **configuration revision** stores submitted and resolved configuration.
 A **run** executes one revision and records its lifecycle and provenance.
 Each run has **streams** identifying its satellites' public measurements.
@@ -63,6 +70,9 @@ adds users and Shift Log tables while preserving historical run ownership.
 This model reference does not inspect a deployed database.
 Revision `0006` adds observed source storage and immutable-row guards.
 It can adopt matching preprovisioned tables without changing their data.
+Revision `0007` adds retained private cases and activity evidence.
+Revision `0008` adds durable notification lifecycle state and per-operator
+acknowledgement receipts.
 
 ::: metis-database-schema
 

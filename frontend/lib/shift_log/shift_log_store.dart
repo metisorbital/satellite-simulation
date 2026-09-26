@@ -54,7 +54,7 @@ class ShiftLogStore extends ChangeNotifier {
   bool _invalidated = false;
   bool _disposed = false;
 
-  /// All saved shift records for this run and operator.
+  /// Shared submitted handovers and this operator's current-run draft.
   List<ShiftLog> get logs => List.unmodifiable(_logs);
 
   /// The currently selected entry kind.
@@ -89,9 +89,15 @@ class ShiftLogStore extends ChangeNotifier {
       mission.operatorUserId == _userId &&
       mission.status?['run_id'] == runId;
 
-  /// The editable draft for this run, if one exists.
-  ShiftLog? get draft =>
-      _logs.where((log) => log.status == 'draft').firstOrNull;
+  /// Whether [log] is the current operator's editable draft for this run.
+  bool isPersonalDraft(ShiftLog log) =>
+      log.status == 'draft' &&
+      log.run_id == runId &&
+      _userId != null &&
+      log.user_id == _userId;
+
+  /// The current operator's editable draft for this run, if one exists.
+  ShiftLog? get draft => _logs.where(isPersonalDraft).firstOrNull;
 
   /// Whether closing would discard text or an unconfirmed write.
   bool get hasUnsavedChanges =>
@@ -225,10 +231,9 @@ class ShiftLogStore extends ChangeNotifier {
   Future<void> _refresh({bool resetSummary = false}) async {
     final records = await mission.shiftLogs(runId);
     if (!validSession) return;
-    final nextDraft = records
-        .where((record) => record.status == 'draft')
-        .firstOrNull;
-    final changedDraft = draft?.shift_id != nextDraft?.shift_id;
+    final currentDraft = draft;
+    final nextDraft = records.where(isPersonalDraft).firstOrNull;
+    final changedDraft = currentDraft?.shift_id != nextDraft?.shift_id;
     final hadEdits = !resetSummary && summaryChanged;
     final keepSummary = hadEdits && !changedDraft;
     if (hadEdits && changedDraft) _orphanedSummary = _summaryText;

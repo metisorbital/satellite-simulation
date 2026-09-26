@@ -404,7 +404,14 @@ class ShiftLogPageState extends State<ShiftLogPage> {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _sectionHeading('COLLECTED EVENTS', 'The shift so far'),
+        _sectionHeading(
+          store.logs.any((log) => log.status == 'submitted')
+              ? 'SHIFT HISTORY'
+              : 'COLLECTED EVENTS',
+          store.logs.any((log) => log.status == 'submitted')
+              ? 'Shared handover history'
+              : 'The shift so far',
+        ),
         const SizedBox(height: 4),
         if (!store.loaded && store.busy)
           const Padding(
@@ -445,6 +452,8 @@ class ShiftLogPageState extends State<ShiftLogPage> {
 
   Widget _recordTimeline(ShiftLog log) {
     final submitted = log.status == 'submitted';
+    final personalDraft = store.isPersonalDraft(log);
+    final readOnly = !personalDraft;
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 19),
       decoration: const BoxDecoration(
@@ -456,8 +465,8 @@ class ShiftLogPageState extends State<ShiftLogPage> {
           SizedBox(
             width: 25,
             child: Icon(
-              submitted ? Icons.lock_outline_rounded : Icons.edit_note_rounded,
-              color: submitted ? _muted : _mint,
+              readOnly ? Icons.lock_outline_rounded : Icons.edit_note_rounded,
+              color: readOnly ? _muted : _mint,
               size: 18,
             ),
           ),
@@ -470,7 +479,11 @@ class ShiftLogPageState extends State<ShiftLogPage> {
                   children: [
                     Expanded(
                       child: Text(
-                        submitted ? 'Submitted shift' : 'Current draft',
+                        personalDraft
+                            ? 'Current draft'
+                            : submitted
+                            ? 'Submitted shift'
+                            : 'Shared draft record',
                         style: const TextStyle(
                           color: _text,
                           fontSize: 13,
@@ -479,16 +492,24 @@ class ShiftLogPageState extends State<ShiftLogPage> {
                       ),
                     ),
                     _smallBadge(
-                      submitted ? 'READ ONLY' : 'EDITABLE',
-                      submitted ? _muted : _mint,
+                      readOnly ? 'READ ONLY' : 'EDITABLE',
+                      readOnly ? _muted : _mint,
                     ),
                   ],
                 ),
                 const SizedBox(height: 5),
                 Text(
-                  '${store.author(log.user_id)} · Opened ${store.timestamp(log.created_at)}',
+                  'Author ${store.author(log.user_id)} · Opened ${store.timestamp(log.created_at)}',
                   style: const TextStyle(color: _muted, fontSize: 11),
                 ),
+                if (submitted)
+                  Tooltip(
+                    message: log.run_id,
+                    child: Text(
+                      'Originating run ${_shortIdentifier(log.run_id)}',
+                      style: const TextStyle(color: _muted, fontSize: 11),
+                    ),
+                  ),
                 if (log.submitted_at != null)
                   Padding(
                     padding: const EdgeInsets.only(top: 3),
@@ -651,7 +672,7 @@ class ShiftLogPageState extends State<ShiftLogPage> {
           ),
           const SizedBox(height: 9),
           const Text(
-            'Submission locks this record. The next entry starts a new draft; no spacecraft command is sent.',
+            'Submitting shares this summary and every entry with all operators and locks the record. The next entry starts a new private draft; no spacecraft command is sent.',
             style: TextStyle(color: _muted, fontSize: 11, height: 1.5),
           ),
         ],

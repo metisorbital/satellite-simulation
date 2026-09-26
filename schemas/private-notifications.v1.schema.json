@@ -1,0 +1,123 @@
+{
+  "$defs": {
+    "MarkNotificationReadRequest": {
+      "additionalProperties": false,
+      "description": "Explicit acknowledgement of one visible notification version.",
+      "properties": {
+        "key": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Key",
+          "type": "string"
+        },
+        "version": {
+          "minimum": 1,
+          "title": "Version",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "key",
+        "version"
+      ],
+      "title": "MarkNotificationReadRequest",
+      "type": "object"
+    },
+    "NotificationList": {
+      "additionalProperties": false,
+      "description": "Visible items and their per-operator unread count.",
+      "properties": {
+        "items": {
+          "items": {
+            "$ref": "#/$defs/OperatorNotification"
+          },
+          "title": "Items",
+          "type": "array"
+        },
+        "unread_count": {
+          "minimum": 0,
+          "title": "Unread Count",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "items",
+        "unread_count"
+      ],
+      "title": "NotificationList",
+      "type": "object"
+    },
+    "OperatorNotification": {
+      "additionalProperties": false,
+      "description": "One visible warning or open investigation notification.\n\nAttributes\n----------\nkey : str\n    Stable server-created notification identity.\nversion : int\n    Material lifecycle version used by per-operator read receipts.\ncategory : {\"warning\", \"case\"}\n    The visible workspace item category.\nsatellite_id : str\n    Selected spacecraft in the warning or investigation workspace.\ntitle, summary : str\n    Public warning copy or operator-authored case summary.",
+      "properties": {
+        "category": {
+          "enum": [
+            "warning",
+            "case"
+          ],
+          "title": "Category",
+          "type": "string"
+        },
+        "key": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Key",
+          "type": "string"
+        },
+        "satellite_id": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Satellite Id",
+          "type": "string"
+        },
+        "summary": {
+          "maxLength": 4000,
+          "minLength": 1,
+          "title": "Summary",
+          "type": "string"
+        },
+        "title": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        },
+        "unread": {
+          "title": "Unread",
+          "type": "boolean"
+        },
+        "version": {
+          "minimum": 1,
+          "title": "Version",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "key",
+        "version",
+        "category",
+        "satellite_id",
+        "title",
+        "summary",
+        "unread"
+      ],
+      "title": "OperatorNotification",
+      "type": "object"
+    }
+  },
+  "$id": "https://metisorbital.local/schemas/private-notifications.v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/OperatorNotification"
+    },
+    {
+      "$ref": "#/$defs/NotificationList"
+    },
+    {
+      "$ref": "#/$defs/MarkNotificationReadRequest"
+    }
+  ],
+  "title": "MetisPrivateNotificationContracts"
+}

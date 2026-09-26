@@ -29,12 +29,12 @@ regression suite and from existing application data.
 
 | Check | Measured result |
 | --- | --- |
-| `uv run metis-sim migrate` on a fresh dedicated PostgreSQL database | Schema current through additive migration `0007` |
+| `uv run metis-sim migrate` on a fresh dedicated PostgreSQL database | Schema current through additive migration `0008` |
 | `METIS_TEST_DATABASE_URL=… uv run pytest -q` | 205 passed, 1 skipped in 190.07 s; PostgreSQL gates enabled |
 | `PATH=<flutter>/bin:$PATH uv run pytest -q tests/test_dart_contracts.py` | 5 passed; includes the Dart-runtime check skipped above because the SDK was initially absent from PATH |
 | `uv run ruff check backend/src backend/migrations tests scripts examples` | Passed |
 | `uv run ruff format --check backend/src backend/migrations tests scripts examples` | 101 files already formatted |
-| `uv run mypy backend/src scripts/generate_contracts.py` | No issues in 67 source files |
+| `uv run mypy backend/src scripts/generate_contracts.py` | No issues in 70 source files |
 | Generate contracts and compare bytes before/after | All JSON schemas and generated Dart contracts reproduced without drift |
 | `dart format --output=none --set-exit-if-changed lib test` and `flutter analyze` before integrating `2e9bb90` | Passed |
 | `flutter test` before integrating `2e9bb90` | 18 passed |
@@ -104,7 +104,25 @@ stored frames. Evidence capture now uses strict JSON-mode `MeasurementFrame`
 validation; the public contract was not relaxed. The complete HTTP rehearsal
 passed after this repair.
 
-## Browser Rehearsal
+### Notification and Shared Handover Update
+
+A fresh PostgreSQL migration through `0008_operator_notifications` passed.
+The inline HTTP lifecycle rehearsal covered notification read receipts, CSRF and
+strict request validation, operator isolation, idempotent acknowledgement, and
+durable read-back after reconnect.
+It also verified that warnings keep a stable read state while active, become
+unread after a material change or reappearance, and that open case revisions are
+unread while closed cases are absent.
+Shared Shift Log API checks confirmed submitted handovers remain visible across
+named operators and producer source revisions, while an unsubmitted current-run
+draft remains visible and writable only to its owner.
+The operator session suite passed 19 checks.
+
+## Earlier Browser Rehearsal
+
+This browser evidence predates the final notification and shared-handover
+integration update.
+It is not final browser acceptance evidence for the current worktree.
 
 The real compiled app was checked against that PostgreSQL service, independently
 of the browser suite's mocked API fixtures. Overview retained the rendered Earth,
@@ -132,10 +150,18 @@ under its historical run. A fresh simulation still started, streamed committed
 measurements, and paused. The grouped-warning layout remained readable at
 390 × 844.
 
-The final navigation pass verified that current warnings keep their telemetry
-shortcut available when older cases exist, selecting a warning's case opens its
-investigation, and creating a warning case opens the newly persisted record.
-The final compiled browser reported no JavaScript errors.
+An earlier navigation pass verified that current warnings kept their telemetry
+shortcut available when older cases existed, selecting a warning case opened its
+investigation, and creating a warning case opened the newly persisted record.
+The final notification/shared-handover release build was checked in the browser.
+Marking a warning viewed reduced its badge from 3 to 2, retained the warning for
+review, and survived continuing telemetry and reload. Entering Investigations
+loaded the selected historical case and reduced its badge from 1 to 0. This pass
+caught and fixed a missing detail load when navigating from warnings. Shared
+submitted handovers displayed author/run provenance alongside the private draft;
+the narrow 390 × 844 layout remained readable. Browser error logs were empty.
+The current existing Python suite passed 199 checks with 7 environment-dependent
+skips; application Flutter analysis and the final release rebuild passed.
 
 ## Independent Review and Limits
 

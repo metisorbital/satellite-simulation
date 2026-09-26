@@ -30,8 +30,14 @@ Entries preserve the author and server-recorded time.
 Corrections should be added as new entries so the original record remains available.
 The summary is editable until submission.
 Navigation checks for unsaved text and unconfirmed writes.
-The current demo scopes records to the signed-in operator and run;
-team-wide shift assignment and cross-operator handover access are not implemented.
+Submitted handovers are read from the database and visible to every named
+operator connected to this application's database, including across different
+runs and producer revisions after deployment. A producer source ID is not a
+workspace or tenant boundary.
+Drafts remain private to their owner and current run. Submission shares the
+complete summary and entries, including any automatically recorded case notes.
+Other operators cannot edit or submit your draft; submitted records are read-only
+for everyone. Reload the Shift Log to read newly submitted handovers.
 
 ## Understand User Attribution
 
@@ -64,6 +70,7 @@ Reuse a key only when retrying the same unchanged request.
 
 | Method | Route | Purpose |
 | --- | --- | --- |
+| GET | `/v1/viewer/shift-logs` | Read shared submitted handovers and the current operator's current-run draft |
 | GET | `/v1/runs/{run_id}/shift-logs` | Read the operator's shift records and entries |
 | POST | `/v1/runs/{run_id}/shift-logs/entries` | Append `{ "kind": "note", "text": "Reviewed the power trend." }` |
 | POST | `/v1/runs/{run_id}/shift-logs/{shift_id}/summary` | Save `{ "summary": "Next shift should recheck the trend." }` |

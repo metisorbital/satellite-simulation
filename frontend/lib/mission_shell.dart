@@ -48,6 +48,8 @@ class MissionSidebar extends StatelessWidget {
     required this.busy,
     required this.connected,
     required this.runLabel,
+    this.warningUnread = 0,
+    this.caseUnread = 0,
     this.compact = false,
   });
 
@@ -80,6 +82,8 @@ class MissionSidebar extends StatelessWidget {
 
   /// Human-readable label for the current simulated run.
   final String runLabel;
+  final int warningUnread;
+  final int caseUnread;
 
   /// Whether to render the icon-only rail variant.
   final bool compact;
@@ -123,6 +127,11 @@ class MissionSidebar extends StatelessWidget {
                         label: destination.title,
                         selected: view == destination,
                         compact: compact,
+                        badge: destination == MissionView.warnings
+                            ? warningUnread
+                            : destination == MissionView.investigations
+                            ? caseUnread
+                            : 0,
                         onPressed:
                             (destination.isCase ||
                                     destination == MissionView.shiftLog) &&
@@ -370,6 +379,7 @@ class _NavigationItem extends StatelessWidget {
     required this.selected,
     required this.compact,
     required this.onPressed,
+    required this.badge,
   });
 
   final IconData icon;
@@ -377,6 +387,7 @@ class _NavigationItem extends StatelessWidget {
   final bool selected;
   final bool compact;
   final VoidCallback? onPressed;
+  final int badge;
 
   @override
   Widget build(BuildContext context) {
@@ -390,6 +401,11 @@ class _NavigationItem extends StatelessWidget {
               : MainAxisAlignment.start,
           children: [
             Icon(icon, size: 19, color: selected ? _mint : _muted),
+            if (compact && badge > 0)
+              Transform.translate(
+                offset: const Offset(-7, -9),
+                child: _UnreadBadge(count: badge),
+              ),
             if (!compact) ...[
               const SizedBox(width: 12),
               Expanded(
@@ -402,6 +418,7 @@ class _NavigationItem extends StatelessWidget {
                   ),
                 ),
               ),
+              if (!compact && badge > 0) _UnreadBadge(count: badge),
             ],
           ],
         ),
@@ -430,6 +447,29 @@ class _NavigationItem extends StatelessWidget {
       child: compact ? Tooltip(message: label, child: item) : item,
     );
   }
+}
+
+class _UnreadBadge extends StatelessWidget {
+  const _UnreadBadge({required this.count});
+  final int count;
+  @override
+  Widget build(BuildContext context) => Container(
+    constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+    padding: const EdgeInsets.symmetric(horizontal: 5),
+    alignment: Alignment.center,
+    decoration: const BoxDecoration(
+      color: Color(0xffa84f44),
+      shape: BoxShape.circle,
+    ),
+    child: Text(
+      count > 99 ? '99+' : '$count',
+      style: const TextStyle(
+        color: Colors.white,
+        fontSize: 10,
+        fontWeight: FontWeight.w700,
+      ),
+    ),
+  );
 }
 
 class _BottomAction extends StatelessWidget {

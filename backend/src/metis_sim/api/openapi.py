@@ -20,6 +20,7 @@ from metis_sim.domain.cases import (
     RecommendationCaseRequest,
 )
 from metis_sim.domain.config import SimulationConfig
+from metis_sim.domain.notifications import MarkNotificationReadRequest
 from metis_sim.domain.public import ControlRequest
 from metis_sim.domain.shift_log import (
     AddShiftLogEntryRequest,
@@ -57,6 +58,7 @@ def install_openapi(app: FastAPI) -> None:
             ("/v1/viewer/cases/{case_id}/decision", DecisionCaseRequest),
             ("/v1/viewer/cases/{case_id}/outcome", OutcomeCaseRequest),
             ("/v1/viewer/cases/{case_id}/evidence", CaptureCaseEvidenceRequest),
+            ("/v1/viewer/notifications/read", MarkNotificationReadRequest),
         ]
         for path, model in bodies:
             schema = model.model_json_schema(ref_template="#/components/schemas/{model}")
@@ -87,14 +89,14 @@ def install_openapi(app: FastAPI) -> None:
             if path.startswith("/v1/") and path not in {"/v1/viewer/bootstrap", "/v1/viewer/login"}:
                 for operation in methods.values():
                     if isinstance(operation, dict):
-                        named_session_only = "/shift-logs" in path or "/cases" in path
+                        named_session_only = "/shift-logs" in path or "/cases" in path or "/notifications" in path
                         if (
                             path in {"/v1/viewer/session", "/v1/viewer/logout"}
                             or named_session_only
                         ):
                             operation["security"] = [{"viewerSession": []}]
                             if named_session_only:
-                                record_name = "Shift Log" if "/shift-logs" in path else "case"
+                                record_name = "Shift Log" if "/shift-logs" in path else "notification" if "/notifications" in path else "case"
                                 operation["description"] += (
                                     f"\nRequires a named operator session authorized for this {record_name}; "
                                     "shared bearer tokens and anonymous sessions are not accepted."

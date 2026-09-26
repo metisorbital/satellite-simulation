@@ -8,6 +8,7 @@ import '../api/viewer_client.dart';
 import '../scene/playback.dart';
 import 'case_details.dart';
 import 'case_shared.dart';
+import 'notification_controller.dart';
 
 /// Durable operator workspace with a bounded case list and on-demand details.
 class CaseWorkspace extends StatefulWidget {
@@ -20,6 +21,7 @@ class CaseWorkspace extends StatefulWidget {
     required this.onTelemetry,
     required this.onShiftLog,
     required this.onInvestigation,
+    required this.notifications,
   });
 
   final Mission mission;
@@ -29,6 +31,7 @@ class CaseWorkspace extends StatefulWidget {
   final void Function(String satelliteId) onTelemetry;
   final VoidCallback onShiftLog;
   final VoidCallback onInvestigation;
+  final NotificationController notifications;
 
   @override
   State<CaseWorkspace> createState() => CaseWorkspaceState();
@@ -77,12 +80,34 @@ class CaseWorkspaceState extends State<CaseWorkspace> {
     _summary.addListener(_trackCreateDraft);
     widget.mission.addListener(_missionChanged);
     unawaited(_load());
+    unawaited(widget.notifications.refresh());
   }
 
   @override
   void didUpdateWidget(covariant CaseWorkspace oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.mission == widget.mission) return;
+    if (oldWidget.mission == widget.mission) {
+      if (oldWidget.section == 'warnings' && widget.section != 'warnings') {
+        final record = _detail;
+        if (record != null) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted && widget.section != 'warnings') {
+              unawaited(
+                widget.notifications.markCaseRead(
+                  record.case_id,
+                  record.revision,
+                ),
+              );
+            }
+          });
+        } else if (_selectedCaseId != null) {
+          // Warnings intentionally avoids reading private detail. Load the
+          // selected record only once it is shown in Investigations.
+          unawaited(_loadDetail(_selectedCaseId!));
+        }
+      }
+      return;
+    }
     oldWidget.mission.removeListener(_missionChanged);
     widget.mission.addListener(_missionChanged);
     _identity = _identityValue;
@@ -219,7 +244,9 @@ class CaseWorkspaceState extends State<CaseWorkspace> {
         _selectedCaseId = selection;
         if (_detail?.case_id != selection) _detail = null;
       });
-      if (selection != null) unawaited(_loadDetail(selection!));
+      if (selection != null && widget.section != 'warnings') {
+        unawaited(_loadDetail(selection!));
+      }
     } catch (error) {
       if (_currentList(identity, request)) {
         setState(() => _error = 'Could not load operator cases: $error');
@@ -246,6 +273,9 @@ class CaseWorkspaceState extends State<CaseWorkspace> {
         _detail = record;
         _replaceSummary(record);
       });
+      if (widget.section != 'warnings') {
+        unawaited(widget.notifications.markCaseRead(caseId, record.revision));
+      }
     } catch (error) {
       if (_currentDetail(identity, request, caseId)) {
         setState(() => _detailError = 'Could not load this case: $error');
@@ -265,7 +295,7 @@ class CaseWorkspaceState extends State<CaseWorkspace> {
         _detail = null;
         _detailError = null;
       });
-      unawaited(_loadDetail(caseId));
+      if (widget.section != 'warnings') unawaited(_loadDetail(caseId));
     }
     if (widget.section == 'warnings') widget.onInvestigation();
   }
@@ -358,6 +388,7 @@ class CaseWorkspaceState extends State<CaseWorkspace> {
       if (mounted && identity == _identity) setState(() => _saving = false);
     }
     if (createdCase && mounted && identity == _identity) {
+      unawaited(widget.notifications.refresh());
       widget.onInvestigation();
     }
   }
@@ -389,6 +420,7 @@ class CaseWorkspaceState extends State<CaseWorkspace> {
         _replaceSummary(updated);
         _detailDirty = false;
       });
+      unawaited(widget.notifications.refresh());
       return true;
     } on ViewerRequestException catch (error) {
       if (mounted && identity == _identity) {
@@ -444,71 +476,17 @@ class CaseWorkspaceState extends State<CaseWorkspace> {
     return frames == null || frames.isEmpty ? null : frames.last;
   }
 
-  List<_WarningSignal> _warnings() {
-    final frame = _latestFrame(widget.selectedSatellite);
-    if (frame == null) return const [];
-    final signals = <_WarningSignal>[];
-    final channels = frame['channels'];
-    if (channels is Map) {
-      final qualityChannels = <String, List<String>>{};
-      for (final entry in channels.entries) {
-        final reading = entry.value;
-        if (reading is Map &&
-            const {
-              'missing',
-              'invalid',
-              'saturated',
-            }.contains(reading['quality'])) {
-          qualityChannels
-              .putIfAbsent(reading['quality'] as String, () => [])
-              .add(entry.key.toString());
-        }
-      }
-      for (final entry in qualityChannels.entries) {
-        final channelPreview = entry.value.take(4).join(', ');
-        final remaining = entry.value.length - 4;
-        final ids = remaining > 0
-            ? '$channelPreview and $remaining more'
-            : channelPreview;
-        final meaning = entry.key == 'missing'
-            ? 'A missing channel can mean this source does not supply it; confirm data availability before treating it as a spacecraft fault.'
-            : 'Review the data quality before interpreting these values.';
-        signals.add(
-          _WarningSignal(
-            title: '${entry.value.length} ${entry.key} telemetry readings',
-            summary: 'Channels: $ids. $meaning',
-            kind: 'data quality',
-          ),
-        );
-      }
-      final powerReading = channels['eps.unserved_power_w'];
-      final power = scalar(frame, 'eps.unserved_power_w');
-      if (powerReading is Map &&
-          powerReading['quality'] == 'valid' &&
-          power != null &&
-          power > 0) {
-        signals.add(
-          _WarningSignal(
-            title: 'Unserved EPS power',
-            summary:
-                'Committed eps.unserved_power_w is positive (${power.toStringAsFixed(2)} W).',
-            kind: 'committed EPS reading',
-          ),
-        );
-      }
-    }
-    if (frame['mode'] == 'safe') {
-      signals.add(
-        const _WarningSignal(
-          title: 'Spacecraft reports safe mode',
-          summary:
-              'The current committed telemetry envelope explicitly reports mode: safe.',
-          kind: 'committed mode',
+  List<_WarningSignal> _warnings() => widget.notifications
+      .warningsFor(widget.selectedSatellite)
+      .map(
+        (item) => _WarningSignal(
+          title: item.title,
+          summary: item.summary,
+          kind: 'committed signal',
+          notification: item,
         ),
-      );
-    }
-    return signals;
-  }
+      )
+      .toList();
 
   @override
   Widget build(BuildContext context) => AnimatedBuilder(
@@ -816,7 +794,23 @@ class CaseWorkspaceState extends State<CaseWorkspace> {
                 : 'There is no committed sample for this spacecraft yet. Risk models are not connected.',
           ),
         if (stale || frame == null) const SizedBox(height: 16),
-        if (signals.isEmpty && openCases.isEmpty && frame != null)
+        if (widget.notifications.error != null)
+          CaseStateMessage(
+            icon: Icons.error_outline,
+            title: 'Warning status unavailable',
+            message: widget.notifications.error!,
+            action: OutlinedButton(
+              onPressed: () => unawaited(widget.notifications.refresh()),
+              child: const Text('Retry'),
+            ),
+          ),
+        if (widget.notifications.error != null) const SizedBox(height: 16),
+        if (signals.isEmpty &&
+            openCases.isEmpty &&
+            frame != null &&
+            !widget.notifications.loading &&
+            widget.notifications.loaded &&
+            widget.notifications.error == null)
           const CaseStateMessage(
             icon: Icons.info_outline,
             title: 'No configured warning condition in this sample',
@@ -834,6 +828,18 @@ class CaseWorkspaceState extends State<CaseWorkspace> {
                     const SizedBox(width: 10),
                     CaseBadge(label: signal.kind, tone: CaseTone.gold),
                     const Spacer(),
+                    TextButton(
+                      onPressed: _saving
+                          ? null
+                          : () => unawaited(
+                              widget.notifications.markRead(
+                                signal.notification,
+                              ),
+                            ),
+                      child: Text(
+                        signal.notification.unread ? 'Mark viewed' : 'Viewed',
+                      ),
+                    ),
                     TextButton(
                       onPressed: _saving
                           ? null
@@ -1121,8 +1127,10 @@ class _WarningSignal {
     required this.title,
     required this.summary,
     required this.kind,
+    required this.notification,
   });
   final String title;
   final String summary;
   final String kind;
+  final OperatorNotification notification;
 }

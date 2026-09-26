@@ -56,6 +56,12 @@ the backend keeps simulating every configured spacecraft.
 
 The sidebar also opens Early warnings, Investigations, Mission planning, Case
 history, and the full-page Shift Log. Private records require a named operator.
+Submitted Shift Logs are shared with all named operators from the application's
+database; unsubmitted drafts remain private to their current-run owner.
+The unread badge calls `GET /v1/viewer/notifications` and acknowledges a visible
+version through `POST /v1/viewer/notifications/read`.
+Acknowledging an item only records that operator's view; it does not resolve a
+warning or alter a case.
 Warnings use committed measurement quality and present operating state;
 investigations preserve public evidence and operator-authored recommendations,
 decisions, and outcomes. Planning reads the configured operation windows and

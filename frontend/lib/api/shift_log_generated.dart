@@ -143,7 +143,7 @@ class ShiftLogEntryDetails {
   };
 }
 
-/// Return retained shifts belonging to the current run and operator.
+/// Return authorized drafts and retained submitted handovers.
 class ShiftLogList {
   const ShiftLogList({
     required this.items,

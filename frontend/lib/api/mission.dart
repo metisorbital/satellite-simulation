@@ -8,6 +8,7 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 import '../scene/playback.dart';
 import 'generated.dart';
 import 'cases_generated.dart' as cases_api;
+import 'notifications_generated.dart' as notifications_api;
 import 'shift_log_generated.dart';
 import 'viewer_client.dart';
 
@@ -629,6 +630,26 @@ class Mission extends ChangeNotifier {
     return cases_api.CaseRecord.fromJson(response);
   }
 
+  /// Read server-derived visible warnings and owned open-case notifications.
+  Future<notifications_api.NotificationList> notifications() async =>
+      notifications_api.NotificationList.fromJson(
+        await _caseRequest('/v1/viewer/notifications'),
+      );
+
+  /// Persist acknowledgement of one displayed notification version.
+  Future<notifications_api.NotificationList> markNotificationRead(
+    String key,
+    int version,
+  ) async => notifications_api.NotificationList.fromJson(
+    await _caseRequest(
+      '/v1/viewer/notifications/read',
+      body: notifications_api.MarkNotificationReadRequest(
+        key: key,
+        version: version,
+      ).toJson(),
+    ),
+  );
+
   /// Open an operator concern with evidence captured by the mission service.
   Future<cases_api.CaseRecord> createCase(JsonMap body) async {
     final runId = status?['run_id'] as String?;
@@ -682,12 +703,12 @@ class Mission extends ChangeNotifier {
     return response;
   }
 
-  /// Read only the authenticated operator's persisted shift records.
+  /// Read shared submitted handovers and this operator's current-run draft.
   Future<List<ShiftLog>> shiftLogs(String runId) async {
     if (!canUseShiftLog) throw StateError('Sign in to read your shift log.');
     final generation = _generation;
     final userId = _operatorUserId;
-    final response = await _request('/v1/runs/$runId/shift-logs');
+    final response = await _request('/v1/viewer/shift-logs');
     if (!_current(generation, runId) || _operatorUserId != userId) {
       throw StateError('The session or run changed while loading shift logs.');
     }

@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import insert, select, update
+from sqlalchemy import and_, insert, or_, select, update
 from sqlalchemy.engine import Connection
 
 from metis_sim.adapters import tables
@@ -216,6 +216,48 @@ class ShiftLogRepository:
                     tables.shift_logs.c.user_id == user_id,
                 )
                 .order_by(tables.shift_logs.c.created_at.desc(), tables.shift_logs.c.shift_id)
+            ).scalars()
+            return {"items": [self._read(connection, shift_id) for shift_id in ids]}
+
+    def list_shared_logs(self, run_id: str, user_id: str) -> dict[str, Any]:
+        """Read the active operator's draft and submitted handovers.
+
+        Drafts remain private to their owning operator and current run. Submitted
+        records are durable handovers, so every named operator may read all of
+        them in this application's database. The established ``ShiftLogList``
+        contract has no pagination metadata; this method intentionally returns
+        every matching record rather than silently omitting history across
+        producer source revisions.
+
+        Parameters
+        ----------
+        run_id, user_id : str
+            Current owned run and authenticated named operator identity.
+
+        Returns
+        -------
+        dict
+            The current operator's draft for ``run_id`` plus submitted handovers
+            from every operator and run in this application's database.
+        """
+        with self.database.engine.connect() as connection:
+            _validate_actor(connection, run_id, user_id)
+            ids = connection.execute(
+                select(tables.shift_logs.c.shift_id)
+                .where(
+                    or_(
+                        tables.shift_logs.c.status == "submitted",
+                        and_(
+                            tables.shift_logs.c.status == "draft",
+                            tables.shift_logs.c.run_id == run_id,
+                            tables.shift_logs.c.user_id == user_id,
+                        ),
+                    ),
+                )
+                .order_by(
+                    tables.shift_logs.c.updated_at.desc(),
+                    tables.shift_logs.c.shift_id,
+                )
             ).scalars()
             return {"items": [self._read(connection, shift_id) for shift_id in ids]}
 
