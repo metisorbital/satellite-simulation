@@ -69,17 +69,16 @@ uv run metis-sim demo --at 0
 ```
 
 Open `http://127.0.0.1:8000` in the same machine's browser.
-The first visit displays the operator login panel.
-Use `operator1`, `operator2`, or `operator3` and any nonempty demo password, then **Log in**.
-Passwords are not verified or stored.
+The first visit opens `operator1` automatically.
+Use the sidebar operator selector to switch to `operator2` or `operator3`.
+Switching operators ends the current run.
 The stable IDs and names are defined in `backend/src/metis_sim/data/mock_operators.json`.
-Each login creates an independent editable run with `user_id` saved in `private.runs`;
+Each operator has an independent editable run with `user_id` saved in `private.runs`;
 editing and resetting retain that ownership.
 Use **Start run** to begin the six-hour, three-satellite simulation.
 Interactive templates omit the private synthetic fault scenario.
 
 Reloading restores the current operator and run while the signed cookie is valid.
-**Log out** ends only that operator's active demo run, clears the session, and returns to login.
 Use the zero-tick startup above for operator demos: `--at` values above zero prepare
 a separate paused run for API evaluation, which occupies the service's one-active-run slot.
 The CLI binds only to `127.0.0.1`, `localhost`, or `::1` in demo mode because unauthenticated bootstrap can issue only a loopback browser session.

@@ -11,9 +11,11 @@ The [Python API reference](docs/python-api.md) renders NumPy-style source docstr
 
 The documentation site is published at [metisorbital.github.io/satellite-simulation](https://metisorbital.github.io/satellite-simulation/).
 
-## Run a Local Demo
+## Start the App Locally
 
 Use Python 3.12.12, uv 0.10.2, Node 22.23.0, Flutter 3.47.5, and Docker with Compose.
+Run these commands from the repository root on the branch you want to view.
+The backend serves that checkout's `frontend/build/web`, so rebuild the Flutter bundle after pulling or switching branches.
 
 ```bash
 uv sync --frozen
@@ -22,20 +24,25 @@ npm ci --prefix frontend
 docker compose up -d --wait db
 uv run metis-sim init
 uv run metis-sim migrate
+```
+
+Start the app in this terminal and leave it running:
+
+```bash
 uv run metis-sim demo --at 0
 ```
 
-docs
-```aiignore
-zensical serve --dev-addr localhost:12345
-```
-
-Open `http://127.0.0.1:8000` and log in as `operator1`, `operator2`, or `operator3` with any nonempty demo password.
-Each login creates a separate editable run; use **Start run** to begin.
+Open [http://127.0.0.1:8000](http://127.0.0.1:8000).
+The app opens `operator1` automatically on a first visit, or restores the current operator while its session is valid.
+Use the operator selector in the sidebar to switch between `operator1`, `operator2`, and `operator3`, and use **Start run** to begin the simulation.
+Each operator has a separate editable run.
+Switching operators ends the current run.
 The mock profiles and stable user IDs live in `backend/src/metis_sim/data/mock_operators.json`.
-Passwords are not checked or stored. This is a demo identity picker, not production authentication.
-The viewer shows the current operator; **Log out** ends that operator's active run and returns to the login panel.
 Run ownership is stored in `private.runs.user_id`, including replacement runs made by editing or resetting.
+
+If port 8000 already serves an older checkout, stop that process before starting this one.
+If the browser still shows an old login panel after restarting, refresh it to clear the cached frontend bundle.
+Check [readiness](http://127.0.0.1:8000/health/ready) if the page does not load.
 
 See [Getting Started](docs/getting-started.md) for prerequisites, Docker use, and the authentication boundary.
 
