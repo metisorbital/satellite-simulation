@@ -395,7 +395,7 @@ class _NavigationItem extends StatelessWidget {
               ? MainAxisAlignment.center
               : MainAxisAlignment.start,
           children: [
-            Icon(icon, size: 19, color: selected ? _mint : _muted),
+            Icon(icon, size: 19, color: selected ? _text : _muted),
             if (compact && badge > 0)
               Transform.translate(
                 offset: const Offset(-7, -9),
@@ -407,7 +407,7 @@ class _NavigationItem extends StatelessWidget {
                 child: Text(
                   label,
                   style: TextStyle(
-                    color: selected ? _mint : _muted,
+                    color: selected ? _text : _muted,
                     fontSize: 13,
                     fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
                   ),
