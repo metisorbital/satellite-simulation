@@ -128,9 +128,12 @@ window.metisGlobe = (() => {
           pointercancel: releasePointer,
           pointerleave: releasePointer,
           wheel() { scene.autoFrame = false; },
+          // Older touch browsers also need a cancellable move listener to keep
+          // page panning and pull-to-refresh from interrupting globe gestures.
+          touchmove(event) { if (event.cancelable) event.preventDefault(); },
         };
         for (const [type, handler] of Object.entries(scene.cameraInput)) {
-          viewer.canvas.addEventListener(type, handler, { passive: true });
+          viewer.canvas.addEventListener(type, handler, { passive: type !== 'touchmove' });
         }
         scene.resizeObserver = new ResizeObserver(() => frameEarth(scene));
         scene.resizeObserver.observe(element);

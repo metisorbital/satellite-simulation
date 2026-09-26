@@ -106,6 +106,7 @@ class _MissionPageState extends State<MissionPage> {
   final _shiftPageKey = GlobalKey<ShiftLogPageState>();
   bool _navigating = false;
   bool telemetryFocused = false;
+  bool mobileOverviewExpanded = false;
   final Set<String> hiddenSatellites = {};
   int lastDashboardSecond = -1;
   double? seconds;
@@ -985,11 +986,12 @@ class _MissionPageState extends State<MissionPage> {
         builder: (context, constraints) {
           final desktop = constraints.maxWidth >= 1150;
           final compact = constraints.maxWidth < 900;
+          final mobile = constraints.maxWidth < 700;
           final shortOverview = overviewVisible && constraints.maxHeight < 600;
           final body = Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              if (!focused)
+              if (!focused && !mobile)
                 SizedBox(
                   width: compact ? 64 : 220,
                   child: MissionSidebar(
@@ -1019,7 +1021,8 @@ class _MissionPageState extends State<MissionPage> {
               Expanded(
                 child: Column(
                   children: [
-                    if (!focused)
+                    if (mobile && !focused) mobileHeader(),
+                    if (!focused && !mobile)
                       MissionHeader(
                         viewTitle: view.title,
                         runState: status?['status'] as String? ?? 'Connecting',
@@ -1035,9 +1038,13 @@ class _MissionPageState extends State<MissionPage> {
                         observed: mission.isObserved,
                         compact: compact,
                       ),
-                    if (overviewVisible && !shortOverview)
+                    if (overviewVisible && mobile)
+                      toolbar(status, compact: true, mobile: true),
+                    if (overviewVisible && !mobile && !shortOverview)
                       toolbar(status, compact: constraints.maxHeight < 820),
-                    if (mission.error != null && !shortOverview)
+                    if (mission.error != null &&
+                        !shortOverview &&
+                        (!mobile || !overviewVisible))
                       connectionIssue(),
                     Expanded(
                       child: view.isCase
@@ -1084,6 +1091,14 @@ class _MissionPageState extends State<MissionPage> {
                                   satellite['satellite_id'] as String,
                               ],
                             )
+                          : mobile
+                          ? orbitStage(
+                              status,
+                              frame,
+                              satellites.length,
+                              false,
+                              mobile: true,
+                            )
                           : Row(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
@@ -1105,7 +1120,7 @@ class _MissionPageState extends State<MissionPage> {
                               ],
                             ),
                     ),
-                    if (overviewVisible && !shortOverview)
+                    if (overviewVisible && !mobile && !shortOverview)
                       footer(status, desktop),
                   ],
                 ),
@@ -1117,6 +1132,146 @@ class _MissionPageState extends State<MissionPage> {
       ),
     );
   }
+
+  void mobileSheet(String title, Widget Function() content) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      backgroundColor: panel,
+      builder: (context) => PointerInterceptor(
+        child: SafeArea(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.sizeOf(context).height * .75,
+            ),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(child: txt(title, size: 18)),
+                      IconButton(
+                        tooltip: 'Close',
+                        onPressed: () => Navigator.pop(context),
+                        icon: const Icon(Icons.close),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  ListenableBuilder(
+                    listenable: mission,
+                    builder: (context, _) => content(),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget mobileHeader() => SizedBox(
+    height: 48,
+    child: Row(
+      children: [
+        IconButton(
+          tooltip: 'Open navigation',
+          icon: const Icon(Icons.menu),
+          onPressed: () => mobileSheet(
+            'Mission control',
+            () => Column(
+              children: [
+                for (final destination in MissionView.values)
+                  ListTile(
+                    leading: Icon(destination.icon),
+                    title: Text(destination.title),
+                    selected: view == destination,
+                    enabled:
+                        destination != MissionView.shiftLog ||
+                        (mission.canUseShiftLog && mission.status != null),
+                    onTap: () {
+                      Navigator.pop(context);
+                      navigateTo(destination);
+                    },
+                  ),
+                ListTile(
+                  leading: const Icon(Icons.settings),
+                  title: const Text('Settings'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    showSettings();
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.info_outline),
+                  title: const Text('Mission information'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    showInfo();
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.person_outline),
+                  title: const Text('Switch operator'),
+                  enabled: !mission.busy,
+                  onTap: () {
+                    Navigator.pop(context);
+                    mobileSheet(
+                      'Switch operator',
+                      () => Column(
+                        children: [
+                          const Text('Switching operators ends this run.'),
+                          for (final login in const [
+                            'operator1',
+                            'operator2',
+                            'operator3',
+                          ])
+                            ListTile(
+                              title: Text(login),
+                              enabled:
+                                  login !=
+                                  (widget.bootstrap['operator']
+                                      as Map)['login'],
+                              onTap: () {
+                                Navigator.pop(context);
+                                switchOperator(login);
+                              },
+                            ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
+        Expanded(
+          child: Text(
+            overviewVisible ? 'Mission overview' : view.title,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        if (overviewVisible)
+          IconButton(
+            tooltip: mobileOverviewExpanded
+                ? 'Collapse mission overview'
+                : 'Expand mission overview',
+            onPressed: () => setState(
+              () => mobileOverviewExpanded = !mobileOverviewExpanded,
+            ),
+            icon: Icon(
+              mobileOverviewExpanded ? Icons.expand_less : Icons.expand_more,
+            ),
+          ),
+      ],
+    ),
+  );
 
   Widget connectionIssue() => Container(
     padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 6),
@@ -1191,35 +1346,44 @@ class _MissionPageState extends State<MissionPage> {
     },
   );
 
-  Widget spacecraftSelector({bool compact = false}) =>
-      DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          isDense: compact,
-          value: visibleSatellites.any((s) => s['satellite_id'] == selected)
-              ? selected
-              : null,
-          hint: txt('Awaiting spacecraft', size: 12),
-          dropdownColor: panel,
-          borderRadius: BorderRadius.circular(6),
-          items: [
-            for (final satellite in visibleSatellites)
-              DropdownMenuItem(
-                value: satellite['satellite_id'] as String,
-                child: PointerInterceptor(
-                  child: Text(
-                    satellite['satellite_id'] as String,
-                    style: const TextStyle(fontSize: 12, color: textColor),
-                  ),
-                ),
+  Widget spacecraftSelector({
+    bool compact = false,
+    bool closeOnSelect = false,
+  }) => DropdownButtonHideUnderline(
+    child: DropdownButton<String>(
+      isDense: compact,
+      value: visibleSatellites.any((s) => s['satellite_id'] == selected)
+          ? selected
+          : null,
+      hint: txt('Awaiting spacecraft', size: 12),
+      dropdownColor: panel,
+      borderRadius: BorderRadius.circular(6),
+      items: [
+        for (final satellite in visibleSatellites)
+          DropdownMenuItem(
+            value: satellite['satellite_id'] as String,
+            child: PointerInterceptor(
+              child: Text(
+                satellite['satellite_id'] as String,
+                style: const TextStyle(fontSize: 12, color: textColor),
               ),
-          ],
-          onChanged: (id) {
-            if (id != null) setState(() => selected = id);
-          },
-        ),
-      );
+            ),
+          ),
+      ],
+      onChanged: (id) {
+        if (id != null) {
+          setState(() => selected = id);
+          if (closeOnSelect) Navigator.pop(context);
+        }
+      },
+    ),
+  );
 
-  Widget toolbar(JsonMap? status, {required bool compact}) {
+  Widget toolbar(
+    JsonMap? status, {
+    required bool compact,
+    bool mobile = false,
+  }) {
     final active = status?['status'] == 'running';
     final starting =
         status?['status'] == 'created' || status?['committed_tick'] == -1;
@@ -1244,7 +1408,7 @@ class _MissionPageState extends State<MissionPage> {
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               SizedBox(
-                height: 34,
+                height: mobile ? 44 : 34,
                 child: FilledButton.icon(
                   onPressed: disabled || !mission.canPerform(primaryAction)
                       ? null
@@ -1275,7 +1439,8 @@ class _MissionPageState extends State<MissionPage> {
                   ),
                 ),
               ),
-              if (mission.canPerform('set_speed')) ...[
+              if ((!mobile || mobileOverviewExpanded) &&
+                  mission.canPerform('set_speed')) ...[
                 Container(
                   height: 34,
                   padding: const EdgeInsets.all(3),
@@ -1319,7 +1484,8 @@ class _MissionPageState extends State<MissionPage> {
                   ),
                 ),
               ],
-              if (mission.canPerform('set_speed')) ...[
+              if ((!mobile || mobileOverviewExpanded) &&
+                  mission.canPerform('set_speed')) ...[
                 TextButton(
                   onPressed: disabled ? null : showCustomSpeed,
                   child: Text(
@@ -1332,8 +1498,8 @@ class _MissionPageState extends State<MissionPage> {
               ],
               if (mission.canPerform('stop')) ...[
                 Container(
-                  width: 34,
-                  height: 34,
+                  width: mobile ? 44 : 34,
+                  height: mobile ? 44 : 34,
                   decoration: box(),
                   child: IconButton(
                     tooltip: 'Stop run',
@@ -1346,21 +1512,46 @@ class _MissionPageState extends State<MissionPage> {
                   ),
                 ),
               ],
-              IconButton(
-                tooltip: mission.isObserved
-                    ? 'Restart the recorded dataset from sample 0'
-                    : 'Reset simulation with a new run',
-                onPressed: mission.busy || !mission.canReplaceRun
-                    ? null
-                    : mission.reset,
-                icon: const Icon(Icons.restart_alt, size: 19),
-              ),
+              if (!mobile || mobileOverviewExpanded)
+                IconButton(
+                  tooltip: mission.isObserved
+                      ? 'Restart the recorded dataset from sample 0'
+                      : 'Reset simulation with a new run',
+                  onPressed: mission.busy || !mission.canReplaceRun
+                      ? null
+                      : mission.reset,
+                  icon: const Icon(Icons.restart_alt, size: 19),
+                ),
             ],
           )
         : status == null
         ? const SizedBox.shrink()
         : badge('VIEW ONLY', muted);
 
+    if (mobile) {
+      return ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.sizeOf(context).height * .4,
+        ),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              controls,
+              if (mobileOverviewExpanded) ...[
+                const SizedBox(height: 12),
+                spacecraftSelector(compact: true),
+                const SizedBox(height: 12),
+                DataSourceSelector(mission: mission, compact: true),
+                if (mission.isObserved) ObservedTimeline(mission: mission),
+                const SizedBox(height: 8),
+              ],
+            ],
+          ),
+        ),
+      );
+    }
     return Container(
       padding: EdgeInsets.symmetric(
         horizontal: compact ? 16 : 24,
@@ -1434,7 +1625,13 @@ class _MissionPageState extends State<MissionPage> {
     );
   }
 
-  Widget orbitStage(JsonMap? status, JsonMap? frame, int count, bool desktop) {
+  Widget orbitStage(
+    JsonMap? status,
+    JsonMap? frame,
+    int count,
+    bool desktop, {
+    bool mobile = false,
+  }) {
     final stale = mission.playback.isStale(mission.now) && status != null;
     final message = stale
         ? 'Data stale · view frozen'
@@ -1484,226 +1681,357 @@ class _MissionPageState extends State<MissionPage> {
                 ),
               ),
             ),
-            Positioned(
-              left: inset,
-              top: inset,
-              child: IgnorePointer(
-                child: Container(
-                  padding: roomy
-                      ? EdgeInsets.zero
-                      : const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 10,
-                        ),
-                  decoration: roomy
-                      ? null
-                      : BoxDecoration(
-                          color: panel.withValues(alpha: .88),
-                          border: Border.all(color: line.withValues(alpha: .8)),
-                          borderRadius: BorderRadius.circular(5),
-                        ),
-                  child: Row(
-                    children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          label('SPACECRAFT', size: 7),
-                          const SizedBox(height: 10),
-                          Row(
-                            children: [
-                              txt(
-                                count.toString().padLeft(2, '0'),
-                                size: 18,
-                                spacing: 2,
-                              ),
-                              const SizedBox(width: 8),
-                              txt('in constellation', size: 8, color: muted),
-                            ],
-                          ),
-                        ],
+            if (mobile)
+              Positioned(
+                top: 12,
+                left: 12,
+                child: PointerInterceptor(
+                  child: Material(
+                    color: panel.withValues(alpha: .92),
+                    borderRadius: BorderRadius.circular(24),
+                    child: TextButton(
+                      style: TextButton.styleFrom(
+                        minimumSize: const Size(44, 44),
                       ),
-                      if (constraints.maxWidth >= 410 && !mission.isObserved)
-                        const SizedBox(width: 30),
-                      if (constraints.maxWidth >= 410 && !mission.isObserved)
+                      onPressed: () => mobileSheet(
+                        'Spacecraft',
+                        () => Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('$count in constellation'),
+                            const SizedBox(height: 12),
+                            spacecraftSelector(
+                              compact: true,
+                              closeOnSelect: true,
+                            ),
+                            TextButton.icon(
+                              onPressed: () {
+                                Navigator.pop(context);
+                                navigate(true);
+                              },
+                              icon: const Icon(Icons.show_chart),
+                              label: const Text('Open telemetry'),
+                            ),
+                          ],
+                        ),
+                      ),
+                      child: Text(count.toString().padLeft(2, '0')),
+                    ),
+                  ),
+                ),
+              ),
+            if (mobile)
+              Positioned(
+                top: 12,
+                right: 12,
+                child: PointerInterceptor(
+                  child: Material(
+                    color: panel.withValues(alpha: .92),
+                    borderRadius: BorderRadius.circular(24),
+                    child: IconButton(
+                      tooltip: 'Run state and connection details',
+                      icon: Icon(Icons.circle, size: 12, color: mint),
+                      onPressed: () => mobileSheet(
+                        'Mission status',
+                        () => Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '${mission.status?['status'] ?? 'Connecting'} · committed state',
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              mission.playback.connected
+                                  ? 'Stream connected'
+                                  : 'Disconnected',
+                            ),
+                            Text(
+                              mission.playback.isStale(mission.now)
+                                  ? 'Data stale · view frozen'
+                                  : 'Committed playback',
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              mission.isObserved
+                                  ? 'Configured orbit · recorded telemetry. Modelled position, not measured location or lighting.'
+                                  : 'Predicted orbit · approximate visual lighting · WGS84 Earth',
+                            ),
+                            if (mission.error != null) connectionIssue(),
+                            Text(
+                              '${mission.status?['frame_count'] ?? 0} committed frames',
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            if (mobile)
+              Positioned(
+                right: 12,
+                bottom: 36,
+                child: PointerInterceptor(
+                  child: Material(
+                    color: panel.withValues(alpha: .92),
+                    borderRadius: BorderRadius.circular(24),
+                    child: IconButton(
+                      tooltip: 'Earth view controls',
+                      icon: const Icon(Icons.tune),
+                      onPressed: () => mobileSheet(
+                        'Earth view controls',
+                        () => Column(
+                          children: [
+                            for (final item in [
+                              ('in', Icons.add, 'Zoom in'),
+                              ('out', Icons.remove, 'Zoom out'),
+                              (
+                                'follow',
+                                Icons.gps_fixed,
+                                'Follow selected spacecraft',
+                              ),
+                              ('reset', Icons.fullscreen, 'Center Earth'),
+                            ])
+                              ListTile(
+                                leading: Icon(item.$2),
+                                title: Text(item.$3),
+                                onTap: () =>
+                                    globeCommand('metis-earth', item.$1),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            if (!mobile)
+              Positioned(
+                left: inset,
+                top: inset,
+                child: IgnorePointer(
+                  child: Container(
+                    padding: roomy
+                        ? EdgeInsets.zero
+                        : const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 10,
+                          ),
+                    decoration: roomy
+                        ? null
+                        : BoxDecoration(
+                            color: panel.withValues(alpha: .88),
+                            border: Border.all(
+                              color: line.withValues(alpha: .8),
+                            ),
+                            borderRadius: BorderRadius.circular(5),
+                          ),
+                    child: Row(
+                      children: [
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            label('SELECTED ALTITUDE', size: 7),
+                            label('SPACECRAFT', size: 7),
                             const SizedBox(height: 10),
-                            txt(
-                              '${reading(scalar(frame, 'orbit.altitude_m') == null ? null : scalar(frame, 'orbit.altitude_m')! / 1000)} km',
-                              size: 17,
-                              spacing: 1.5,
+                            Row(
+                              children: [
+                                txt(
+                                  count.toString().padLeft(2, '0'),
+                                  size: 18,
+                                  spacing: 2,
+                                ),
+                                const SizedBox(width: 8),
+                                txt('in constellation', size: 8, color: muted),
+                              ],
                             ),
                           ],
                         ),
-                    ],
+                        if (constraints.maxWidth >= 410 && !mission.isObserved)
+                          const SizedBox(width: 30),
+                        if (constraints.maxWidth >= 410 && !mission.isObserved)
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              label('SELECTED ALTITUDE', size: 7),
+                              const SizedBox(height: 10),
+                              txt(
+                                '${reading(scalar(frame, 'orbit.altitude_m') == null ? null : scalar(frame, 'orbit.altitude_m')! / 1000)} km',
+                                size: 17,
+                                spacing: 1.5,
+                              ),
+                            ],
+                          ),
+                      ],
+                    ),
                   ),
                 ),
               ),
-            ),
             if (desktop)
+              if (!mobile)
+                Positioned(
+                  right: inset,
+                  top: inset,
+                  child: IgnorePointer(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 7,
+                          ),
+                          decoration: box(color: const Color(0xe6111e29)),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.public, size: 12, color: muted),
+                              const SizedBox(width: 6),
+                              txt(
+                                'Earth fixed',
+                                size: 9,
+                                color: const Color(0xff9db2c1),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        label(
+                          mission.isObserved
+                              ? 'CONFIGURED ORBIT'
+                              : 'J2 ORBIT MODEL',
+                          size: 6,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+            if (!mobile)
               Positioned(
                 right: inset,
-                top: inset,
+                bottom: compactOverlay
+                    ? 82
+                    : desktop
+                    ? 99
+                    : 110,
+                child: PointerInterceptor(
+                  child: Container(
+                    width: compactOverlay ? null : 38,
+                    padding: EdgeInsets.symmetric(
+                      horizontal: compactOverlay ? 4 : 0,
+                      vertical: 4,
+                    ),
+                    decoration: box(
+                      color: const Color(0xed111e28),
+                      border: const Color(0xff304956),
+                    ),
+                    child: compactOverlay
+                        ? Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: cameraButtons,
+                          )
+                        : Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: cameraButtons,
+                          ),
+                  ),
+                ),
+              ),
+            if (!mobile)
+              Positioned(
+                left: inset,
+                right: inset,
+                bottom: compactOverlay ? 32 : 37,
                 child: IgnorePointer(
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 7,
-                        ),
-                        decoration: box(color: const Color(0xe6111e29)),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.public, size: 12, color: muted),
-                            const SizedBox(width: 6),
-                            txt(
-                              'Earth fixed',
-                              size: 9,
-                              color: const Color(0xff9db2c1),
-                            ),
-                          ],
-                        ),
+                      Wrap(
+                        spacing: 12,
+                        runSpacing: 4,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 16,
+                                height: 1,
+                                color: const Color(0xff8fbbc9),
+                              ),
+                              const SizedBox(width: 7),
+                              txt(
+                                mission.isObserved
+                                    ? 'Configured orbit · recorded telemetry'
+                                    : 'Predicted orbit',
+                                size: 8,
+                                color: const Color(0xffa1b6c4),
+                              ),
+                            ],
+                          ),
+                          txt('·  Symbols enlarged', size: 8, color: muted),
+                        ],
                       ),
-                      const SizedBox(height: 10),
-                      label(
+                      const SizedBox(height: 7),
+                      txt(
                         mission.isObserved
-                            ? 'CONFIGURED ORBIT'
-                            : 'J2 ORBIT MODEL',
-                        size: 6,
+                            ? 'Modelled position · not measured location or lighting'
+                            : 'Approximate visual lighting · WGS84 Earth',
+                        size: 7,
+                        color: muted,
                       ),
                     ],
                   ),
                 ),
               ),
-            Positioned(
-              right: inset,
-              bottom: compactOverlay
-                  ? 82
-                  : desktop
-                  ? 99
-                  : 110,
-              child: PointerInterceptor(
-                child: Container(
-                  width: compactOverlay ? null : 38,
-                  padding: EdgeInsets.symmetric(
-                    horizontal: compactOverlay ? 4 : 0,
-                    vertical: 4,
-                  ),
-                  decoration: box(
-                    color: const Color(0xed111e28),
-                    border: const Color(0xff304956),
-                  ),
-                  child: compactOverlay
-                      ? Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: cameraButtons,
-                        )
-                      : Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: cameraButtons,
-                        ),
-                ),
-              ),
-            ),
-            Positioned(
-              left: inset,
-              right: inset,
-              bottom: compactOverlay ? 32 : 37,
-              child: IgnorePointer(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Wrap(
-                      spacing: 12,
-                      runSpacing: 4,
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      children: [
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Container(
-                              width: 16,
-                              height: 1,
-                              color: const Color(0xff8fbbc9),
-                            ),
-                            const SizedBox(width: 7),
-                            txt(
-                              mission.isObserved
-                                  ? 'Configured orbit · recorded telemetry'
-                                  : 'Predicted orbit',
+            if (!mobile)
+              Positioned(
+                left: compactOverlay ? inset : null,
+                right: compactOverlay ? 164 : 22,
+                bottom: compactOverlay
+                    ? 82
+                    : desktop && roomy
+                    ? 37
+                    : 74,
+                child: IgnorePointer(
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    widthFactor: 1,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 9,
+                        vertical: 7,
+                      ),
+                      decoration: box(
+                        color: const Color(0xe60e1b23),
+                        border: const Color(0xff29454c),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          dot(stale ? gold : mint, 4),
+                          const SizedBox(width: 6),
+                          Flexible(
+                            child: txt(
+                              message,
                               size: 8,
-                              color: const Color(0xffa1b6c4),
+                              color: const Color(0xffa0c9c2),
+                            ),
+                          ),
+                          if (roomy && !compactOverlay) ...[
+                            const SizedBox(width: 10),
+                            txt('|', size: 8, color: muted),
+                            const SizedBox(width: 8),
+                            txt(
+                              '${reading(lag)} s behind',
+                              size: 7,
+                              color: muted,
                             ),
                           ],
-                        ),
-                        txt('·  Symbols enlarged', size: 8, color: muted),
-                      ],
-                    ),
-                    const SizedBox(height: 7),
-                    txt(
-                      mission.isObserved
-                          ? 'Modelled position · not measured location or lighting'
-                          : 'Approximate visual lighting · WGS84 Earth',
-                      size: 7,
-                      color: muted,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            Positioned(
-              left: compactOverlay ? inset : null,
-              right: compactOverlay ? 164 : 22,
-              bottom: compactOverlay
-                  ? 82
-                  : desktop && roomy
-                  ? 37
-                  : 74,
-              child: IgnorePointer(
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  widthFactor: 1,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 9,
-                      vertical: 7,
-                    ),
-                    decoration: box(
-                      color: const Color(0xe60e1b23),
-                      border: const Color(0xff29454c),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        dot(stale ? gold : mint, 4),
-                        const SizedBox(width: 6),
-                        Flexible(
-                          child: txt(
-                            message,
-                            size: 8,
-                            color: const Color(0xffa0c9c2),
-                          ),
-                        ),
-                        if (roomy && !compactOverlay) ...[
-                          const SizedBox(width: 10),
-                          txt('|', size: 8, color: muted),
-                          const SizedBox(width: 8),
-                          txt(
-                            '${reading(lag)} s behind',
-                            size: 7,
-                            color: muted,
-                          ),
                         ],
-                      ],
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
           ],
         );
       },
