@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../scene/playback.dart';
 
 const telemetrySurface = Color(0xff101923);
@@ -29,6 +30,7 @@ const telemetryTabs = <String>[
   'Payload',
   'ADCS',
   'Space weather',
+  'Recorded channels',
 ];
 
 const powerPanel = TelemetryPanel('Power balance', [
@@ -171,7 +173,46 @@ const telemetryPanels = <String, List<TelemetryPanel>>{
     TelemetryPanel('Integral solar proton flux', ['space_weather.proton_flux']),
     TelemetryPanel('Solar X-ray flux', ['space_weather.x_ray_flux']),
   ],
+  'Recorded channels': [],
 };
+
+/// Add source channels without duplicating canonical subsystem dashboards.
+List<TelemetryPanel> recordedPanels(Map<String, JsonMap> definitions) {
+  final existing = telemetryPanels.values
+      .expand((panels) => panels)
+      .expand((panel) => panel.channels)
+      .toSet();
+  final groups = <String, List<String>>{};
+  const systems = {
+    'eps': 'EPS',
+    'payload': 'Payload',
+    'comm': 'Communications',
+    'fc': 'Flight computer',
+  };
+  const quantities = {'V': 'voltage', 'A': 'current', 'degC': 'temperature'};
+  for (final entry in definitions.entries) {
+    final definition = entry.value;
+    if (existing.contains(entry.key) ||
+        definition['availability'] != 'observed' ||
+        definition['value_type'] != 'scalar') {
+      continue;
+    }
+    final system = entry.key.split('.').first;
+    final unit = definition['unit'] as String;
+    final group = '${systems[system] ?? system} · ${quantities[unit] ?? unit}';
+    groups.putIfAbsent(group, () => []).add(entry.key);
+  }
+  return [
+    for (final group in groups.entries)
+      for (var index = 0; index < group.value.length; index += 4)
+        TelemetryPanel(
+          group.value.length <= 4
+              ? group.key
+              : '${group.key} · ${index ~/ 4 + 1}',
+          group.value.skip(index).take(4).toList(),
+        ),
+  ];
+}
 
 const channelLabels = <String, String>{
   'eps.solar_power_w': 'Solar generation',

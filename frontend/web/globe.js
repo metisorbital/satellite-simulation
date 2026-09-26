@@ -81,16 +81,29 @@ window.metisGlobe = (() => {
         }
         entity.show = visible;
         const buffer = frames[satellite.satellite_id] ?? [];
-        globalThis.metisAddSamples(entity.position, buffer, status.epoch_utc, C);
+        if (status.source_kind !== 'observed') {
+          globalThis.metisAddSamples(entity.position, buffer, status.epoch_utc, C);
+        }
         entity.point.pixelSize = satellite.satellite_id === selected ? 11 : 7;
       }
       const pathKey = JSON.stringify([trajectory, selected, [...scene.hidden].sort()]);
-      if (trajectory?.run_id === status.run_id && pathKey !== scene.paths) {
+      const trajectoryAllowed = status.source_kind !== 'observed' || trajectory?.kind === 'configured_orbit';
+      if (trajectoryAllowed && trajectory?.run_id === status.run_id && pathKey !== scene.paths) {
         scene.paths = pathKey;
         for (const path of trajectory.satellites) {
           viewer.entities.removeById(`orbit-${path.satellite_id}`);
           const descriptor = status.satellites.find(s => s.satellite_id === path.satellite_id);
           if (!descriptor) continue;
+          if (status.source_kind === 'observed') {
+            const entity = viewer.entities.getById(path.satellite_id);
+            // Presentation only: interpolate backend orbit points on the replay clock.
+            entity.position = window.metisCreatePosition(C);
+            for (const sample of path.samples) {
+              entity.position.addSample(C.JulianDate.fromIso8601(sample.observed_at),
+                C.Cartesian3.fromArray(sample.position_itrs_m),
+                [C.Cartesian3.fromArray(sample.velocity_itrs_m_s)]);
+            }
+          }
           const orbit = viewer.entities.add({ id: `orbit-${path.satellite_id}`, polyline: {
             positions: path.samples.map(s => C.Cartesian3.fromArray(s.position_itrs_m)), arcType: C.ArcType.NONE,
             width: path.satellite_id === selected ? 2 : 1,

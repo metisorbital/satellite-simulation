@@ -15,6 +15,8 @@ The authoritative acceptance requirements remain the [specification](../specific
 
 ## Evidence by Boundary
 
+The September 26 recorded-source extension has its own [SatelliteCOTS replay validation](recorded-data.md), including source completeness, database imports, seek semantics and deployment limits.
+
 The optional September 26 `spacecraft.v1` extension has a separate [telemetry validation record](spacecraft-telemetry.md), including its numerical, database/export, and remaining browser gates. The results below describe the original orbit-to-power delivery.
 
 | Boundary | Executable evidence | Scope |

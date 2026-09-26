@@ -13,6 +13,7 @@ Deterministic synthetic orbit-to-power telemetry for a prepared run, with an Ear
 - [Database tables and relationships](reference/database.md) — generated schema diagram, columns, keys, and indexes.
 
 - [Getting started](getting-started.md) — prerequisites, local demo setup, and the authentication boundary.
+- [Replay recorded data](recorded-data.md) — import BUPT-1 measurements, select a source, and position playback on the Overview timeline.
 - [Physics-backed spacecraft telemetry](reference/spacecraft-telemetry.md) — one-second electrical, thermal, attitude and payload measurements, reports, and ML exports.
 - [Sample telemetry field reference](reference/sample-telemetry.md) — the supplied satellite data inventory and its relationship to simulated measurements.
 - [API consumer guide](api.md) — authenticate, discover a stream, and resume durable telemetry reads.

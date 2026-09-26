@@ -169,6 +169,7 @@ class MissionHeader extends StatelessWidget {
     required this.connectionLabel,
     required this.utc,
     required this.connected,
+    this.observed = false,
     this.compact = false,
   });
 
@@ -186,6 +187,9 @@ class MissionHeader extends StatelessWidget {
 
   /// Whether the stream status should use the connected treatment.
   final bool connected;
+
+  /// Whether the active producer replays observed spacecraft measurements.
+  final bool observed;
 
   /// Whether to hide the text breadcrumb for an icon-only shell.
   final bool compact;
@@ -249,7 +253,10 @@ class MissionHeader extends StatelessWidget {
               ),
             ),
           if (!compact) ...[
-            const _HeaderLabel(text: 'SYNTHETIC DATA', color: _gold),
+            _HeaderLabel(
+              text: observed ? 'OBSERVED REPLAY' : 'SYNTHETIC DATA',
+              color: observed ? _mint : _gold,
+            ),
             const SizedBox(width: 18),
             _HeaderStatus(
               icon: Icons.circle,

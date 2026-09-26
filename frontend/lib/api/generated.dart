@@ -45,6 +45,23 @@ class ControlRequest {
   };
 }
 
+/// Discover imported archives without exposing their future channel values.
+class DatasetList {
+  const DatasetList({
+    required this.items,
+  });
+
+  final List<PublicDataset> items;
+
+  factory DatasetList.fromJson(Map<String, dynamic> json) => DatasetList(
+    items: (json['items'] as List).map((item) => PublicDataset.fromJson(Map<String, dynamic>.from(item as Map))).toList(),
+  );
+
+  Map<String, dynamic> toJson() => {
+    'items': items.map((item) => item.toJson()).toList(),
+  };
+}
+
 /// Allowlisted observed public SOC limit transition details.
 class LowEnergyLimitDetails {
   const LowEnergyLimitDetails({
@@ -104,7 +121,7 @@ class MeasurementFrame {
   final double sample_window_s;
   final String emitted_at;
   final String catalog_version;
-  final String mode;
+  final String? mode;
   final String? interval_mode;
   final Map<String, ChannelReading> channels;
 
@@ -120,7 +137,7 @@ class MeasurementFrame {
     sample_window_s: (json['sample_window_s'] as num).toDouble(),
     emitted_at: json['emitted_at'] as String,
     catalog_version: json['catalog_version'] as String,
-    mode: json['mode'] as String,
+    mode: json['mode'] == null ? null : json['mode'] as String,
     interval_mode: json['interval_mode'] == null ? null : json['interval_mode'] as String,
     channels: (json['channels'] as Map<String, dynamic>).map((key, item) => MapEntry(key, ChannelReading.fromJson(Map<String, dynamic>.from(item as Map)))),
   );
@@ -137,7 +154,7 @@ class MeasurementFrame {
     'sample_window_s': sample_window_s,
     'emitted_at': emitted_at,
     'catalog_version': catalog_version,
-    'mode': mode,
+    'mode': mode == null ? null : mode!,
     'interval_mode': interval_mode == null ? null : interval_mode!,
     'channels': channels.map((key, item) => MapEntry(key, item.toJson())),
   };
@@ -225,7 +242,7 @@ class OperationalEvent {
   };
 }
 
-/// One authoritative Earth-fixed orbit state without predicted health.
+/// One Earth-fixed display state whose origin is declared by its trajectory.
 class OrbitPoint {
   const OrbitPoint({
     required this.elapsed_s,
@@ -276,6 +293,51 @@ class PowerUnservedDetails {
     'active': active,
     'value_w': value_w,
     'sample_window_s': sample_window_s,
+  };
+}
+
+/// An available archive's public metadata, excluding future measurements.
+class PublicDataset {
+  const PublicDataset({
+    required this.dataset_id,
+    required this.title,
+    required this.satellite_id,
+    required this.catalog_version,
+    required this.observed_start,
+    required this.observed_end,
+    required this.duration_s,
+    required this.sample_count,
+  });
+
+  final String dataset_id;
+  final String title;
+  final String satellite_id;
+  final String catalog_version;
+  final String observed_start;
+  final String observed_end;
+  final int duration_s;
+  final int sample_count;
+
+  factory PublicDataset.fromJson(Map<String, dynamic> json) => PublicDataset(
+    dataset_id: json['dataset_id'] as String,
+    title: json['title'] as String,
+    satellite_id: json['satellite_id'] as String,
+    catalog_version: json['catalog_version'] as String,
+    observed_start: json['observed_start'] as String,
+    observed_end: json['observed_end'] as String,
+    duration_s: json['duration_s'] as int,
+    sample_count: json['sample_count'] as int,
+  );
+
+  Map<String, dynamic> toJson() => {
+    'dataset_id': dataset_id,
+    'title': title,
+    'satellite_id': satellite_id,
+    'catalog_version': catalog_version,
+    'observed_start': observed_start,
+    'observed_end': observed_end,
+    'duration_s': duration_s,
+    'sample_count': sample_count,
   };
 }
 
@@ -345,6 +407,12 @@ class PublicModelProvenance {
     this.housekeeping_model_limits,
     this.attitude_model,
     this.attitude_model_limits,
+    this.dataset_repository,
+    this.dataset_revision,
+    this.dataset_sha256,
+    this.timestamp_interpretation,
+    this.sampling_limits,
+    this.data_mapping_version,
   });
 
   final String? frame;
@@ -381,6 +449,12 @@ class PublicModelProvenance {
   final String? housekeeping_model_limits;
   final String? attitude_model;
   final String? attitude_model_limits;
+  final String? dataset_repository;
+  final String? dataset_revision;
+  final String? dataset_sha256;
+  final String? timestamp_interpretation;
+  final String? sampling_limits;
+  final String? data_mapping_version;
 
   factory PublicModelProvenance.fromJson(Map<String, dynamic> json) => PublicModelProvenance(
     frame: json['frame'] == null ? null : json['frame'] as String,
@@ -417,6 +491,12 @@ class PublicModelProvenance {
     housekeeping_model_limits: json['housekeeping_model_limits'] == null ? null : json['housekeeping_model_limits'] as String,
     attitude_model: json['attitude_model'] == null ? null : json['attitude_model'] as String,
     attitude_model_limits: json['attitude_model_limits'] == null ? null : json['attitude_model_limits'] as String,
+    dataset_repository: json['dataset_repository'] == null ? null : json['dataset_repository'] as String,
+    dataset_revision: json['dataset_revision'] == null ? null : json['dataset_revision'] as String,
+    dataset_sha256: json['dataset_sha256'] == null ? null : json['dataset_sha256'] as String,
+    timestamp_interpretation: json['timestamp_interpretation'] == null ? null : json['timestamp_interpretation'] as String,
+    sampling_limits: json['sampling_limits'] == null ? null : json['sampling_limits'] as String,
+    data_mapping_version: json['data_mapping_version'] == null ? null : json['data_mapping_version'] as String,
   );
 
   Map<String, dynamic> toJson() => {
@@ -454,6 +534,12 @@ class PublicModelProvenance {
     if (housekeeping_model_limits != null) 'housekeeping_model_limits': housekeeping_model_limits!,
     if (attitude_model != null) 'attitude_model': attitude_model!,
     if (attitude_model_limits != null) 'attitude_model_limits': attitude_model_limits!,
+    if (dataset_repository != null) 'dataset_repository': dataset_repository!,
+    if (dataset_revision != null) 'dataset_revision': dataset_revision!,
+    if (dataset_sha256 != null) 'dataset_sha256': dataset_sha256!,
+    if (timestamp_interpretation != null) 'timestamp_interpretation': timestamp_interpretation!,
+    if (sampling_limits != null) 'sampling_limits': sampling_limits!,
+    if (data_mapping_version != null) 'data_mapping_version': data_mapping_version!,
   };
 }
 
@@ -465,6 +551,7 @@ class PublicRunStatus {
     required this.epoch_utc,
     required this.duration_s,
     required this.committed_tick,
+    required this.committed_sequence,
     required this.status_revision,
     required this.committed_at,
     required this.requested_speed,
@@ -472,6 +559,12 @@ class PublicRunStatus {
     required this.wall_lag_s,
     required this.satellites,
     required this.source_kind,
+    required this.data_source,
+    required this.dataset_id,
+    required this.dataset_title,
+    required this.time_domain,
+    required this.nominal_cadence_s,
+    required this.playback_start_s,
     required this.model_provenance,
     required this.frame_count,
     required this.diagnostic,
@@ -482,6 +575,7 @@ class PublicRunStatus {
   final String epoch_utc;
   final int duration_s;
   final int committed_tick;
+  final int? committed_sequence;
   final int status_revision;
   final String? committed_at;
   final int requested_speed;
@@ -489,6 +583,12 @@ class PublicRunStatus {
   final double wall_lag_s;
   final List<PublicSpacecraft> satellites;
   final String source_kind;
+  final String data_source;
+  final String? dataset_id;
+  final String? dataset_title;
+  final String time_domain;
+  final double? nominal_cadence_s;
+  final int playback_start_s;
   final PublicModelProvenance model_provenance;
   final int frame_count;
   final String? diagnostic;
@@ -498,16 +598,23 @@ class PublicRunStatus {
     status: json['status'] as String,
     epoch_utc: json['epoch_utc'] as String,
     duration_s: json['duration_s'] as int,
-    committed_tick: json['committed_tick'] as int,
-    status_revision: json['status_revision'] as int,
+    committed_tick: (json['committed_tick'] ?? -1) as int,
+    committed_sequence: json['committed_sequence'] == null ? null : json['committed_sequence'] as int,
+    status_revision: (json['status_revision'] ?? 0) as int,
     committed_at: json['committed_at'] == null ? null : json['committed_at'] as String,
     requested_speed: json['requested_speed'] as int,
-    effective_speed: (json['effective_speed'] as num).toDouble(),
-    wall_lag_s: (json['wall_lag_s'] as num).toDouble(),
+    effective_speed: ((json['effective_speed'] ?? 0) as num).toDouble(),
+    wall_lag_s: ((json['wall_lag_s'] ?? 0) as num).toDouble(),
     satellites: (json['satellites'] as List).map((item) => PublicSpacecraft.fromJson(Map<String, dynamic>.from(item as Map))).toList(),
-    source_kind: json['source_kind'] as String,
+    source_kind: (json['source_kind'] ?? "synthetic") as String,
+    data_source: (json['data_source'] ?? "physics") as String,
+    dataset_id: json['dataset_id'] == null ? null : json['dataset_id'] as String,
+    dataset_title: json['dataset_title'] == null ? null : json['dataset_title'] as String,
+    time_domain: (json['time_domain'] ?? "simulation_utc") as String,
+    nominal_cadence_s: json['nominal_cadence_s'] == null ? null : (json['nominal_cadence_s'] as num).toDouble(),
+    playback_start_s: (json['playback_start_s'] ?? 0) as int,
     model_provenance: PublicModelProvenance.fromJson(Map<String, dynamic>.from(json['model_provenance'] as Map)),
-    frame_count: json['frame_count'] as int,
+    frame_count: (json['frame_count'] ?? 0) as int,
     diagnostic: json['diagnostic'] == null ? null : json['diagnostic'] as String,
   );
 
@@ -517,6 +624,7 @@ class PublicRunStatus {
     'epoch_utc': epoch_utc,
     'duration_s': duration_s,
     'committed_tick': committed_tick,
+    'committed_sequence': committed_sequence == null ? null : committed_sequence!,
     'status_revision': status_revision,
     'committed_at': committed_at == null ? null : committed_at!,
     'requested_speed': requested_speed,
@@ -524,6 +632,12 @@ class PublicRunStatus {
     'wall_lag_s': wall_lag_s,
     'satellites': satellites.map((item) => item.toJson()).toList(),
     'source_kind': source_kind,
+    'data_source': data_source,
+    'dataset_id': dataset_id == null ? null : dataset_id!,
+    'dataset_title': dataset_title == null ? null : dataset_title!,
+    'time_domain': time_domain,
+    'nominal_cadence_s': nominal_cadence_s == null ? null : nominal_cadence_s!,
+    'playback_start_s': playback_start_s,
     'model_provenance': model_provenance.toJson(),
     'frame_count': frame_count,
     'diagnostic': diagnostic == null ? null : diagnostic!,
@@ -546,8 +660,8 @@ class PublicSpacecraft {
   final String name;
   final String color;
   final String stream_id;
-  final double capacity_wh;
-  final double panel_area_m2;
+  final double? capacity_wh;
+  final double? panel_area_m2;
   final List<PublicLimit> public_limits;
 
   factory PublicSpacecraft.fromJson(Map<String, dynamic> json) => PublicSpacecraft(
@@ -555,8 +669,8 @@ class PublicSpacecraft {
     name: json['name'] as String,
     color: json['color'] as String,
     stream_id: json['stream_id'] as String,
-    capacity_wh: (json['capacity_wh'] as num).toDouble(),
-    panel_area_m2: (json['panel_area_m2'] as num).toDouble(),
+    capacity_wh: json['capacity_wh'] == null ? null : (json['capacity_wh'] as num).toDouble(),
+    panel_area_m2: json['panel_area_m2'] == null ? null : (json['panel_area_m2'] as num).toDouble(),
     public_limits: (json['public_limits'] as List).map((item) => PublicLimit.fromJson(Map<String, dynamic>.from(item as Map))).toList(),
   );
 
@@ -565,8 +679,8 @@ class PublicSpacecraft {
     'name': name,
     'color': color,
     'stream_id': stream_id,
-    'capacity_wh': capacity_wh,
-    'panel_area_m2': panel_area_m2,
+    'capacity_wh': capacity_wh == null ? null : capacity_wh!,
+    'panel_area_m2': panel_area_m2 == null ? null : panel_area_m2!,
     'public_limits': public_limits.map((item) => item.toJson()).toList(),
   };
 }
@@ -645,18 +759,21 @@ class Trajectory {
     required this.kind,
     required this.frame,
     required this.satellites,
+    required this.description,
   });
 
   final String run_id;
   final String kind;
   final String frame;
   final List<SatelliteTrajectory> satellites;
+  final String? description;
 
   factory Trajectory.fromJson(Map<String, dynamic> json) => Trajectory(
     run_id: json['run_id'] as String,
-    kind: json['kind'] as String,
-    frame: json['frame'] as String,
+    kind: (json['kind'] ?? "predicted_orbit") as String,
+    frame: (json['frame'] ?? "ITRS") as String,
     satellites: (json['satellites'] as List).map((item) => SatelliteTrajectory.fromJson(Map<String, dynamic>.from(item as Map))).toList(),
+    description: json['description'] == null ? null : json['description'] as String,
   );
 
   Map<String, dynamic> toJson() => {
@@ -664,6 +781,7 @@ class Trajectory {
     'kind': kind,
     'frame': frame,
     'satellites': satellites.map((item) => item.toJson()).toList(),
+    'description': description == null ? null : description!,
   };
 }
 
@@ -721,6 +839,48 @@ class ViewerOperator {
   };
 }
 
+/// Select an archive time for a new independent replay stream.
+class ViewerSeekRequest {
+  const ViewerSeekRequest({
+    required this.elapsed_s,
+  });
+
+  final int elapsed_s;
+
+  factory ViewerSeekRequest.fromJson(Map<String, dynamic> json) => ViewerSeekRequest(
+    elapsed_s: json['elapsed_s'] as int,
+  );
+
+  Map<String, dynamic> toJson() => {
+    'elapsed_s': elapsed_s,
+  };
+}
+
+/// Choose the source for a fresh viewer run and independent stream.
+class ViewerSourceRequest {
+  const ViewerSourceRequest({
+    required this.data_source,
+    this.dataset_id,
+    this.start_elapsed_s,
+  });
+
+  final String data_source;
+  final String? dataset_id;
+  final int? start_elapsed_s;
+
+  factory ViewerSourceRequest.fromJson(Map<String, dynamic> json) => ViewerSourceRequest(
+    data_source: json['data_source'] as String,
+    dataset_id: json['dataset_id'] == null ? null : json['dataset_id'] as String,
+    start_elapsed_s: (json['start_elapsed_s'] ?? 0) == null ? null : (json['start_elapsed_s'] ?? 0) as int,
+  );
+
+  Map<String, dynamic> toJson() => {
+    'data_source': data_source,
+    if (dataset_id != null) 'dataset_id': dataset_id == null ? null : dataset_id!,
+    if (start_elapsed_s != null) 'start_elapsed_s': start_elapsed_s!,
+  };
+}
+
 /// Bounded public presentation transport; never a durable consumer offset.
 class VisualMessage {
   const VisualMessage({
@@ -744,7 +904,7 @@ class VisualMessage {
   final String? message;
 
   factory VisualMessage.fromJson(Map<String, dynamic> json) => VisualMessage(
-    visual_schema_version: json['visual_schema_version'] as String,
+    visual_schema_version: (json['visual_schema_version'] ?? "visual.v1") as String,
     type: json['type'] as String,
     sent_at: json['sent_at'] as String,
     run_id: json['run_id'] as String,

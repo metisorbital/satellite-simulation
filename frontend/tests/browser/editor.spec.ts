@@ -22,6 +22,7 @@ test('constellation add and remove create a fresh run', async ({ page }) => {
   await page.route('**/v1/viewer/session', route => route.fulfill({
     json: { operator: demoOperator, csrf_token: 'test-csrf', allowed_actions: ['start', 'pause', 'resume', 'set_speed', 'stop'], run: current },
   }));
+  await page.route('**/v1/datasets', route => route.fulfill({ json: { items: [] } }));
   await page.route('**/v1/viewer/configuration', route => {
     if (route.request().method() === 'GET') return route.fulfill({ json: { satellites } });
     submitted = route.request().postDataJSON();
@@ -33,6 +34,7 @@ test('constellation add and remove create a fresh run', async ({ page }) => {
   }));
   await page.routeWebSocket('**/v1/runs/*/visual', () => {});
   await page.goto('/');
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await page.getByRole('button', { name: 'Edit constellation' }).click();
   await expect(page.getByRole('alertdialog')).toBeVisible();
   await page.getByRole('button', { name: 'Add satellite' }).click();
@@ -43,6 +45,8 @@ test('constellation add and remove create a fresh run', async ({ page }) => {
   await expect.poll(() => submitted?.satellites.length).toBe(4);
   expect(submitted?.satellites[3].name).toBe('Metis 1');
   expect(submitted?.satellites[3].power.panel_area_m2).toBe(0.9);
-  expect(submitted?.satellites.every((item: Record<string, any>) => item.operations.length === 0)).toBe(true);
+  expect(submitted?.satellites.slice(0, 3).map((item: Record<string, any>) => item.operations))
+    .toEqual(satellites.map(item => item.operations));
+  expect(submitted?.satellites[3].operations).toEqual([]);
   await expect(page.getByRole('button', { name: 'Start run' })).toBeEnabled();
 });

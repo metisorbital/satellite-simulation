@@ -6,6 +6,7 @@ from sqlalchemy import select
 
 from metis_sim.adapters import tables
 from metis_sim.adapters.database import Database
+from metis_sim.adapters.reads import sequence_watermark
 from metis_sim.application.errors import ServiceError
 from metis_sim.application.reporting import ChannelAccumulator
 from metis_sim.domain.catalog import CATALOGS
@@ -49,7 +50,7 @@ def telemetry_report(
             ).scalar_one_or_none()
             if status is None:
                 raise ServiceError("run_not_found", "Run does not exist.", 404)
-            watermark = status["committed_tick"]
+            watermark = sequence_watermark(status)
             stop = watermark if end is None else end
             if (
                 start < 0
@@ -111,12 +112,28 @@ def telemetry_report(
                         channels=[accumulator.result() for accumulator in accumulators.values()],
                     )
                 )
+            observed = status.get("source_kind") == "observed"
+            metadata = {}
+            if observed:
+                metadata = {
+                    "source_kind": "observed",
+                    "time_domain": "mission_utc",
+                    "nominal_cadence_s": status.get("nominal_cadence_s"),
+                    "limitations": [
+                        "Replayed flight observations retain their source timestamps and gaps.",
+                        "Channel calibration and sign conventions follow the source archive documentation.",
+                        "Missing channels are not zeros; no synthetic orbit or battery SOC is supplied.",
+                        "Coverage describes available records, not uninterrupted one-second sampling.",
+                        "Recorded endpoint values are not integrated across gaps.",
+                    ],
+                }
             return TelemetryReport(
                 run_id=run_id,
                 run_status=status["status"],
-                committed_tick=watermark,
+                committed_tick=status["committed_tick"],
                 from_sequence=start,
                 through_sequence=stop,
                 model_provenance=status["model_provenance"],
                 streams=results,
+                **metadata,
             )

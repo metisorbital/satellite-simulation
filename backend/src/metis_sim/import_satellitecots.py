@@ -21,6 +21,7 @@ from typing import Any
 
 from sqlalchemy import select, text
 from sqlalchemy.engine import Connection
+from sqlalchemy.exc import SQLAlchemyError
 
 from metis_sim.adapters.database import Database
 from metis_sim.adapters.observed import decode_chunk_bytes
@@ -241,14 +242,23 @@ def main() -> None:
     url = os.getenv(args.database_url_env)
     if not url:
         parser.error(f"Environment variable {args.database_url_env} must select a database")
-    database = Database(url, "satellitecots-corpus-import")
+    database = None
     try:
+        database = Database(url, "satellitecots-corpus-import")
         result = import_satellitecots(
             database, args.prepare_dir, manifest, verify_only=args.verify_only
         )
         print(json.dumps(result, indent=2))
+    except (SQLAlchemyError, ValueError) as error:
+        # Driver exceptions can contain connection details or SQL parameters.
+        parser.exit(
+            1,
+            f"Database import failed ({type(error).__name__}). "
+            "Check the selected database, migrations and source identity.\n",
+        )
     finally:
-        database.engine.dispose()
+        if database is not None:
+            database.engine.dispose()
 
 
 if __name__ == "__main__":

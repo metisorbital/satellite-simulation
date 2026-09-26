@@ -9,6 +9,7 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from starlette.concurrency import run_in_threadpool
 
+from metis_sim.adapters.reads import sequence_watermark
 from metis_sim.application.errors import ServiceError
 from metis_sim.domain.public import VisualMessage
 
@@ -51,9 +52,10 @@ async def visual_socket(websocket: WebSocket, run_id: str) -> None:
                 status = current["status"]
                 changed_speed = last_speed is not None and last_speed != status["requested_speed"]
                 history_count = 2 * status["requested_speed"] + 1
-                earliest = status["committed_tick"] - history_count + 1
+                watermark = sequence_watermark(status)
+                earliest = watermark - history_count + 1
                 history = [frame for frame in current["frames"] if frame["sequence"] >= earliest]
-                gap = last_tick >= 0 and status["committed_tick"] - last_tick > history_count
+                gap = last_tick >= 0 and watermark - last_tick > history_count
                 if not first and (gap or changed_speed):
                     resync_count += 1
                     logger.info(
@@ -106,7 +108,7 @@ async def visual_socket(websocket: WebSocket, run_id: str) -> None:
                 await asyncio.wait_for(websocket.send_text(message.model_dump_json()), timeout=2)
                 first = False
                 last_tick, last_state, last_speed = (
-                    status["committed_tick"],
+                    watermark,
                     status["status"],
                     status["requested_speed"],
                 )

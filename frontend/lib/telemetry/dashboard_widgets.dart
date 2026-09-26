@@ -232,13 +232,17 @@ class TelemetryChannelInventory extends StatelessWidget {
     required this.definitions,
     required this.frame,
     required this.query,
+    this.observed = false,
   });
   final Map<String, JsonMap> definitions;
   final JsonMap? frame;
   final String query;
+  final bool observed;
 
   String value(String id, JsonMap definition) {
-    if (definition['availability'] == 'unavailable') return 'Not modeled';
+    if (definition['availability'] == 'unavailable') {
+      return observed ? 'Not recorded' : 'Not modeled';
+    }
     if (frame == null) return 'Waiting';
     final reading = (frame!['channels'] as Map)[id];
     if (reading is! Map) return 'Unsupported';

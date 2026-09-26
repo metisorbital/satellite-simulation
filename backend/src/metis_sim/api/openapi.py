@@ -4,7 +4,13 @@ from fastapi import FastAPI
 from fastapi.openapi.utils import get_openapi
 from pydantic import BaseModel
 
-from metis_sim.api.requests import CreateRunRequest, ViewerLoginRequest
+from metis_sim.api.requests import (
+    CreateRunRequest,
+    ViewerConfigurationRequest,
+    ViewerLoginRequest,
+    ViewerSeekRequest,
+    ViewerSourceRequest,
+)
 from metis_sim.domain.config import SimulationConfig
 from metis_sim.domain.public import ControlRequest
 from metis_sim.domain.shift_log import (
@@ -30,6 +36,9 @@ def install_openapi(app: FastAPI) -> None:
             ("/v1/configurations", SimulationConfig),
             ("/v1/runs", CreateRunRequest),
             ("/v1/viewer/login", ViewerLoginRequest),
+            ("/v1/viewer/configuration", ViewerConfigurationRequest),
+            ("/v1/viewer/source", ViewerSourceRequest),
+            ("/v1/viewer/seek", ViewerSeekRequest),
             ("/v1/runs/{run_id}/control", ControlRequest),
             ("/v1/runs/{run_id}/shift-logs/entries", AddShiftLogEntryRequest),
             ("/v1/runs/{run_id}/shift-logs/{shift_id}/summary", UpdateShiftLogSummaryRequest),

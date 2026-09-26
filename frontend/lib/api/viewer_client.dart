@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:http/http.dart' as http;
 
 import '../scene/playback.dart';
+import 'generated.dart';
 
 /// A failed viewer request with its HTTP status preserved for session expiry.
 class ViewerRequestException implements Exception {
@@ -74,6 +75,14 @@ class ViewerClient {
     }
     return Map<String, dynamic>.from(decoded);
   }
+
+  /// Prepare recorded playback at the next available source sample.
+  Future<JsonMap> seek(int elapsedSeconds, {required String csrfToken}) =>
+      request(
+        '/v1/viewer/seek',
+        body: ViewerSeekRequest(elapsed_s: elapsedSeconds).toJson(),
+        csrfToken: csrfToken,
+      );
 
   void close() => _client.close();
 }

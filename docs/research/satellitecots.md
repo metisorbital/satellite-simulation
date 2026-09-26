@@ -3,7 +3,7 @@ title: SatelliteCOTS Recorded Telemetry
 description: Source assessment and integration boundaries for replaying BUPT-1 measurements.
 content-type: reference
 audience: engineering
-status: implementation in progress
+status: implemented with measured source and replay validation
 ---
 
 # SatelliteCOTS Recorded Telemetry
@@ -75,6 +75,24 @@ benchmarks must not be presented as in-orbit telemetry.
 Per-channel cadence and data gaps must be measured from the source and described
 alongside the imported catalog rather than assuming a uniform one-second grid.
 
+## Configure the Globe Orbit
+
+The operator's [BUPT-1 specification](https://github.com/TiansuanConstellation/TiansuanExperimentPlatform/blob/e58b3f3a7652f4a58f92e3818fac16ae1769f7e8/Specifications.md)
+reports a sun-synchronous orbit with altitude 487.607–494.651 km and inclination
+97.3710°. The default configuration uses these values: semi-major axis
+6,869,266 m relative to the existing 6,378,137 m reference radius, and eccentricity
+derived from the reported altitude range.
+
+The specification does not supply a dated orbital state, RAAN, argument of
+periapsis or phase at the recording epoch. Those angles default to zero as
+editable model settings, and the recorded start time is the configuration epoch.
+This is a model of the published orbit geometry, not a reconstruction of the
+spacecraft's historical ground track. An explicitly labelled, bounded two-body
+projection supplies globe coordinates; it never supplies observed telemetry or
+changes electrical measurements. The physics source retains its existing J2
+model. No orbital catalog identifier is inferred from the specification's
+ambiguous “ORCID” field.
+
 ## Keep Storage and Playback Separate
 
 Import the source into immutable dataset/chunk tables with its upstream commit,
@@ -111,9 +129,14 @@ Reuse existing dashboard panels where their channel meanings match the source.
 Add panels for measured fields that the existing dashboards do not cover.
 Keep every existing dashboard available and label unsupported measurements as
 unavailable.
-The globe must not display a synthetic orbit as if it were measured.
+The existing Earth Overview and moving spacecraft are retained. Their configured
+orbit is explicitly separate from measured telemetry and follows the same source
+clock, including speed changes and seek. The full-dataset slider appears beneath
+the Earth without replacing existing history controls.
 
 ## Verify the Integration
+
+The executed results are recorded in [replay validation](../validation/recorded-data.md).
 
 Acceptance requires a reproducible source inventory, an idempotent import with
 database readback, timestamp-faithful playback, reset to sample zero, source

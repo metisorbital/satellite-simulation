@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import 'scene/playback.dart';
 
 const _surface = Color(0xff0d151f);
@@ -13,11 +14,13 @@ class OverviewInspector extends StatelessWidget {
     required this.descriptor,
     required this.frame,
     required this.onTelemetry,
+    this.observed = false,
   });
 
   final JsonMap? descriptor;
   final JsonMap? frame;
   final VoidCallback onTelemetry;
+  final bool observed;
 
   String _value(String channel, String unit, {double scale = 1}) {
     final value = scalar(frame, channel);
@@ -45,10 +48,13 @@ class OverviewInspector extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final soc = scalar(frame, 'eps.battery_soc');
+    final busVoltage = scalar(frame, 'eps.bus_voltage_v');
     final battery = scalar(frame, 'eps.battery_power_w');
     final light = scalar(frame, 'environment.illumination_fraction');
     final illumination = light == null
-        ? 'Awaiting sample'
+        ? observed
+              ? 'Unavailable'
+              : 'Awaiting sample'
         : light <= .001
         ? 'In eclipse'
         : light >= .999
@@ -83,7 +89,10 @@ class OverviewInspector extends StatelessWidget {
               const SizedBox(width: 9),
               Expanded(
                 child: Text(
-                  (frame?['mode'] as String? ?? 'Awaiting measurements')
+                  (frame?['mode'] as String? ??
+                          (observed
+                              ? 'Operating mode unavailable'
+                              : 'Awaiting measurements'))
                       .replaceAll('_', ' '),
                   style: const TextStyle(color: _mint, fontSize: 12),
                 ),
@@ -91,17 +100,23 @@ class OverviewInspector extends StatelessWidget {
             ],
           ),
           const Divider(height: 43, color: _border),
-          const Text(
-            'Battery state of charge',
-            style: TextStyle(color: _muted, fontSize: 12),
+          Text(
+            observed ? 'Spacecraft bus voltage' : 'Battery state of charge',
+            style: const TextStyle(color: _muted, fontSize: 12),
           ),
           const SizedBox(height: 16),
           Text(
-            soc == null ? '—' : '${(soc * 100).toStringAsFixed(1)}%',
+            observed
+                ? busVoltage == null
+                      ? '—'
+                      : '${busVoltage.toStringAsFixed(2)} V'
+                : soc == null
+                ? '—'
+                : '${(soc * 100).toStringAsFixed(1)}%',
             style: const TextStyle(fontSize: 36, color: _mint),
           ),
           const SizedBox(height: 15),
-          if (soc != null)
+          if (!observed && soc != null)
             LinearProgressIndicator(
               value: soc.clamp(0, 1),
               minHeight: 4,
@@ -110,7 +125,9 @@ class OverviewInspector extends StatelessWidget {
             ),
           const SizedBox(height: 12),
           Text(
-            battery == null
+            observed
+                ? 'Recorded source measurement'
+                : battery == null
                 ? 'No valid power measurement'
                 : battery < -.01
                 ? 'Charging'
@@ -121,9 +138,23 @@ class OverviewInspector extends StatelessWidget {
           ),
           const SizedBox(height: 22),
           _measurement('Solar generation', _value('eps.solar_power_w', 'W')),
-          _measurement('Requested load', _value('eps.load_requested_w', 'W')),
+          if (observed)
+            _measurement('Bus current', _value('eps.bus_current_a', 'A'))
+          else
+            _measurement('Requested load', _value('eps.load_requested_w', 'W')),
           _measurement('Supplied load', _value('eps.load_served_w', 'W')),
-          _measurement('Battery power', _value('eps.battery_power_w', 'W')),
+          if (observed) ...[
+            _measurement(
+              'Battery 1 voltage',
+              _value('eps.battery_1_voltage_v', 'V'),
+            ),
+            _measurement(
+              'Battery 2 voltage',
+              _value('eps.battery_2_voltage_v', 'V'),
+            ),
+            _measurement('Battery state of charge', 'Unavailable'),
+          ] else
+            _measurement('Battery power', _value('eps.battery_power_w', 'W')),
           const Divider(height: 28, color: _border),
           _measurement('Illumination', illumination),
           _measurement(
