@@ -28,6 +28,7 @@ class ViewerClient {
     JsonMap? body,
     String? csrfToken,
     String? idempotencyKey,
+    Duration timeout = const Duration(seconds: 20),
   }) async {
     final uri = _baseUri.resolve(path);
     final response =
@@ -44,7 +45,7 @@ class ViewerClient {
                     },
                     body: jsonEncode(body),
                   ))
-            .timeout(const Duration(seconds: 20));
+            .timeout(timeout);
     dynamic decoded;
     try {
       decoded = jsonDecode(response.body);

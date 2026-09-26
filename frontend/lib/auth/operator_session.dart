@@ -62,6 +62,7 @@ class OperatorSession extends ChangeNotifier {
       final response = await _client.request(
         '/v1/viewer/login',
         body: {'login': login.trim(), 'password': password},
+        timeout: const Duration(minutes: 3),
       );
       if (_current(generation)) bootstrap = _operatorSession(response);
     } catch (exception) {

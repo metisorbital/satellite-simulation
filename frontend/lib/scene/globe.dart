@@ -29,12 +29,14 @@ class Globe extends StatefulWidget {
     required this.selected,
     required this.trajectory,
     required this.onSelect,
+    this.hiddenSatelliteIds = const <String>{},
   });
   final CommittedPlayback playback;
   final double? seconds;
   final String selected;
   final JsonMap? trajectory;
   final ValueChanged<String> onSelect;
+  final Set<String> hiddenSatelliteIds;
   @override
   State<Globe> createState() => _GlobeState();
 }
@@ -44,7 +46,13 @@ class _GlobeState extends State<Globe> {
   String? renderError;
   JsonMap? _lastStatus, _lastTrajectory;
   String? _lastSelected;
+  Set<String> _lastHiddenSatelliteIds = const <String>{};
   int _lastRevision = -1;
+
+  bool _sameIds(Set<String> left, Set<String> right) {
+    return left.length == right.length && left.every(right.contains);
+  }
+
   void update() {
     if (!ready) return;
     if (widget.playback.status != null) {
@@ -60,13 +68,16 @@ class _GlobeState extends State<Globe> {
     if (_lastRevision == widget.playback.revision &&
         identical(_lastStatus, widget.playback.status) &&
         identical(_lastTrajectory, widget.trajectory) &&
-        _lastSelected == widget.selected) {
+        _lastSelected == widget.selected &&
+        _sameIds(_lastHiddenSatelliteIds, widget.hiddenSatelliteIds)) {
       return;
     }
     _lastRevision = widget.playback.revision;
     _lastStatus = widget.playback.status;
     _lastTrajectory = widget.trajectory;
     _lastSelected = widget.selected;
+    _lastHiddenSatelliteIds = Set<String>.of(widget.hiddenSatelliteIds);
+    final hiddenSatelliteIds = widget.hiddenSatelliteIds.toList()..sort();
     _update(
       'metis-earth',
       jsonEncode({
@@ -75,6 +86,7 @@ class _GlobeState extends State<Globe> {
         'seconds': widget.seconds,
         'selected': widget.selected,
         'trajectory': widget.trajectory,
+        'hidden_satellite_ids': hiddenSatelliteIds,
       }),
     );
     renderError =

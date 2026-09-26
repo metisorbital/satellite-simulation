@@ -4,7 +4,7 @@ window.metisGlobe = (() => {
   const C = window.Cesium;
   return {
     create(element, onSelect) {
-      const scene = { viewer: null, run: null, selected: '', paths: '', follow: false, error: null, fps: null, count: 0, began: performance.now() };
+      const scene = { viewer: null, run: null, selected: '', hidden: new Set(), paths: '', follow: false, error: null, fps: null, count: 0, began: performance.now() };
       scenes.set(element.id, scene);
       try {
         C.CreditDisplay.cesiumCredit = new C.Credit('<a href="https://cesium.com/cesiumjs/" target="_blank" rel="noreferrer">CesiumJS</a>', true);
@@ -45,7 +45,8 @@ window.metisGlobe = (() => {
         viewer.scene.renderError.addEventListener(() => { scene.error = 'Globe renderer paused. Reload to restore the 3D view.'; scene.fps = null; });
         viewer.screenSpaceEventHandler.setInputAction((event) => {
           const picked = viewer.scene.pick(event.position);
-          if (picked?.id && !picked.id.id.startsWith('orbit-')) onSelect(picked.id.id);
+          const pickedId = picked?.id?.id;
+          if (typeof pickedId === 'string' && !pickedId.startsWith('orbit-') && !scene.hidden.has(pickedId)) onSelect(pickedId);
         }, C.ScreenSpaceEventType.LEFT_CLICK);
         viewer.screenSpaceEventHandler.removeInputAction(C.ScreenSpaceEventType.LEFT_DOUBLE_CLICK);
         C.SingleTileImageryProvider.fromUrl('/assets/earth_atmos_2048.jpg', {credit: 'Earth imagery · three.js contributors (MIT)'})
@@ -56,9 +57,10 @@ window.metisGlobe = (() => {
     update(id, serialized) {
       const scene = scenes.get(id);
       if (!scene?.viewer) return;
-      const { status, frames, seconds, selected, trajectory } = JSON.parse(serialized);
+      const { status, frames, seconds, selected, trajectory, hidden_satellite_ids: hiddenSatelliteIds = [] } = JSON.parse(serialized);
       const viewer = scene.viewer;
       if (!status) return;
+      scene.hidden = new Set(Array.isArray(hiddenSatelliteIds) ? hiddenSatelliteIds : []);
       if (scene.run !== status.run_id) {
         viewer.trackedEntity = undefined;
         viewer.entities.removeAll();
@@ -69,6 +71,7 @@ window.metisGlobe = (() => {
       viewer.clock.multiplier = 0;
       scene.selected = selected;
       for (const satellite of status.satellites) {
+        const visible = !scene.hidden.has(satellite.satellite_id);
         let entity = viewer.entities.getById(satellite.satellite_id);
         if (!entity) {
           const position = window.metisCreatePosition(C);
@@ -76,24 +79,33 @@ window.metisGlobe = (() => {
             point: { color: C.Color.fromCssColorString(satellite.color), pixelSize: 8, outlineWidth: 2, outlineColor: C.Color.BLACK },
             label: { text: satellite.satellite_id, font: '12px sans-serif', pixelOffset: new C.Cartesian2(0,-20), fillColor: C.Color.fromCssColorString(satellite.color) } });
         }
+        entity.show = visible;
         const buffer = frames[satellite.satellite_id] ?? [];
         globalThis.metisAddSamples(entity.position, buffer, status.epoch_utc, C);
         entity.point.pixelSize = satellite.satellite_id === selected ? 11 : 7;
       }
-      const pathKey = JSON.stringify([trajectory, selected]);
+      const pathKey = JSON.stringify([trajectory, selected, [...scene.hidden].sort()]);
       if (trajectory?.run_id === status.run_id && pathKey !== scene.paths) {
         scene.paths = pathKey;
         for (const path of trajectory.satellites) {
           viewer.entities.removeById(`orbit-${path.satellite_id}`);
           const descriptor = status.satellites.find(s => s.satellite_id === path.satellite_id);
           if (!descriptor) continue;
-          viewer.entities.add({ id: `orbit-${path.satellite_id}`, polyline: {
+          const orbit = viewer.entities.add({ id: `orbit-${path.satellite_id}`, polyline: {
             positions: path.samples.map(s => C.Cartesian3.fromArray(s.position_itrs_m)), arcType: C.ArcType.NONE,
             width: path.satellite_id === selected ? 2 : 1,
             material: C.Color.fromCssColorString(descriptor.color).withAlpha(path.satellite_id === selected ? .65 : .2) } });
+          orbit.show = !scene.hidden.has(path.satellite_id);
         }
       }
-      if (scene.follow) viewer.trackedEntity = viewer.entities.getById(selected);
+      if (scene.follow) {
+        if (scene.hidden.has(selected)) {
+          scene.follow = false;
+          viewer.trackedEntity = undefined;
+        } else {
+          viewer.trackedEntity = viewer.entities.getById(selected);
+        }
+      }
     },
     clock(id, epoch, seconds) {
       const viewer = scenes.get(id)?.viewer;
@@ -105,7 +117,17 @@ window.metisGlobe = (() => {
       if (action === 'reset') {
         scene.follow = false; viewer.trackedEntity = undefined;
         viewer.camera.setView({ destination: C.Cartesian3.fromDegrees(120, 18, 13700000) });
-      } else if (action === 'follow') { scene.follow = !scene.follow; viewer.trackedEntity = scene.follow ? viewer.entities.getById(scene.selected) : undefined; }
+      } else if (action === 'follow') {
+        if (scene.follow) {
+          scene.follow = false;
+          viewer.trackedEntity = undefined;
+        } else if (scene.hidden.has(scene.selected)) {
+          viewer.trackedEntity = undefined;
+        } else {
+          scene.follow = true;
+          viewer.trackedEntity = viewer.entities.getById(scene.selected);
+        }
+      }
       else if (action === 'in') viewer.camera.zoomIn(viewer.camera.positionCartographic.height * .3);
       else if (action === 'out') viewer.camera.zoomOut(viewer.camera.positionCartographic.height * .3);
     },

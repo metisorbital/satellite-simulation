@@ -46,10 +46,30 @@ uv run metis-sim demo --config configs/telemetry-demo.yaml --at 0 --port 8002
 ```
 
 Open `http://127.0.0.1:8002`, log in with a local demo operator, start the run, and
-choose **Telemetry dashboard** in the sidebar (or **Telemetry** on narrow screens).
-Satellite selection, simulation time, pause/resume, and speed remain shared with
-the orbital overview. The default `power-leo.v1` configuration also works, with
-only its available catalog channels.
+choose **Telemetry** in the sidebar (the chart icon on narrow screens).
+Spacecraft selection and the committed simulation clock remain shared with
+**Overview**. Start, pause/resume, speed, stop, and reset controls stay beside the
+Earth view on Overview. The single sidebar places the operator menu, Settings,
+and Help at its bottom; **Shift log** opens the saved operator handover workflow.
+
+Open **Settings** to hide spacecraft from both the Earth view and telemetry
+selector, or to edit the constellation in a replacement run. Hidden spacecraft
+continue simulating; at least one remains visible. Saving a new configuration
+still requires stopping the active run.
+
+Choose **Focus dashboard** to hide the app shell, or use a chart's expand icon
+to fill the view with that live panel. **Close panel** restores the prior focus
+state. Panels retain channel quality, committed sample times, units, and gaps.
+The default `power-leo.v1` configuration also works, with only its available
+catalog channels.
+
+Buffered windows offer 1, 5, and 10 minute presets plus a custom duration from
+1 second to 10 minutes. Windows end at the displayed committed sample and use
+only received history; choosing a longer window does not fetch older samples.
+
+The first demo login may prepare a complete simulation. Login allows up to
+three minutes for this preparation; ordinary API requests retain their
+20-second timeout.
 
 The dashboard groups committed measurements into Overview, EPS, Flight computer,
 Payload, ADCS, and Space weather. Channel search and 1/5/10-minute windows filter

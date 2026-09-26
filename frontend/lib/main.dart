@@ -8,6 +8,8 @@ import 'package:flutter/scheduler.dart';
 
 import 'api/mission.dart';
 import 'auth/operator_gate.dart';
+import 'mission_shell.dart';
+import 'overview_inspector.dart';
 import 'scene/globe.dart';
 import 'scene/playback.dart';
 import 'telemetry/dashboard.dart';
@@ -88,6 +90,8 @@ class _MissionPageState extends State<MissionPage> {
   final historyFocus = FocusNode(debugLabel: "Measurement history");
   String selected = '', chart = 'eps.battery_soc';
   bool telemetryVisible = false;
+  bool telemetryFocused = false;
+  final Set<String> hiddenSatellites = {};
   int lastDashboardSecond = -1;
   double? seconds;
   @override
@@ -108,7 +112,11 @@ class _MissionPageState extends State<MissionPage> {
   void refresh() {
     if (!mounted) return;
     setState(() {
-      final satellites = mission.status?['satellites'] as List? ?? [];
+      final configured = mission.status?['satellites'] as List? ?? [];
+      if (configured.isNotEmpty && visibleSatellites.isEmpty) {
+        hiddenSatellites.remove(configured.first['satellite_id']);
+      }
+      final satellites = visibleSatellites;
       if (!satellites.any((s) => s['satellite_id'] == selected)) {
         selected = satellites.isEmpty
             ? ''
@@ -561,59 +569,225 @@ class _MissionPageState extends State<MissionPage> {
     }
   }
 
+  List<JsonMap> get visibleSatellites => [
+    for (final raw in mission.status?['satellites'] as List? ?? [])
+      if (!hiddenSatellites.contains(raw['satellite_id']))
+        Map<String, dynamic>.from(raw as Map),
+  ];
+
+  void navigate(bool telemetry) => setState(() {
+    telemetryVisible = telemetry;
+    telemetryFocused = false;
+  });
+
+  void logout() {
+    if (mission.busy) return;
+    final token = mission.csrfToken.isNotEmpty
+        ? mission.csrfToken
+        : widget.bootstrap['csrf_token'] as String;
+    mission.suspend();
+    widget.onLogout(token);
+  }
+
+  void showShiftLog() {
+    final runId = mission.status?['run_id'] as String?;
+    if (!mission.canUseShiftLog || runId == null) return;
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => ShiftLogDialog(
+        mission: mission,
+        runId: runId,
+        operatorName:
+            (widget.bootstrap['operator'] as Map)['display_name'] as String,
+      ),
+    );
+  }
+
+  Future<void> showSettings() async {
+    final edit = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => PointerInterceptor(
+        child: StatefulBuilder(
+          builder: (context, update) => ListenableBuilder(
+            listenable: mission,
+            builder: (context, _) {
+              final satellites = mission.status?['satellites'] as List? ?? [];
+              return AlertDialog(
+                title: Row(
+                  children: [
+                    const Expanded(child: Text('Mission settings')),
+                    IconButton(
+                      tooltip: 'Close settings',
+                      onPressed: () => Navigator.pop(dialogContext, false),
+                      icon: const Icon(Icons.close),
+                    ),
+                  ],
+                ),
+                content: SizedBox(
+                  width: 430,
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Constellation',
+                          style: TextStyle(fontSize: 17),
+                        ),
+                        const SizedBox(height: 10),
+                        const Text(
+                          'Choose spacecraft shown on the Earth view and telemetry dashboard. Hidden spacecraft continue simulating.',
+                          style: TextStyle(
+                            color: muted,
+                            fontSize: 12,
+                            height: 1.6,
+                          ),
+                        ),
+                        const SizedBox(height: 18),
+                        for (final raw in satellites)
+                          SwitchListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: Text(raw['satellite_id'] as String),
+                            subtitle: Text(raw['name'] as String),
+                            value: !hiddenSatellites.contains(
+                              raw['satellite_id'],
+                            ),
+                            onChanged:
+                                !hiddenSatellites.contains(
+                                      raw['satellite_id'],
+                                    ) &&
+                                    visibleSatellites.length == 1
+                                ? null
+                                : (visible) {
+                                    setState(() {
+                                      final id = raw['satellite_id'] as String;
+                                      if (visible) {
+                                        hiddenSatellites.remove(id);
+                                      } else {
+                                        hiddenSatellites.add(id);
+                                      }
+                                      if (hiddenSatellites.contains(selected)) {
+                                        selected =
+                                            visibleSatellites
+                                                    .first['satellite_id']
+                                                as String;
+                                      }
+                                    });
+                                    update(() {});
+                                  },
+                          ),
+                        const Divider(height: 32),
+                        const Text(
+                          'Simulation configuration',
+                          style: TextStyle(fontSize: 17),
+                        ),
+                        const SizedBox(height: 10),
+                        const Text(
+                          'Add or edit spacecraft in a new run. An active run keeps its original configuration.',
+                          style: TextStyle(
+                            color: muted,
+                            fontSize: 12,
+                            height: 1.6,
+                          ),
+                        ),
+                        const SizedBox(height: 18),
+                        FilledButton.tonalIcon(
+                          onPressed: mission.canEdit && !mission.busy
+                              ? () => Navigator.pop(dialogContext, true)
+                              : null,
+                          icon: const Icon(Icons.edit_outlined, size: 17),
+                          label: const Text('Edit constellation'),
+                        ),
+                        if (!mission.canReplaceRun)
+                          const Padding(
+                            padding: EdgeInsets.only(top: 12),
+                            child: Text(
+                              'Stop the run before saving configuration changes.',
+                              style: TextStyle(fontSize: 11, color: gold),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+    if (edit == true && mounted) await showConstellationEditor();
+  }
+
   @override
   Widget build(BuildContext context) {
     final status = mission.status;
-    final satellites = status?['satellites'] as List? ?? [];
+    final satellites = visibleSatellites;
     final frame = mission.playback.frameAt(selected, seconds);
-    final descriptor =
-        satellites.where((s) => s['satellite_id'] == selected).firstOrNull
-            as JsonMap?;
+    final descriptor = satellites
+        .where((s) => s['satellite_id'] == selected)
+        .firstOrNull;
     final utc = status == null || seconds == null
         ? null
         : DateTime.parse(status['epoch_utc'] as String)
               .add(Duration(milliseconds: (seconds! * 1000).round()))
               .toIso8601String();
+    final operator = widget.bootstrap['operator'] as Map;
+    final focused = telemetryVisible && telemetryFocused;
+    final stale = mission.playback.isStale(mission.now);
     return Scaffold(
       body: LayoutBuilder(
         builder: (context, constraints) {
-          final desktop = constraints.maxWidth >= 1050;
-          final dashboard = Row(
+          final desktop = constraints.maxWidth >= 1150;
+          final compact = constraints.maxWidth < 900;
+          final body = Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              if (desktop) rail(),
-              if (desktop) SizedBox(width: 238, child: sidebar(satellites)),
+              if (!focused)
+                SizedBox(
+                  width: compact ? 64 : 220,
+                  child: MissionSidebar(
+                    telemetrySelected: telemetryVisible,
+                    onOverview: () => navigate(false),
+                    onTelemetry: () => navigate(true),
+                    onSettings: showSettings,
+                    onInfo: showInfo,
+                    onLogout: logout,
+                    onShiftLog: mission.canUseShiftLog && status != null
+                        ? showShiftLog
+                        : null,
+                    operatorName: operator['display_name'] as String,
+                    operatorLogin: operator['login'] as String,
+                    busy: mission.busy,
+                    connected: mission.playback.connected && !stale,
+                    runLabel: status?['status'] as String? ?? 'Connecting',
+                    compact: compact,
+                  ),
+                ),
               Expanded(
                 child: Column(
                   children: [
-                    header(status, desktop),
-                    operatorBar(),
-                    toolbar(status, utc, desktop),
-                    if (!desktop)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        child: SegmentedButton<bool>(
-                          segments: const [
-                            ButtonSegment(
-                              value: false,
-                              icon: Icon(Icons.public, size: 16),
-                              label: Text('Orbit'),
-                            ),
-                            ButtonSegment(
-                              value: true,
-                              icon: Icon(Icons.dashboard_outlined, size: 16),
-                              label: Text('Telemetry'),
-                            ),
-                          ],
-                          selected: {telemetryVisible},
-                          onSelectionChanged: (value) =>
-                              setState(() => telemetryVisible = value.first),
-                        ),
+                    if (!focused)
+                      MissionHeader(
+                        telemetrySelected: telemetryVisible,
+                        runState: status?['status'] as String? ?? 'Connecting',
+                        connectionLabel: !mission.playback.connected
+                            ? 'Disconnected'
+                            : stale
+                            ? 'Stream delayed'
+                            : 'Stream connected',
+                        utc: utc == null
+                            ? 'Awaiting sample'
+                            : '${clockTime(utc)} UTC',
+                        connected: mission.playback.connected && !stale,
+                        compact: compact,
                       ),
+                    if (!telemetryVisible) toolbar(status, utc, desktop),
                     if (mission.error != null)
                       Container(
                         padding: const EdgeInsets.symmetric(
-                          horizontal: 24,
+                          horizontal: 22,
                           vertical: 6,
                         ),
                         color: const Color(0xff2b211d),
@@ -621,16 +795,12 @@ class _MissionPageState extends State<MissionPage> {
                           children: [
                             const Icon(
                               Icons.info_outline,
-                              size: 15,
+                              size: 16,
                               color: gold,
                             ),
                             const SizedBox(width: 10),
                             Expanded(
-                              child: txt(
-                                mission.error!,
-                                color: const Color(0xffe0b99d),
-                                size: 11,
-                              ),
+                              child: txt(mission.error!, color: gold, size: 11),
                             ),
                             TextButton(
                               onPressed: mission.connecting
@@ -641,48 +811,20 @@ class _MissionPageState extends State<MissionPage> {
                           ],
                         ),
                       ),
-                    if (!desktop)
-                      Container(
-                        height: 44,
-                        padding: const EdgeInsets.symmetric(horizontal: 18),
-                        decoration: const BoxDecoration(
-                          border: Border(bottom: BorderSide(color: line)),
-                        ),
-                        child: DropdownButtonHideUnderline(
-                          child: DropdownButton<String>(
-                            isExpanded: true,
-                            value: selected.isEmpty ? null : selected,
-                            hint: txt('Connecting to mission…'),
-                            dropdownColor: panel,
-                            items: [
-                              for (final s in satellites)
-                                DropdownMenuItem(
-                                  value: s['satellite_id'] as String,
-                                  child: PointerInterceptor(
-                                    child: SizedBox(
-                                      height: 48,
-                                      child: Align(
-                                        alignment: Alignment.centerLeft,
-                                        child: txt(
-                                          '${s['satellite_id']} · ${s['name']}',
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                            ],
-                            onChanged: (id) {
-                              if (id != null) setState(() => selected = id);
-                            },
-                          ),
-                        ),
-                      ),
                     Expanded(
                       child: telemetryVisible
                           ? TelemetryDashboard(
                               mission: mission,
                               selected: selected,
                               seconds: seconds,
+                              focused: telemetryFocused,
+                              onFocusChanged: (value) =>
+                                  setState(() => telemetryFocused = value),
+                              onSelected: (id) => setState(() => selected = id),
+                              visibleSatelliteIds: [
+                                for (final satellite in satellites)
+                                  satellite['satellite_id'] as String,
+                              ],
                             )
                           : Row(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -698,457 +840,71 @@ class _MissionPageState extends State<MissionPage> {
                                           desktop,
                                         ),
                                       ),
-                                      Focus(
-                                        focusNode: historyFocus,
-                                        child: historyPanel(),
-                                      ),
+                                      if (!compact)
+                                        Focus(
+                                          focusNode: historyFocus,
+                                          child: historyPanel(),
+                                        )
+                                      else
+                                        Padding(
+                                          padding: const EdgeInsets.all(12),
+                                          child: OutlinedButton.icon(
+                                            onPressed: () => navigate(true),
+                                            icon: const Icon(
+                                              Icons.show_chart,
+                                              size: 17,
+                                            ),
+                                            label: const Text(
+                                              'Open spacecraft telemetry',
+                                            ),
+                                          ),
+                                        ),
                                     ],
                                   ),
                                 ),
                                 if (desktop)
                                   SizedBox(
-                                    width: 286,
+                                    width: 280,
                                     child: telemetry(descriptor, frame),
                                   ),
                               ],
                             ),
                     ),
-                    if (!desktop && !telemetryVisible)
-                      SizedBox(
-                        height: 720,
-                        child: telemetry(descriptor, frame),
-                      ),
-                    footer(status, desktop),
+                    if (!telemetryVisible) footer(status, desktop),
                   ],
                 ),
               ),
             ],
           );
-          return desktop || telemetryVisible
-              ? dashboard
-              : SingleChildScrollView(
-                  child: SizedBox(
-                    height: math.max(constraints.maxHeight, 1540),
-                    child: dashboard,
-                  ),
-                );
+          return body;
         },
       ),
     );
   }
 
-  Widget rail() => Container(
-    width: 66,
-    decoration: const BoxDecoration(
-      color: background,
-      border: Border(right: BorderSide(color: line)),
-    ),
-    child: Column(
-      children: [
-        const SizedBox(height: 22),
-        Container(
-          width: 36,
-          height: 36,
-          decoration: BoxDecoration(
-            color: const Color(0xff10202b),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Image.asset(
-            'assets/images/metis-mark.png',
-            width: 35,
-            height: 35,
-          ),
-        ),
-        const SizedBox(height: 40),
-        railIcon(
-          Icons.public,
-          'Orbital overview',
-          active: !telemetryVisible,
-          action: () => setState(() => telemetryVisible = false),
-        ),
-        const SizedBox(height: 16),
-        railIcon(
-          Icons.show_chart,
-          'Telemetry dashboard',
-          active: telemetryVisible,
-          action: () => setState(() => telemetryVisible = true),
-        ),
-        const SizedBox(height: 16),
-        railIcon(
-          Icons.layers_outlined,
-          'View simulation model information',
-          action: showInfo,
-        ),
-        const Spacer(),
-        railIcon(
-          Icons.help_outline,
-          'Help and model limitations',
-          action: showInfo,
-        ),
-        const SizedBox(height: 20),
-        Container(
-          width: 31,
-          height: 31,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: const Color(0xff15252b),
-            border: Border.all(color: const Color(0xff2a4147)),
-          ),
-          alignment: Alignment.center,
-          child: txt('M', size: 11, color: const Color(0xffb3ccce)),
-        ),
-        const SizedBox(height: 20),
-      ],
-    ),
-  );
-  Widget railIcon(
-    IconData icon,
-    String label, {
-    bool active = false,
-    VoidCallback? action,
-  }) => Container(
-    width: 42,
-    height: 42,
-    decoration: BoxDecoration(
-      color: active ? const Color(0xff192b36) : Colors.transparent,
-      borderRadius: BorderRadius.circular(9),
-      border: Border.all(
-        color: active ? const Color(0xff2c4555) : Colors.transparent,
-      ),
-    ),
-    child: IconButton(
-      tooltip: label,
-      onPressed: action ?? () {},
-      icon: Icon(
-        icon,
-        size: 21,
-        color: active ? const Color(0xffa7cbd9) : muted,
-      ),
-    ),
-  );
-
-  Widget sidebar(List<dynamic> satellites) => Container(
-    decoration: const BoxDecoration(
-      color: panel,
-      border: Border(right: BorderSide(color: line)),
-    ),
-    padding: const EdgeInsets.symmetric(horizontal: 18),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        const SizedBox(height: 28),
-        Row(
-          children: [
-            txt('metis', size: 26, weight: FontWeight.w700),
-            const SizedBox(width: 12),
-            label('O R B I T A L', size: 8),
-          ],
-        ),
-        const SizedBox(height: 30),
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: box(color: const Color(0xff101c28)),
-          child: Row(
-            children: [
-              Container(
-                width: 28,
-                height: 30,
-                decoration: box(
-                  color: const Color(0xff1b2e39),
-                  border: Colors.transparent,
-                ),
-                child: const Icon(
-                  Icons.hub_outlined,
-                  color: Color(0xff9fc4d2),
-                  size: 18,
-                ),
+  Widget spacecraftSelector() => DropdownButtonHideUnderline(
+    child: DropdownButton<String>(
+      value: visibleSatellites.any((s) => s['satellite_id'] == selected)
+          ? selected
+          : null,
+      hint: txt('Awaiting spacecraft', size: 12),
+      dropdownColor: panel,
+      borderRadius: BorderRadius.circular(6),
+      items: [
+        for (final satellite in visibleSatellites)
+          DropdownMenuItem(
+            value: satellite['satellite_id'] as String,
+            child: PointerInterceptor(
+              child: Text(
+                satellite['satellite_id'] as String,
+                style: const TextStyle(fontSize: 12, color: textColor),
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    txt('LEO power mission', size: 11),
-                    const SizedBox(height: 3),
-                    txt('Simulation workspace', color: muted, size: 9),
-                  ],
-                ),
-              ),
-              const Icon(Icons.expand_more, size: 14, color: muted),
-            ],
-          ),
-        ),
-        const SizedBox(height: 34),
-        label('MISSION WORKSPACE'),
-        const SizedBox(height: 16),
-        workspaceLink('Orbital overview', Icons.public, false),
-        const SizedBox(height: 5),
-        workspaceLink('Telemetry dashboard', Icons.show_chart, true),
-        divider(22),
-        Row(
-          children: [
-            Expanded(child: label('CONSTELLATION')),
-            if (mission.canEdit)
-              IconButton(
-                tooltip: 'Edit constellation',
-                onPressed: mission.busy ? null : showConstellationEditor,
-                icon: const Icon(Icons.edit_outlined, size: 16),
-              ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-              decoration: box(
-                color: const Color(0xff1a2732),
-                border: Colors.transparent,
-              ),
-              child: txt('${satellites.length}', size: 8, color: muted),
             ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        Expanded(
-          child: ListView(
-            padding: EdgeInsets.zero,
-            children: [
-              for (final satellite in satellites)
-                satelliteCard(satellite as JsonMap),
-            ],
-          ),
-        ),
-        Row(
-          children: [
-            dot(gold, 4),
-            const SizedBox(width: 8),
-            label('SYNTHETIC MISSION', color: gold, size: 8),
-          ],
-        ),
-        const SizedBox(height: 14),
-        txt(
-          'Explore how orbit and sunlight\nshape spacecraft power.',
-          size: 10,
-          color: muted,
-          height: 1.9,
-        ),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: TextButton(
-            onPressed: showInfo,
-            style: TextButton.styleFrom(
-              padding: EdgeInsets.zero,
-              foregroundColor: const Color(0xffa6c3d0),
-            ),
-            child: const Text(
-              'About this simulation',
-              style: TextStyle(fontSize: 10),
-            ),
-          ),
-        ),
-        divider(10),
-        Row(
-          children: [
-            Icon(
-              mission.playback.connected ? Icons.wifi : Icons.wifi_off,
-              size: 12,
-              color: mint,
-            ),
-            const SizedBox(width: 8),
-            txt(
-              mission.playback.connected
-                  ? 'Local stream connected'
-                  : 'Stream disconnected',
-              size: 9,
-              color: muted,
-            ),
-          ],
-        ),
-        const SizedBox(height: 20),
-      ],
-    ),
-  );
-  Widget workspaceLink(String title, IconData icon, bool telemetryPage) {
-    final active = telemetryVisible == telemetryPage;
-    return Semantics(
-      selected: active,
-      child: TextButton.icon(
-        onPressed: () => setState(() => telemetryVisible = telemetryPage),
-        style: TextButton.styleFrom(
-          alignment: Alignment.centerLeft,
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 15),
-          foregroundColor: active ? const Color(0xffb9d2dc) : muted,
-          backgroundColor: active
-              ? const Color(0xff1b2d37)
-              : Colors.transparent,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-        ),
-        icon: Icon(icon, size: 16),
-        label: Text(title, style: const TextStyle(fontSize: 11)),
-      ),
-    );
-  }
-
-  Widget satelliteCard(JsonMap satellite) {
-    final id = satellite['satellite_id'] as String;
-    final frame = mission.playback.frameAt(id, seconds);
-    final soc = scalar(frame, 'eps.battery_soc');
-    final color = Color(
-      int.parse('ff${(satellite['color'] as String).substring(1)}', radix: 16),
-    );
-    return Container(
-      margin: const EdgeInsets.only(bottom: 9),
-      decoration: box(
-        color: selected == id
-            ? const Color(0xff172a34)
-            : const Color(0xff101d27),
-        border: selected == id ? const Color(0xff375364) : Colors.transparent,
-      ),
-      child: ListTile(
-        selected: selected == id,
-        dense: true,
-        minVerticalPadding: 12,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-        title: Row(
-          children: [
-            Icon(Icons.satellite_alt, size: 15, color: color),
-            const SizedBox(width: 10),
-            Expanded(child: txt(id, size: 11, spacing: .8)),
-            dot(color, 4),
-          ],
-        ),
-        subtitle: Padding(
-          padding: const EdgeInsets.only(top: 10),
-          child: Column(
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: txt(environment(frame), size: 9, color: muted),
-                  ),
-                  txt(
-                    '${reading(soc == null ? null : soc * 100, 0)}% SOC',
-                    size: 9,
-                    color: muted,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 9),
-              meter(soc ?? 0, color, 2),
-            ],
-          ),
-        ),
-        onTap: () => setState(() => selected = id),
-      ),
-    );
-  }
-
-  Widget operatorBar() {
-    final operator = widget.bootstrap['operator'] as Map;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 3),
-      decoration: const BoxDecoration(
-        color: panel,
-        border: Border(bottom: BorderSide(color: line)),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.person_outline, size: 16, color: mint),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              '${operator['display_name']} · ${operator['login']}',
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: textColor, fontSize: 11),
-            ),
-          ),
-          TextButton.icon(
-            onPressed: mission.canUseShiftLog && mission.status != null
-                ? () => showDialog<void>(
-                    context: context,
-                    barrierDismissible: false,
-                    builder: (_) => ShiftLogDialog(
-                      mission: mission,
-                      runId: mission.status!['run_id'] as String,
-                      operatorName: operator['display_name'] as String,
-                    ),
-                  )
-                : null,
-            icon: const Icon(Icons.assignment_outlined, size: 15),
-            label: const Text('Shift Log'),
-          ),
-          Tooltip(
-            message: mission.busy
-                ? 'Wait for the current mission request to finish'
-                : 'Log out and end this demo run',
-            child: TextButton.icon(
-              onPressed: mission.busy
-                  ? null
-                  : () {
-                      final token = mission.csrfToken.isNotEmpty
-                          ? mission.csrfToken
-                          : widget.bootstrap['csrf_token'] as String;
-                      mission.suspend();
-                      widget.onLogout(token);
-                    },
-              icon: const Icon(Icons.logout, size: 15),
-              label: const Text('Log out'),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget header(JsonMap? status, bool desktop) => Container(
-    height: 65,
-    padding: EdgeInsets.symmetric(horizontal: desktop ? 28 : 18),
-    decoration: const BoxDecoration(
-      color: Color(0xff0b141e),
-      border: Border(bottom: BorderSide(color: line)),
-    ),
-    child: Row(
-      children: [
-        txt(
-          desktop ? 'Mission control' : 'metis',
-          size: desktop ? 10 : 18,
-          color: desktop ? muted : textColor,
-          weight: desktop ? FontWeight.w400 : FontWeight.w700,
-        ),
-        if (desktop) ...[
-          SizedBox(width: desktop ? 18 : 9),
-          txt('/', color: line),
-          SizedBox(width: desktop ? 18 : 9),
-          txt(
-            telemetryVisible ? 'Telemetry dashboard' : 'Orbital overview',
-            size: 10,
-          ),
-        ],
-        const Spacer(),
-        badge('SYNTHETIC', gold),
-        SizedBox(width: desktop ? 18 : 9),
-        Container(width: 1, height: 18, color: line),
-        SizedBox(width: desktop ? 18 : 9),
-        dot(status?['status'] == 'running' ? mint : muted, 4),
-        const SizedBox(width: 7),
-        txt(
-          status?['status'] as String? ?? 'Connecting',
-          size: 10,
-          color: const Color(0xffaab8c7),
-        ),
-        if (desktop) ...[
-          SizedBox(width: desktop ? 18 : 9),
-          badge(
-            status == null
-                ? 'CONNECTING'
-                : mission.canControl
-                ? 'CONTROL'
-                : 'PUBLIC DEMO',
-            muted,
-          ),
-        ] else
-          IconButton(
-            tooltip: 'Model & credits',
-            onPressed: showInfo,
-            icon: const Icon(Icons.info_outline, size: 16, color: muted),
           ),
       ],
+      onChanged: (id) {
+        if (id != null) setState(() => selected = id);
+      },
     ),
   );
 
@@ -1276,91 +1032,65 @@ class _MissionPageState extends State<MissionPage> {
                     : mission.reset,
                 icon: const Icon(Icons.restart_alt, size: 19),
               ),
-              if (!desktop && mission.canEdit)
-                IconButton(
-                  tooltip: 'Edit constellation',
-                  onPressed: mission.busy ? null : showConstellationEditor,
-                  icon: const Icon(Icons.edit_outlined, size: 18),
-                ),
             ],
           )
         : status == null
         ? const SizedBox.shrink()
         : badge('VIEW ONLY', muted);
-    final title = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        label(
-          telemetryVisible ? 'METIS / TELEMETRY' : 'METIS / EARTH ORBIT',
-          size: 8,
-        ),
-        const SizedBox(height: 10),
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Semantics(
-              header: true,
-              child: txt(
-                telemetryVisible ? 'Telemetry dashboard' : 'Orbital overview',
-                size: 23,
-                weight: FontWeight.w500,
-                spacing: -.7,
-              ),
-            ),
-            const SizedBox(width: 10),
-            dot(const Color(0xff4e7183), 4),
-          ],
-        ),
-      ],
-    );
-    final clock = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        label('SIMULATION UTC', size: 8),
-        const SizedBox(height: 8),
-        txt(clockTime(utc), size: 17, spacing: 3),
-        const SizedBox(height: 3),
-        txt(utc?.substring(0, 10) ?? '—', size: 8, color: muted, spacing: 1.5),
-      ],
-    );
+
     return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: desktop ? 28 : 18,
-        vertical: desktop ? 24 : 15,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
       decoration: const BoxDecoration(
-        color: Color(0xff0c151f),
+        color: background,
         border: Border(bottom: BorderSide(color: line)),
       ),
-      child: desktop
-          ? Row(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final heading = Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Semantics(
+                header: true,
+                child: txt(
+                  'Mission overview',
+                  size: 24,
+                  weight: FontWeight.w500,
+                  spacing: -.6,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  txt('Spacecraft', size: 11, color: muted),
+                  const SizedBox(width: 14),
+                  spacecraftSelector(),
+                ],
+              ),
+            ],
+          );
+          if (constraints.maxWidth >= 750) {
+            return Row(
               children: [
-                Expanded(child: title),
-                clock,
-                const SizedBox(width: 30),
+                Expanded(child: heading),
                 controls,
               ],
-            )
-          : Column(
-              children: [
-                Row(
-                  children: [
-                    Expanded(child: title),
-                    clock,
-                  ],
-                ),
-                const SizedBox(height: 15),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: controls,
-                  ),
-                ),
-              ],
-            ),
+            );
+          }
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              heading,
+              const SizedBox(height: 12),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: controls,
+              ),
+            ],
+          );
+        },
+      ),
     );
   }
 
@@ -1387,6 +1117,7 @@ class _MissionPageState extends State<MissionPage> {
                   seconds: seconds,
                   selected: selected,
                   trajectory: mission.trajectory,
+                  hiddenSatelliteIds: hiddenSatellites.toSet(),
                   onSelect: (id) => setState(() => selected = id),
                 ),
               ),
@@ -1429,19 +1160,21 @@ class _MissionPageState extends State<MissionPage> {
                           ),
                         ],
                       ),
-                      const SizedBox(width: 30),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          label('SELECTED ALTITUDE', size: 7),
-                          const SizedBox(height: 10),
-                          txt(
-                            '${reading(scalar(frame, 'orbit.altitude_m') == null ? null : scalar(frame, 'orbit.altitude_m')! / 1000)} km',
-                            size: 17,
-                            spacing: 1.5,
-                          ),
-                        ],
-                      ),
+                      if (constraints.maxWidth >= 410)
+                        const SizedBox(width: 30),
+                      if (constraints.maxWidth >= 410)
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            label('SELECTED ALTITUDE', size: 7),
+                            const SizedBox(height: 10),
+                            txt(
+                              '${reading(scalar(frame, 'orbit.altitude_m') == null ? null : scalar(frame, 'orbit.altitude_m')! / 1000)} km',
+                              size: 17,
+                              spacing: 1.5,
+                            ),
+                          ],
+                        ),
                     ],
                   ),
                 ),
@@ -1481,7 +1214,7 @@ class _MissionPageState extends State<MissionPage> {
               ),
             Positioned(
               right: 22,
-              bottom: desktop ? 99 : 63,
+              bottom: desktop ? 99 : 110,
               child: PointerInterceptor(
                 child: Container(
                   width: 38,
@@ -1558,7 +1291,7 @@ class _MissionPageState extends State<MissionPage> {
             ),
             Positioned(
               right: 22,
-              bottom: desktop ? (roomy ? 37 : 74) : 10,
+              bottom: desktop && roomy ? 37 : 74,
               child: IgnorePointer(
                 child: Container(
                   padding: const EdgeInsets.symmetric(
@@ -1575,10 +1308,12 @@ class _MissionPageState extends State<MissionPage> {
                       dot(stale ? gold : mint, 4),
                       const SizedBox(width: 6),
                       txt(message, size: 8, color: const Color(0xffa0c9c2)),
-                      const SizedBox(width: 10),
-                      txt('|', size: 8, color: muted),
-                      const SizedBox(width: 8),
-                      txt('${reading(lag)} s behind', size: 7, color: muted),
+                      if (roomy) ...[
+                        const SizedBox(width: 10),
+                        txt('|', size: 8, color: muted),
+                        const SizedBox(width: 8),
+                        txt('${reading(lag)} s behind', size: 7, color: muted),
+                      ],
                     ],
                   ),
                 ),
@@ -1590,304 +1325,11 @@ class _MissionPageState extends State<MissionPage> {
     );
   }
 
-  Widget telemetry(JsonMap? descriptor, JsonMap? frame) {
-    final soc = scalar(frame, 'eps.battery_soc'),
-        battery = scalar(frame, 'eps.battery_power_w'),
-        solar = scalar(frame, 'eps.solar_power_w'),
-        load = scalar(frame, 'eps.load_requested_w'),
-        light = scalar(frame, 'environment.illumination_fraction');
-    final maxPower = math.max(
-      1.0,
-      math.max(solar ?? 0, math.max(load ?? 0, (battery ?? 0).abs())),
-    );
-    final color = descriptor == null
-        ? mint
-        : Color(
-            int.parse(
-              'ff${(descriptor['color'] as String).substring(1)}',
-              radix: 16,
-            ),
-          );
-    Widget row(String title, String value, {Color valueColor = textColor}) =>
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 6),
-          child: Row(
-            children: [
-              Expanded(child: txt(title, size: 9, color: muted)),
-              txt(value, size: 9, color: valueColor, spacing: .4),
-            ],
-          ),
-        );
-    return Container(
-      decoration: const BoxDecoration(
-        color: Color(0xff0e1a24),
-        border: Border(left: BorderSide(color: line)),
-      ),
-      child: ListView(
-        padding: const EdgeInsets.all(20),
-        children: [
-          Row(
-            children: [
-              Expanded(child: label('SPACECRAFT DETAIL', size: 7)),
-              const Icon(Icons.sensors, size: 14, color: muted),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              Icon(Icons.satellite_alt_outlined, size: 31, color: color),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    txt(
-                      descriptor?['satellite_id'] as String? ??
-                          'Select a satellite',
-                      size: 15,
-                      spacing: .5,
-                    ),
-                    const SizedBox(height: 5),
-                    txt(
-                      descriptor?['name'] as String? ?? 'Mission telemetry',
-                      size: 10,
-                      color: muted,
-                    ),
-                  ],
-                ),
-              ),
-              const Icon(Icons.expand_more, size: 14, color: muted),
-            ],
-          ),
-          const SizedBox(height: 15),
-          Row(
-            children: [
-              dot(mint, 4),
-              const SizedBox(width: 7),
-              txt(
-                (frame?['mode'] as String? ?? 'Awaiting measurements')
-                    .replaceAll('_', ' '),
-                size: 9,
-                color: const Color(0xffa5bdb7),
-              ),
-              const SizedBox(width: 12),
-              badge('LEO', muted),
-            ],
-          ),
-          divider(13),
-          Row(
-            children: [
-              const Icon(Icons.battery_4_bar_outlined, size: 13, color: muted),
-              const SizedBox(width: 7),
-              Expanded(child: txt('Battery state', size: 10, color: muted)),
-              txt(
-                battery == null
-                    ? '—'
-                    : battery < -.01
-                    ? 'Charging'
-                    : battery > .01
-                    ? 'Discharging'
-                    : 'Balanced',
-                size: 9,
-                color: battery != null && battery < 0 ? mint : muted,
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              txt(
-                reading(soc == null ? null : soc * 100),
-                size: 31,
-                spacing: 2,
-              ),
-              Padding(
-                padding: const EdgeInsets.only(bottom: 4),
-                child: txt('%', size: 14, color: muted),
-              ),
-            ],
-          ),
-          const SizedBox(height: 15),
-          Semantics(
-            label: 'Battery state of charge',
-            value: '${reading(soc == null ? null : soc * 100)}%',
-            child: Row(
-              children: [
-                for (var i = 0; i < 12; i++)
-                  Expanded(
-                    child: Container(
-                      height: 6,
-                      margin: EdgeInsets.only(right: i == 11 ? 0 : 3),
-                      color: (soc ?? 0) * 12 > i
-                          ? mint
-                          : const Color(0xff253a45),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 9),
-          Row(
-            children: [
-              Expanded(
-                child: txt(
-                  '${reading(scalar(frame, 'eps.battery_energy_wh'))} Wh stored',
-                  size: 7,
-                  color: muted,
-                ),
-              ),
-              txt(
-                '${reading(descriptor?['capacity_wh'] as num?, 0)} Wh capacity',
-                size: 7,
-                color: muted,
-              ),
-            ],
-          ),
-          divider(13),
-          Row(
-            children: [
-              const Icon(Icons.bolt_outlined, size: 15, color: muted),
-              const SizedBox(width: 7),
-              Expanded(child: txt('Power balance', size: 10, color: muted)),
-              label('WATTS', size: 6),
-            ],
-          ),
-          const SizedBox(height: 15),
-          txt('Solar generation', size: 8, color: muted),
-          const SizedBox(height: 7),
-          Row(
-            children: [
-              Expanded(
-                child: txt(
-                  '${reading(solar)} W',
-                  size: 24,
-                  color: const Color(0xffdfcda2),
-                  spacing: 2,
-                ),
-              ),
-              const Icon(Icons.wb_sunny_outlined, size: 22, color: gold),
-            ],
-          ),
-          const SizedBox(height: 14),
-          for (final item in [
-            ('Solar', solar, gold),
-            ('Requested load', load, const Color(0xff899daf)),
-            (
-              battery != null && battery < 0 ? 'To battery' : 'From battery',
-              battery?.abs(),
-              mint,
-            ),
-          ])
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 6),
-              child: Row(
-                children: [
-                  SizedBox(
-                    width: 87,
-                    child: txt(item.$1, size: 8, color: muted),
-                  ),
-                  Expanded(child: meter((item.$2 ?? 0) / maxPower, item.$3, 3)),
-                  SizedBox(
-                    width: 40,
-                    child: Align(
-                      alignment: Alignment.centerRight,
-                      child: txt(
-                        reading(item.$2, 0),
-                        size: 8,
-                        color: const Color(0xffb4c3ce),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          const SizedBox(height: 9),
-          row(
-            'Load served',
-            '${reading(scalar(frame, 'eps.load_served_w'))} W',
-          ),
-          row(
-            'Curtailed / unmet',
-            '${reading(scalar(frame, 'eps.curtailed_power_w'))} / ${reading(scalar(frame, 'eps.unserved_power_w'))} W',
-          ),
-          const SizedBox(height: 5),
-          txt(
-            frame?['sample_window_s'] == 0
-                ? 'Initial instantaneous allocation'
-                : '${frame?['sample_window_s'] ?? 1} s mean · ${frame?['interval_mode'] ?? 'unknown'}',
-            size: 7,
-            color: muted,
-          ),
-          divider(13),
-          Row(
-            children: [
-              const Icon(Icons.wb_sunny_outlined, size: 14, color: muted),
-              const SizedBox(width: 7),
-              Expanded(child: txt('Illumination', size: 10, color: muted)),
-              txt(environment(frame), size: 9, color: gold),
-            ],
-          ),
-          const SizedBox(height: 12),
-          meter(light ?? 0, gold, 3),
-          const SizedBox(height: 9),
-          Row(
-            children: [
-              Expanded(child: txt('Visible solar disk', size: 7, color: muted)),
-              txt(
-                '${reading(light == null ? null : light * 100)}%',
-                size: 7,
-                color: muted,
-              ),
-            ],
-          ),
-          divider(13),
-          Row(
-            children: [
-              Expanded(child: txt('Position', size: 9, color: muted)),
-              label('EARTH FIXED', size: 6),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              for (final item in [
-                (
-                  'Altitude',
-                  '${reading(scalar(frame, 'orbit.altitude_m') == null ? null : scalar(frame, 'orbit.altitude_m')! / 1000)} km',
-                ),
-                (
-                  'Latitude',
-                  '${reading(scalar(frame, 'orbit.latitude_deg'), 2)}°',
-                ),
-                (
-                  'Longitude',
-                  '${reading(scalar(frame, 'orbit.longitude_deg'), 2)}°',
-                ),
-              ])
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      txt(item.$1, size: 7, color: muted),
-                      const SizedBox(height: 8),
-                      txt(item.$2, size: 9, spacing: .4),
-                    ],
-                  ),
-                ),
-            ],
-          ),
-          divider(18),
-          txt(
-            'Sample ${frame?['observed_at'] ?? '—'}\n#${frame?['sequence'] ?? '—'}',
-            size: 7,
-            color: muted,
-            height: 1.8,
-          ),
-        ],
-      ),
-    );
-  }
+  Widget telemetry(JsonMap? descriptor, JsonMap? frame) => OverviewInspector(
+    descriptor: descriptor,
+    frame: frame,
+    onTelemetry: () => navigate(true),
+  );
 
   Widget historyPanel() {
     final status = mission.status;
@@ -1918,7 +1360,7 @@ class _MissionPageState extends State<MissionPage> {
               const SizedBox(width: 10),
               txt('|', size: 10, color: line),
               const SizedBox(width: 10),
-              Expanded(child: txt(selected, size: 8, color: muted)),
+              Expanded(child: txt(selected, size: 10, color: muted)),
               Container(
                 height: 25,
                 padding: const EdgeInsets.all(2),
@@ -1959,7 +1401,7 @@ class _MissionPageState extends State<MissionPage> {
             child: Row(
               children: [
                 SizedBox(
-                  width: 126,
+                  width: 155,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -1974,7 +1416,7 @@ class _MissionPageState extends State<MissionPage> {
                         soc
                             ? 'Measured state of charge'
                             : 'Measured generation',
-                        size: 7,
+                        size: 10,
                         color: muted,
                       ),
                     ],
@@ -2004,13 +1446,13 @@ class _MissionPageState extends State<MissionPage> {
                                 : clockTime(
                                     samples.first['observed_at'] as String,
                                   ),
-                            size: 6,
+                            size: 9,
                             color: muted,
                           ),
                           const Spacer(),
                           txt(
                             'Actual committed samples · UTC',
-                            size: 6,
+                            size: 9,
                             color: muted,
                           ),
                           const Spacer(),
@@ -2020,7 +1462,7 @@ class _MissionPageState extends State<MissionPage> {
                                 : clockTime(
                                     samples.last['observed_at'] as String,
                                   ),
-                            size: 6,
+                            size: 9,
                             color: muted,
                           ),
                         ],

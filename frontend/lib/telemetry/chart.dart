@@ -13,6 +13,8 @@ class TelemetryChart extends StatefulWidget {
     required this.current,
     required this.windowSeconds,
     required this.end,
+    this.expanded = false,
+    this.onExpand,
   });
   final TelemetryPanel panel;
   final Map<String, JsonMap> definitions;
@@ -20,6 +22,8 @@ class TelemetryChart extends StatefulWidget {
   final JsonMap? current;
   final int windowSeconds;
   final DateTime? end;
+  final bool expanded;
+  final VoidCallback? onExpand;
 
   @override
   State<TelemetryChart> createState() => _TelemetryChartState();
@@ -75,7 +79,7 @@ class _TelemetryChartState extends State<TelemetryChart> {
         border: Border.all(color: telemetryBorder),
         borderRadius: BorderRadius.circular(9),
       ),
-      padding: const EdgeInsets.fromLTRB(15, 13, 15, 12),
+      padding: EdgeInsets.fromLTRB(15, widget.expanded ? 17 : 13, 15, 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -101,6 +105,13 @@ class _TelemetryChartState extends State<TelemetryChart> {
                   ),
                 ),
               ),
+              if (widget.onExpand != null)
+                IconButton(
+                  tooltip: 'Expand ${widget.panel.title}',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: widget.onExpand,
+                  icon: const Icon(Icons.open_in_full, size: 17),
+                ),
             ],
           ),
           const SizedBox(height: 7),

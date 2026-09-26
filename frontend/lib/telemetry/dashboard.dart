@@ -12,10 +12,18 @@ class TelemetryDashboard extends StatefulWidget {
     required this.mission,
     required this.selected,
     required this.seconds,
+    this.focused = false,
+    this.onFocusChanged,
+    this.onSelected,
+    this.visibleSatelliteIds,
   });
   final Mission mission;
   final String selected;
   final double? seconds;
+  final bool focused;
+  final ValueChanged<bool>? onFocusChanged;
+  final ValueChanged<String>? onSelected;
+  final List<String>? visibleSatelliteIds;
 
   @override
   State<TelemetryDashboard> createState() => _TelemetryDashboardState();
@@ -24,7 +32,20 @@ class TelemetryDashboard extends StatefulWidget {
 class _TelemetryDashboardState extends State<TelemetryDashboard> {
   String _tab = 'Overview';
   int _window = 60;
+  TelemetryPanel? _expanded;
+  bool _focusedBeforeExpansion = false;
   final _search = TextEditingController();
+
+  void _expand(TelemetryPanel panel) {
+    _focusedBeforeExpansion = widget.focused;
+    setState(() => _expanded = panel);
+    widget.onFocusChanged?.call(true);
+  }
+
+  void _closeExpanded() {
+    setState(() => _expanded = null);
+    widget.onFocusChanged?.call(_focusedBeforeExpansion);
+  }
 
   @override
   void dispose() {
@@ -36,8 +57,17 @@ class _TelemetryDashboardState extends State<TelemetryDashboard> {
   Widget build(BuildContext context) {
     final mission = widget.mission;
     final status = mission.status;
-    final current = mission.playback.frameAt(widget.selected, widget.seconds);
-    final received = mission.playback.history[widget.selected] ?? <JsonMap>[];
+    final availableIds = (status?['satellites'] as List? ?? [])
+        .map((item) => (item as Map)['satellite_id'] as String)
+        .toList();
+    final visibleIds = widget.visibleSatelliteIds == null
+        ? availableIds
+        : widget.visibleSatelliteIds!.where(availableIds.contains).toList();
+    final selected = visibleIds.contains(widget.selected)
+        ? widget.selected
+        : (visibleIds.isEmpty ? widget.selected : visibleIds.first);
+    final current = mission.playback.frameAt(selected, widget.seconds);
+    final received = mission.playback.history[selected] ?? <JsonMap>[];
     final eligible = status == null || widget.seconds == null
         ? <JsonMap>[]
         : received
@@ -65,10 +95,6 @@ class _TelemetryDashboardState extends State<TelemetryDashboard> {
       for (final raw in catalog?['channels'] as List? ?? [])
         (raw as Map)['channel_id'] as String: Map<String, dynamic>.from(raw),
     };
-    final modeled = definitions.values
-        .where((item) => item['availability'] != 'unavailable')
-        .length;
-    final unavailable = definitions.length - modeled;
     final query = _search.text.trim().toLowerCase();
     final panels = telemetryPanels[_tab]!
         .where(
@@ -103,6 +129,49 @@ class _TelemetryDashboardState extends State<TelemetryDashboard> {
         ? 'Receiving'
         : telemetryTitleCase(runState);
 
+    if (_expanded != null) {
+      return SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(28, 16, 28, 20),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '$selected · $_tab · ${_window ~/ 60} min · $connection · ${current?['source_kind'] ?? 'Awaiting source'}',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: telemetryMuted,
+                      ),
+                    ),
+                  ),
+                  TextButton.icon(
+                    onPressed: _closeExpanded,
+                    icon: const Icon(Icons.fullscreen_exit, size: 18),
+                    label: const Text('Close panel'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Expanded(
+                child: TelemetryChart(
+                  key: ValueKey('expanded:$selected:${_expanded!.title}'),
+                  panel: _expanded!,
+                  definitions: definitions,
+                  frames: frames,
+                  current: current,
+                  windowSeconds: _window,
+                  end: end,
+                  expanded: true,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return ListView(
       padding: const EdgeInsets.fromLTRB(22, 22, 22, 26),
       children: [
@@ -115,30 +184,45 @@ class _TelemetryDashboardState extends State<TelemetryDashboard> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'SPACECRAFT TELEMETRY',
+                  'Telemetry',
                   style: TextStyle(
-                    fontSize: 10,
-                    letterSpacing: 2.1,
-                    color: telemetryAccent,
+                    fontSize: 26,
+                    letterSpacing: -.6,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
-                const SizedBox(height: 7),
+                const SizedBox(height: 10),
                 Wrap(
                   spacing: 13,
                   runSpacing: 8,
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    Text(
-                      widget.selected.isEmpty
-                          ? 'Awaiting spacecraft'
-                          : widget.selected,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 26,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: -.6,
+                    SizedBox(
+                      width: 170,
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: visibleIds.contains(selected)
+                              ? selected
+                              : null,
+                          hint: const Text('Awaiting spacecraft'),
+                          isDense: true,
+                          isExpanded: true,
+                          dropdownColor: telemetrySurface,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white,
+                          ),
+                          items: [
+                            for (final id in visibleIds)
+                              DropdownMenuItem(value: id, child: Text(id)),
+                          ],
+                          onChanged: visibleIds.isEmpty
+                              ? null
+                              : (id) {
+                                  if (id != null) widget.onSelected?.call(id);
+                                },
+                        ),
                       ),
                     ),
                     TelemetryBadge(
@@ -170,85 +254,26 @@ class _TelemetryDashboardState extends State<TelemetryDashboard> {
                           ? 'SYNTHETIC'
                           : 'AWAITING SOURCE',
                     ),
-                    if (version != null) TelemetryBadge(version),
-                    if (current != null)
-                      TelemetryBadge(
-                        'Endpoint: ${telemetryTitleCase(current['mode'] as String)}',
+                    IconButton(
+                      tooltip: widget.focused
+                          ? 'Exit focus mode'
+                          : 'Focus dashboard',
+                      onPressed: () =>
+                          widget.onFocusChanged?.call(!widget.focused),
+                      icon: Icon(
+                        widget.focused
+                            ? Icons.fullscreen_exit
+                            : Icons.fullscreen,
+                        size: 18,
                       ),
-                    if (current != null &&
-                        current['interval_mode'] != current['mode'])
-                      TelemetryBadge(
-                        'Interval: ${current['interval_mode'] == null ? 'Unknown' : telemetryTitleCase(current['interval_mode'] as String)}',
-                      ),
+                    ),
                   ],
-                ),
-                const SizedBox(height: 9),
-                Text(
-                  catalog == null
-                      ? version == null
-                            ? 'Awaiting the first channel catalog'
-                            : mission.catalogLoading
-                            ? 'Loading channel definitions'
-                            : 'Channel definitions unavailable'
-                      : '$modeled modeled channels  ·  $unavailable unavailable  ·  1 Hz simulated UTC',
-                  style: const TextStyle(fontSize: 10, color: telemetryMuted),
                 ),
               ],
             ),
           ],
         ),
-        const SizedBox(height: 21),
-        if (catalog != null) ...[
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final columns = constraints.maxWidth >= 1000
-                  ? 4
-                  : constraints.maxWidth >= 540
-                  ? 2
-                  : 1;
-              return Wrap(
-                spacing: 12,
-                runSpacing: 12,
-                children: [
-                  for (final item in const [
-                    (
-                      'Battery state of charge',
-                      'eps.battery_soc',
-                      Icons.battery_5_bar_outlined,
-                    ),
-                    (
-                      'Solar generation',
-                      'eps.solar_power_w',
-                      Icons.wb_sunny_outlined,
-                    ),
-                    (
-                      'Payload images',
-                      'payload.image_count',
-                      Icons.photo_camera_outlined,
-                    ),
-                    (
-                      'Geodetic altitude',
-                      'orbit.altitude_m',
-                      Icons.public_outlined,
-                    ),
-                  ])
-                    SizedBox(
-                      width:
-                          (constraints.maxWidth - (columns - 1) * 12) / columns,
-                      child: TelemetryMetric(
-                        title: item.$1,
-                        channel: item.$2,
-                        icon: item.$3,
-                        definition: definitions[item.$2],
-                        frame: current,
-                      ),
-                    ),
-                ],
-              );
-            },
-          ),
-          const SizedBox(height: 20),
-        ],
+        const SizedBox(height: 16),
         Container(
           decoration: const BoxDecoration(
             border: Border(bottom: BorderSide(color: telemetryBorder)),
@@ -381,11 +406,12 @@ class _TelemetryDashboardState extends State<TelemetryDashboard> {
                     '${gaps > 0 ? ' · $gaps sequence gaps' : ''}',
           style: const TextStyle(fontSize: 10, color: telemetryMuted),
         ),
-        const SizedBox(height: 5),
-        const Text(
-          'History builds as samples arrive (up to 600 per spacecraft). Gaps remain blank; diamonds mark saturated readings.',
-          style: TextStyle(fontSize: 10, color: telemetryMuted, height: 1.5),
-        ),
+        if (!widget.focused) const SizedBox(height: 5),
+        if (!widget.focused)
+          const Text(
+            'History builds as samples arrive (up to 600 per spacecraft). Gaps remain blank; diamonds mark saturated readings.',
+            style: TextStyle(fontSize: 10, color: telemetryMuted, height: 1.5),
+          ),
         const SizedBox(height: 17),
         if (catalog == null)
           TelemetryCatalogState(
@@ -421,29 +447,26 @@ class _TelemetryDashboardState extends State<TelemetryDashboard> {
             ),
           LayoutBuilder(
             builder: (context, constraints) {
-              final columns = constraints.maxWidth >= 1250
-                  ? 3
-                  : constraints.maxWidth >= 760
-                  ? 2
-                  : 1;
+              final columns = constraints.maxWidth >= 760 ? 2 : 1;
               final width =
-                  (constraints.maxWidth - (columns - 1) * 13) / columns;
+                  (constraints.maxWidth - (columns - 1) * 18) / columns;
               return Wrap(
-                spacing: 13,
-                runSpacing: 13,
+                spacing: 18,
+                runSpacing: 18,
                 children: [
                   for (final panel in panels)
                     SizedBox(
                       width: width,
-                      height: 294,
+                      height: widget.focused ? 405 : 365,
                       child: TelemetryChart(
-                        key: ValueKey('${widget.selected}:${panel.title}'),
+                        key: ValueKey('$selected:${panel.title}'),
                         panel: panel,
                         definitions: definitions,
                         frames: frames,
                         current: current,
                         windowSeconds: _window,
                         end: end,
+                        onExpand: () => _expand(panel),
                       ),
                     ),
                 ],
@@ -452,7 +475,15 @@ class _TelemetryDashboardState extends State<TelemetryDashboard> {
           ),
         ],
         const SizedBox(height: 19),
-        if (catalog != null)
+        if (!widget.focused && current != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Text(
+              'Catalog ${version ?? 'unknown'} · Endpoint mode: ${current['mode']} · Interval mode: ${current['interval_mode'] ?? 'unknown'}',
+              style: const TextStyle(color: telemetryMuted, fontSize: 11),
+            ),
+          ),
+        if (catalog != null && !widget.focused)
           TelemetryChannelInventory(
             definitions: definitions,
             frame: current,

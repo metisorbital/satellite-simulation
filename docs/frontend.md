@@ -41,12 +41,20 @@ session-cookie behavior. Do not put operator bearer tokens in the frontend.
 
 ## Mission Dashboard Design
 
-The dashboard follows a compact aerospace operations layout: constellation
-selection at the left, Earth and orbit context in the center, and the selected
-spacecraft's measured state at the right. Power history stays next to the globe
-so users can connect an orbital position with its recent energy behavior.
+The viewer uses one sidebar and a 48-pixel status header.
+Overview keeps the Earth view, spacecraft selection, and start/pause/speed
+controls together, with a concise measured-state panel on wide screens.
+Power history stays beneath the globe.
+The operator menu and Settings live at the bottom of the sidebar.
 
-Use dark navy surfaces, fine panel borders, compact typography, and restrained
+Telemetry uses large two-column panels on wide screens and one column on
+narrow screens. Dashboard focus hides the shell; individual panel expansion
+uses the full content area without freezing measurements.
+Constellation editing and spacecraft visibility belong to Settings.
+Hiding spacecraft changes presentation only, including their orbit paths;
+the backend keeps simulating every configured spacecraft.
+
+Use dark navy surfaces, fine panel borders, readable typography, and restrained
 mint, blue, and gold accents. Color reinforces labels; it must never be the only
 way to identify a spacecraft, a control state, or an illumination condition.
 Keep controls and status readable without competing with the Earth view.
