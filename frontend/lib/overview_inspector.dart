@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 
 import 'scene/playback.dart';
 
-const _surface = Color(0xff0d151f);
-const _border = Color(0xff202a36);
-const _muted = Color(0xff94a4b7);
-const _mint = Color(0xff95cfbc);
+const _surface = Color(0xff081426);
+const _border = Color(0xff1a315e);
+const _muted = Color(0xff8da4d8);
+const _mint = Color(0xff5d84ff);
 
 /// A concise summary of committed spacecraft measurements beside the Earth.
 class OverviewInspector extends StatelessWidget {

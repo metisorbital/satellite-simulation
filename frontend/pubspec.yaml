@@ -19,7 +19,8 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
-    - assets/images/metis-mark.png
+    - assets/images/metis-orbital-logo.png
+    - assets/images/metis-orbital-mark.png
   fonts:
     - family: MetisSans
       fonts:

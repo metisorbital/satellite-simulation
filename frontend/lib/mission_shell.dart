@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 
-const _background = Color(0xff070d15);
-const _sidebar = Color(0xff0a111a);
-const _line = Color(0xff202a36);
-const _mint = Color(0xff95cfbc);
-const _gold = Color(0xffc7b985);
-const _text = Color(0xffd4dfe8);
-const _muted = Color(0xff94a4b7);
-const _quiet = Color(0xff8091a5);
+const _background = Color(0xff040d1a);
+const _sidebar = Color(0xff061225);
+const _line = Color(0xff1a315e);
+const _mint = Color(0xff0040fc);
+const _gold = Color(0xff8eb4ff);
+const _text = Color(0xffe3ebff);
+const _muted = Color(0xff8da4d8);
+const _quiet = Color(0xff7089bf);
 
 /// Destinations share one mission session and committed simulation clock.
 enum MissionView {
@@ -331,41 +331,33 @@ class _Brand extends StatelessWidget {
         child: compact
             ? Tooltip(
                 message: 'Metis mission control',
-                child: Image.asset(
-                  'assets/images/metis-mark.png',
-                  width: 30,
-                  height: 30,
-                  fit: BoxFit.contain,
-                ),
-              )
-            : Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Image.asset(
-                    'assets/images/metis-mark.png',
-                    width: 29,
-                    height: 36,
+                child: Container(
+                  width: 40,
+                  height: 40,
+                  padding: const EdgeInsets.all(5),
+                  decoration: BoxDecoration(
+                    color: const Color(0xfff4f7ff),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Image.asset(
+                    'assets/images/metis-orbital-mark.png',
                     fit: BoxFit.contain,
                   ),
-                  const SizedBox(width: 11),
-                  const Text(
-                    'metis',
-                    style: TextStyle(
-                      color: _text,
-                      fontSize: 27,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: -1.2,
-                    ),
-                  ),
-                  const Text(
-                    '.',
-                    style: TextStyle(
-                      color: _mint,
-                      fontSize: 27,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
+                ),
+              )
+            : Container(
+                margin: const EdgeInsets.symmetric(horizontal: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                decoration: BoxDecoration(
+                  color: const Color(0xfff4f7ff),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Image.asset(
+                  'assets/images/metis-orbital-logo.png',
+                  width: 164,
+                  height: 42,
+                  fit: BoxFit.contain,
+                ),
               ),
       ),
     );
@@ -432,12 +424,12 @@ class _NavigationItem extends StatelessWidget {
       label: compact ? null : label,
       excludeSemantics: !compact,
       child: Material(
-        color: selected ? const Color(0xff152922) : Colors.transparent,
+        color: selected ? const Color(0xff0e2862) : Colors.transparent,
         borderRadius: BorderRadius.circular(5),
         child: InkWell(
           onTap: onPressed,
           borderRadius: BorderRadius.circular(5),
-          hoverColor: const Color(0xff14202a),
+          hoverColor: const Color(0xff0c2048),
           child: content,
         ),
       ),
@@ -498,7 +490,7 @@ class _BottomAction extends StatelessWidget {
         child: InkWell(
           onTap: onPressed,
           borderRadius: BorderRadius.circular(5),
-          hoverColor: const Color(0xff14202a),
+          hoverColor: const Color(0xff0c2048),
           child: SizedBox(
             height: 40,
             child: Row(
