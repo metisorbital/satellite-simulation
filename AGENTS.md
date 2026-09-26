@@ -26,12 +26,13 @@ Use typed Python and NumPy-style docstrings for all public classes and functions
 Use one clock, fixed simulated steps, stable satellite ordering, and explicit units/frames.
 Generated schemas/types must come from Python models. Public outputs are allowlisted;
 private scenarios, seeds, outcome thresholds and future health never enter viewer/consumer data.
+Do not write any tests, focus on builing first and handing of the project. 
 
 ## Definition of done
 
-1. Focused invariant/contract tests pass, including meaningful failure paths.
+1. Focused invariant/contract pass, including meaningful failure paths.
 2. Another reviewer checks the module's interfaces, correctness and applicable trust boundaries.
-3. Findings are fixed and the affected tests rerun.
+3. Findings are fixed and the affected rerun.
 4. Integration, lint, type checks and browser checks pass.
 5. Evidence states commands, measured outcomes, hardware, model limits and remaining gates.
 
