@@ -265,12 +265,16 @@ class OrbitPoint(PublicModel):
         Earth-fixed position in metres.
     velocity_itrs_m_s : tuple of float
         Earth-fixed velocity in metres per second.
+    sun_position_itrs_m : tuple of float
+        Astropy geocentric Sun position in metres at ``observed_at``, in
+        the same Earth-fixed frame. Presentation ephemeris, not telemetry.
     """
 
     elapsed_s: int
     observed_at: datetime
     position_itrs_m: tuple[float, float, float]
     velocity_itrs_m_s: tuple[float, float, float]
+    sun_position_itrs_m: tuple[float, float, float]
 
 
 class SatelliteTrajectory(PublicModel):

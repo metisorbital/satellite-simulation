@@ -15,9 +15,25 @@ window.metisGlobe = (() => {
     const altitude = Math.max(13700000, radius * 1.25 / Math.sin(Math.min(vertical, horizontal)) - radius);
     viewer.camera.setView({ destination: C.Cartesian3.fromDegrees(120, 18, altitude) });
   }
+  function updateClock(scene, epoch, seconds) {
+    const viewer = scene.viewer;
+    viewer.clock.currentTime = C.JulianDate.addSeconds(
+      C.JulianDate.fromIso8601(epoch), seconds, new C.JulianDate());
+    const sun = scene.sun?.getValue(viewer.clock.currentTime);
+    const available = sun && C.Cartesian3.magnitudeSquared(sun) > 0;
+    viewer.scene.globe.enableLighting = Boolean(available);
+    // A missing/out-of-range ephemeris must not leave a stale terminator visible.
+    if (viewer.scene.skyAtmosphere) viewer.scene.skyAtmosphere.show = Boolean(available);
+    scene.lightingError = available ? null : 'Day/night lighting unavailable at this time.';
+    if (available) {
+      // Backend vectors point Earth -> Sun; light rays travel the opposite way.
+      C.Cartesian3.normalize(sun, scene.light.direction);
+      C.Cartesian3.negate(scene.light.direction, scene.light.direction);
+    }
+  }
   return {
     create(element, onSelect) {
-      const scene = { viewer: null, run: null, selected: '', hidden: new Set(), paths: '', follow: false, autoFrame: true, resizeObserver: null, cameraInput: null, error: null, fps: null, count: 0, began: performance.now() };
+      const scene = { viewer: null, run: null, selected: '', hidden: new Set(), paths: '', follow: false, autoFrame: true, resizeObserver: null, cameraInput: null, sun: null, light: null, lightingError: null, error: null, fps: null, count: 0, began: performance.now() };
       scenes.set(element.id, scene);
       try {
         C.CreditDisplay.cesiumCredit = new C.Credit('<a href="https://cesium.com/cesiumjs/" target="_blank" rel="noreferrer">CesiumJS</a>', true);
@@ -33,9 +49,11 @@ window.metisGlobe = (() => {
         viewer.scene.backgroundColor = C.Color.TRANSPARENT;
         if (viewer.scene.skyBox) viewer.scene.skyBox.show = false;
         viewer.scene.globe.baseColor = C.Color.fromCssColorString('#173148');
-        viewer.scene.globe.enableLighting = true;
+        scene.light = new C.DirectionalLight({ direction: new C.Cartesian3(1, 0, 0) });
+        viewer.scene.light = scene.light;
+        viewer.scene.globe.enableLighting = false;
         viewer.scene.globe.dynamicAtmosphereLighting = true;
-        viewer.scene.globe.dynamicAtmosphereLightingFromSun = true;
+        viewer.scene.globe.dynamicAtmosphereLightingFromSun = false;
         viewer.scene.globe.atmosphereLightIntensity = 11;
         if (viewer.scene.skyAtmosphere) {
           viewer.scene.skyAtmosphere.hueShift = -0.06;
@@ -101,9 +119,8 @@ window.metisGlobe = (() => {
       if (scene.run !== status.run_id) {
         viewer.trackedEntity = undefined;
         viewer.entities.removeAll();
-        scene.run = status.run_id; scene.paths = ''; scene.follow = false;
+        scene.run = status.run_id; scene.paths = ''; scene.follow = false; scene.sun = null;
       }
-      viewer.clock.currentTime = C.JulianDate.addSeconds(C.JulianDate.fromIso8601(status.epoch_utc), seconds ?? 0, new C.JulianDate());
       viewer.clock.shouldAnimate = false;
       viewer.clock.multiplier = 0;
       scene.selected = selected;
@@ -127,6 +144,14 @@ window.metisGlobe = (() => {
       const trajectoryAllowed = status.source_kind !== 'observed' || trajectory?.kind === 'configured_orbit';
       if (trajectoryAllowed && trajectory?.run_id === status.run_id && pathKey !== scene.paths) {
         scene.paths = pathKey;
+        // All satellites share the same geocentric Sun, sampled by Astropy.
+        scene.sun = new C.SampledProperty(C.Cartesian3);
+        for (const sample of trajectory.satellites[0]?.samples ?? []) {
+          const vector = sample.sun_position_itrs_m;
+          if (Array.isArray(vector) && vector.length === 3 && vector.every(Number.isFinite)) {
+            scene.sun.addSample(C.JulianDate.fromIso8601(sample.observed_at), C.Cartesian3.fromArray(vector));
+          }
+        }
         for (const path of trajectory.satellites) {
           viewer.entities.removeById(`orbit-${path.satellite_id}`);
           const descriptor = status.satellites.find(s => s.satellite_id === path.satellite_id);
@@ -148,6 +173,7 @@ window.metisGlobe = (() => {
           orbit.show = !scene.hidden.has(path.satellite_id);
         }
       }
+      updateClock(scene, status.epoch_utc, seconds ?? 0);
       if (scene.follow) {
         if (scene.hidden.has(selected)) {
           scene.follow = false;
@@ -158,8 +184,8 @@ window.metisGlobe = (() => {
       }
     },
     clock(id, epoch, seconds) {
-      const viewer = scenes.get(id)?.viewer;
-      if (viewer) viewer.clock.currentTime = C.JulianDate.addSeconds(C.JulianDate.fromIso8601(epoch), seconds, new C.JulianDate());
+      const scene = scenes.get(id);
+      if (scene?.viewer) updateClock(scene, epoch, seconds);
     },
     command(id, action) {
       const scene = scenes.get(id), viewer = scene?.viewer;
@@ -189,7 +215,7 @@ window.metisGlobe = (() => {
     },
     diagnostics(id) {
       const scene = scenes.get(id);
-      return JSON.stringify({ error: scene?.error ?? null, fps: scene?.fps ?? null });
+      return JSON.stringify({ error: scene?.error ?? scene?.lightingError ?? null, fps: scene?.fps ?? null });
     },
     destroy(id) {
       const scene = scenes.get(id);
