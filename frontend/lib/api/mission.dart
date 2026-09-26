@@ -570,25 +570,29 @@ class Mission extends ChangeNotifier {
     _shiftRetryKeys.remove(intent);
   }
 
-  Future<void> replaceSatellites(List<JsonMap> satellites) async {
-    if (_closed || busy || !canEdit || !canReplaceRun) return;
+  /// Save a new run and report whether the editor can close successfully.
+  Future<bool> replaceSatellites(List<JsonMap> satellites) async {
+    if (_closed || busy || !canEdit || !canReplaceRun) return false;
     final generation = _generation;
     busy = true;
     error = null;
     notifyListeners();
     try {
-      await _request(
+      final replacement = await _request(
         '/v1/viewer/configuration',
         body: {'satellites': satellites},
       );
-      if (_closed || generation != _generation) return;
+      if (_closed || generation != _generation) return false;
       busy = false;
-      await connect();
+      await connect(initial: replacement);
+      // The POST already committed; a refresh error must not invite a second save.
+      return !_closed;
     } catch (exception) {
-      if (_closed || generation != _generation) return;
+      if (_closed || generation != _generation) return false;
       error = '$exception';
       busy = false;
       notifyListeners();
+      return false;
     }
   }
 

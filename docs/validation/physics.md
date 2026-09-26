@@ -195,8 +195,42 @@ Settings → Edit constellation → Save as new run with mocked API responses;
 the submitted METIS-02 operation retained `start_s: 3600`, `end_s: 3900`,
 `mode: payload_active`, and `repeat: orbit`.
 The legacy browser check needs updating before that automated gate can pass.
-The Dart format check also reports a pre-existing multiline-format issue in
-`main.dart`'s custom-speed condition, outside this change.
+At that verification point the Dart format check also reported a pre-existing
+multiline-format issue in `main.dart`'s custom-speed condition; formatting passed
+after the dashboard follow-up below.
+
+### Configure Tasks Through the Dashboard
+
+The dashboard follow-up adds per-satellite payload controls described in
+[Schedule Payload Operations](../frontend.md#schedule-payload-operations).
+An independent review covered controller lifetime, satellite switching, preserved
+non-payload operations, validation, save/refresh failures, and session expiry;
+the reported save and dialog-lifetime findings were corrected and re-reviewed.
+
+Manual Playwright verification used the release web build, the real local API,
+and an isolated temporary SQLite database with a 10,000-second run.
+For METIS-01, an orbit-repeating payload window at 1000–1300 seconds conflicted
+on its second repetition with an existing safe-mode window at 6800–6860.
+The API returned 422 with the overlap reason, and the editor retained its draft.
+Changing the payload start to 2000 saved successfully (HTTP 200); an independent
+configuration read returned both the safe window and the recurring 2000–2300
+payload window. METIS-02's existing recurring and one-time payload operations
+were preserved. No browser errors were reported in that flow.
+
+Additional browser checks confirmed that disabling and re-enabling payload
+scheduling retained an edited 420-second draft. A zero-duration task was caught
+after switching to another satellite, with the editor returning to the satellite
+containing the error. A newly added satellite saved a recurring 600–900-second
+payload task; reopening the editor confirmed the persisted start, 300-second
+duration, and enabled repeat setting.
+
+`flutter analyze`, the 18 existing Flutter checks, the release web build, Dart
+formatting for the four touched Dart files, and the strict documentation build
+passed. `uv run pytest tests/integration/test_viewer_editing.py
+tests/contracts/test_contracts.py -q` passed all 35 existing checks.
+No test files were added or changed; the legacy browser check described above
+still needs its navigation and old schedule-clearing expectation updated.
+This is local verification, with no deployment or production database change.
 
 ## Inspect the Historical Six-Hour Causal Outcome
 

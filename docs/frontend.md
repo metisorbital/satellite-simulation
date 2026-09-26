@@ -66,6 +66,29 @@ and distinguish orbit previews from measured telemetry. A flight-operations
 appearance does not imply flight certification or additional simulated systems.
 Do not add invented communications, attitude, thermal, or propulsion readings.
 
+### Schedule Payload Operations
+
+Stop the active run before changing the configuration. Open **Settings → Edit
+constellation**, select an existing satellite or add one, then open **Payload
+Tasks** and enable **Schedule payload operations**. Add one or more tasks and
+set each task's whole simulated **Start time(s)** and **Duration(s)**; duration
+defaults to 300 seconds. Enable **Repeat every orbit** for a recurring task.
+Use the task controls to add or remove individual payload windows.
+
+Disabling **Schedule payload operations** removes payload tasks only; nominal
+and safe operations remain unchanged. The mode configured outside scheduled
+windows applies between them. If that mode is `payload_active`, payload power
+stays active continuously between windows. The satellite's **Power System**
+payload-active load is the total spacecraft load for that mode and remains
+editable per satellite.
+
+Choose **Save as new run** to validate and create a new immutable run from the
+edited constellation. If server validation rejects the configuration, the
+editor keeps the draft so it can be corrected. The backend resolves orbit
+recurrence and rejects overlapping windows, including overlaps created by later
+cycles; the first declared window must fit within the run. The viewer does not
+predict recurrence or replace backend schedule validation.
+
 ## Component Responsibilities
 
 | Layer | Responsibility |
