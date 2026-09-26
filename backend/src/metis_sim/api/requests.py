@@ -4,7 +4,7 @@ import json
 from typing import Any, Literal
 
 from fastapi import Request
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, SecretStr
 
 from metis_sim.adapters.configuration import ConfigurationParsingError, load_configuration
 from metis_sim.adapters.records import canonical_hash
@@ -12,6 +12,22 @@ from metis_sim.adapters.repository import Idempotent
 from metis_sim.api.auth import Principal
 from metis_sim.application.errors import ServiceError
 from metis_sim.domain.config import SimulationConfig
+
+
+class ViewerLoginRequest(BaseModel):
+    """Demo-only login input whose password is never verified or persisted.
+
+    Attributes
+    ----------
+    login : str
+        Name resolved against the packaged mock operator directory.
+    password : SecretStr
+        Required nonempty input, redacted from model representations.
+    """
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+    login: str = Field(min_length=1, max_length=64)
+    password: SecretStr = Field(min_length=1, max_length=1024)
 
 
 class ViewerConfigurationRequest(BaseModel):

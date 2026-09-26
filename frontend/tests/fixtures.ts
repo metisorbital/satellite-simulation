@@ -1,6 +1,11 @@
 type PublicRunStatus = Record<string, any>;
 type MeasurementFrame = Record<string, any>;
 
+export const demoOperator = {
+  user_id: '11111111-1111-4111-8111-111111111111',
+  login: 'operator1', display_name: 'Operator One',
+};
+
 export const EPOCH = '2026-09-21T00:00:00Z';
 export function statusAt(
   tick: number,

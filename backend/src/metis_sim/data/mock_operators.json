@@ -1,0 +1,17 @@
+[
+  {
+    "user_id": "cb7434cd-7c89-4e04-a510-ab0760b13d64",
+    "login": "operator1",
+    "display_name": "Operator 1"
+  },
+  {
+    "user_id": "50caf6e8-1192-40e0-a99c-e59b4900d4a1",
+    "login": "operator2",
+    "display_name": "Operator 2"
+  },
+  {
+    "user_id": "cefd24c1-a4ab-4663-ab69-b12a1bdc6d9f",
+    "login": "operator3",
+    "display_name": "Operator 3"
+  }
+]

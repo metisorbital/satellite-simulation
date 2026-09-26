@@ -1,9 +1,11 @@
 """Token roles and expiring run-scoped browser sessions."""
 
 import hmac
+import json
 import secrets
 import time
 from dataclasses import dataclass
+from importlib.resources import files
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -11,6 +13,7 @@ from fastapi import Request, WebSocket
 from itsdangerous import BadData, URLSafeTimedSerializer
 
 from metis_sim.application.errors import ServiceError
+from metis_sim.domain.public import ViewerOperator
 from metis_sim.settings import Settings
 
 COOKIE = "metis_viewer"
@@ -28,6 +31,7 @@ class Principal:
     csrf_token: str | None = None
     public_demo: bool = False
     interactive: bool = False
+    user_id: str | None = None
 
     def require(
         self, roles: set[str], run_id: str | None = None, action: str | None = None
@@ -55,6 +59,12 @@ class Auth:
 
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
+        directory = json.loads(files("metis_sim").joinpath("data/mock_operators.json").read_text())
+        operators = [ViewerOperator.model_validate(item) for item in directory]
+        self.operators = {operator.login: operator for operator in operators}
+        self.operators_by_id = {str(operator.user_id): operator for operator in operators}
+        if len(self.operators) != len(operators) or len(self.operators_by_id) != len(operators):
+            raise ValueError("Mock operator logins and user IDs must be unique")
         if len(settings.session_secret) < 32:
             raise ValueError("METIS_SESSION_SECRET must contain at least 32 characters")
         tokens = [settings.operator_token, settings.consumer_token, settings.evaluator_token]
@@ -76,6 +86,26 @@ class Auth:
                 ):
                     return Principal(role)
             raise ServiceError("unauthorized", "Invalid credentials.", 401)
+        return self.session(request)
+
+    def session(self, request: Request | WebSocket) -> Principal:
+        """Verify only the browser cookie, without accepting bearer credentials.
+
+        Parameters
+        ----------
+        request : Request or WebSocket
+            Browser request containing the optional HttpOnly viewer cookie.
+
+        Returns
+        -------
+        Principal
+            Expiring run-scoped session claims.
+
+        Raises
+        ------
+        ServiceError
+            If the session is missing, invalid, expired, or no longer enabled.
+        """
         cookie = request.cookies.get(COOKIE)
         if cookie:
             try:
@@ -92,6 +122,18 @@ class Auth:
                     raise BadData("public demo cannot control a shared run")
                 if payload.get("public_demo", False) and not self.settings.public_demo:
                     raise BadData("public demo access is disabled")
+                user_id = payload.get("user_id")
+                if user_id is not None and (
+                    not isinstance(user_id, str)
+                    or user_id not in self.operators_by_id
+                    or payload.get("public_demo", False)
+                    or not payload.get("interactive", False)
+                    or not (
+                        self.settings.local_demo
+                        or (self.settings.public_demo and self.settings.interactive_public_demo)
+                    )
+                ):
+                    raise BadData("invalid mock operator claim")
                 principal = Principal(
                     role="viewer_control",
                     run_id=payload["run_id"],
@@ -100,6 +142,7 @@ class Auth:
                     csrf_token=payload["csrf_token"],
                     public_demo=payload.get("public_demo", False),
                     interactive=payload.get("interactive", False),
+                    user_id=user_id,
                 )
                 principal.require({"viewer_control"})
                 return principal
@@ -110,7 +153,13 @@ class Auth:
         raise ServiceError("unauthorized", "Authentication is required.", 401)
 
     def issue(
-        self, run_id: str, *, public_demo: bool = False, interactive: bool = False
+        self,
+        run_id: str,
+        *,
+        public_demo: bool = False,
+        interactive: bool = False,
+        user_id: str | None = None,
+        expires_at: float | None = None,
     ) -> tuple[str, Principal]:
         """Mint a fixed run-scoped capability after the caller authorizes issuance.
 
@@ -122,6 +171,10 @@ class Auth:
             Issue a read-only session for the shared public demonstration.
         interactive : bool, default=False
             Mark a browser-owned run eligible for prepared-engine recovery.
+        user_id : str or None
+            Stable mock operator identity, only for an interactive viewer grant.
+        expires_at : float or None
+            Absolute expiry shared with a durable mock run lease, if provided.
 
         Returns
         -------
@@ -132,10 +185,13 @@ class Auth:
             "viewer_control",
             run_id,
             () if public_demo else ACTIONS,
-            time.time() + self.settings.session_lifetime_s,
+            expires_at
+            if expires_at is not None
+            else time.time() + self.settings.session_lifetime_s,
             secrets.token_urlsafe(32),
             public_demo,
             interactive,
+            user_id,
         )
         claims: dict[str, Any] = dict(
             role=principal.role,
@@ -145,8 +201,57 @@ class Auth:
             csrf_token=principal.csrf_token,
             public_demo=principal.public_demo,
             interactive=principal.interactive,
+            user_id=principal.user_id,
         )
         return self.serializer.dumps(claims), principal
+
+    def demo_operator(self, login: str) -> ViewerOperator:
+        """Resolve a demo login without inspecting or verifying a password.
+
+        Parameters
+        ----------
+        login : str
+            Entered login, normalized for surrounding whitespace and case.
+
+        Returns
+        -------
+        ViewerOperator
+            Stable identity loaded from the packaged mock directory.
+
+        Raises
+        ------
+        ServiceError
+            If the login is not a configured demo operator.
+        """
+        operator = self.operators.get(login.strip().casefold())
+        if operator is None:
+            raise ServiceError(
+                "unknown_operator", "Choose operator1, operator2, or operator3.", 401
+            )
+        return operator
+
+    def login_issuance(self, request: Request) -> None:
+        """Gate mock sign-in using the existing explicit interactive demo modes.
+
+        Parameters
+        ----------
+        request : Request
+            Browser login request with a required allowed Origin.
+
+        Raises
+        ------
+        ServiceError
+            If the origin, loopback address, HTTPS host, or demo mode is invalid.
+        """
+        self.origin(request, required=True)
+        try:
+            self.local_bootstrap(request)
+        except ServiceError:
+            if not self.settings.interactive_public_demo:
+                raise ServiceError(
+                    "forbidden", "Interactive demo login is unavailable.", 403
+                ) from None
+            self.public_bootstrap(request)
 
     def csrf(self, request: Request, principal: Principal) -> None:
         """Require a trusted Origin and session-bound token for browser mutations."""

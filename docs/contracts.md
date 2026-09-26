@@ -222,6 +222,32 @@ Session issuance is handled by the deployment's authentication adapter during op
 Define its verified internal claims as `{role, run_id, allowed_actions, expires_at, public_demo}` and enforce expiry server-side on HTTP requests and WebSocket reconnects; an active socket closes when its session expires. Disabling public demo issuance also invalidates outstanding public demo grants.
 Use an HttpOnly, SameSite session cookie, Secure on HTTPS deployments, with Origin/CSRF checks on control requests. No new public account/registration API is needed for the prepared demo.
 Acceptance fixtures issue this restricted principal through the auth adapter and prove control succeeds for its run but configuration/private routes and other runs remain forbidden.
+
+### Mock Operator Sessions
+
+The Flutter demo begins at a login gate. Packaged `data/mock_operators.json` contains
+fixed `user_id`, `login`, and `display_name` records for three demo operators.
+`POST /v1/viewer/login` accepts a listed login and any nonempty password; it performs
+no password verification and never stores the password. Issuance is restricted to
+the existing loopback demo boundary or an explicitly enabled interactive HTTPS demo.
+Each login creates a separate run with a server-selected `private.runs.user_id`.
+Editing or resetting copies this ownership into the replacement run transactionally.
+Existing non-user runs retain a null `user_id`.
+
+`ViewerBootstrap.operator` exposes the current demo profile only in the viewer
+session response. The identity does not enter public telemetry or run-status payloads.
+`GET /v1/viewer/session` restores the signed session's operator and scoped run;
+without a mock operator session it returns `401` and does not issue an anonymous grant.
+`POST /v1/viewer/logout` requires the valid session's Origin and CSRF token, stops
+only its active demo run, and deletes the cookie. The Flutter client clears old
+samples and cancels streams before another operator enters.
+The private manifest records the signed session's expiry. A later login stops
+expired operator-owned active runs before allocating a new run, so an abandoned
+paused session cannot occupy the single-writer slot indefinitely.
+Unexpired and legacy runs are not reclaimed by this operator cleanup.
+These mock identities are not evidence of a verified person's identity and do not
+grant bearer-operator or evaluator privileges.
+
 Use separate SQL schemas/roles or equivalently restricted repository access, distinct response models, and negative access tests.
 Do not merely remove `fault` from one JSON response while exposing it through the manifest, scenario name, logs, filesystem exports, or future orbit/health preview.
 

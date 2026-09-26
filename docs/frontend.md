@@ -24,7 +24,7 @@ cd frontend
 flutter pub get --enforce-lockfile
 flutter build web --release --no-web-resources-cdn
 cd ..
-uv run metis-sim demo --at 10
+uv run metis-sim demo --at 0
 ```
 
 Open `http://127.0.0.1:8000`. FastAPI serves `frontend/build/web`.
@@ -73,9 +73,16 @@ interpolate committed position samples for display; it must not propagate an
 orbit or extrapolate public telemetry beyond committed time. Predicted orbit
 paths remain explicitly separate from measured state.
 
-The API client obtains an HttpOnly run-scoped cookie through viewer bootstrap.
+The login gate restores an existing operator session with `GET /v1/viewer/session`.
+Without a session it presents login and password fields before creating the mission view.
+`POST /v1/viewer/login` selects a JSON-backed demo identity and obtains an HttpOnly
+run-scoped cookie. Use `operator1`, `operator2`, or `operator3` and any nonempty
+password; passwords are neither verified nor stored.
 Control requests carry the returned CSRF token and an idempotency key. Mission
 replacement must clear prior samples and reject late responses for the old run.
+Logout stops the operator's active demo run, clears the cookie, disposes mission
+streams and state, and returns to login. Another login creates a separate run.
+The signed session restores the same operator and run on browser reload until expiry.
 See [the contracts](contracts.md) for freshness, reconnect, and privacy rules.
 
 Flutter's [HTML platform views](https://docs.flutter.dev/platform-integration/web/web-content-in-flutter)
@@ -113,3 +120,5 @@ The earlier [browser measurements](validation/browser.md) describe the React
 viewer before migration. They are historical evidence, not Flutter performance
 results. See [Flutter migration validation](validation/flutter-migration.md) for
 checks performed on the replacement.
+The [mock operator login validation](validation/operator-login.md) records the
+subsequent identity, session-lifecycle, and private ownership checks.

@@ -2,6 +2,7 @@
 
 from datetime import datetime
 from typing import Literal, TypedDict
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, with_config
 
@@ -297,6 +298,24 @@ class VisualMessage(PublicModel):
     message: str | None = None
 
 
+class ViewerOperator(PublicModel):
+    """Mock operator identity disclosed only to its own browser session.
+
+    Attributes
+    ----------
+    user_id : UUID
+        Stable demo identity stored privately with the operator's runs.
+    login : str
+        Canonical login name from the packaged demo directory.
+    display_name : str
+        Human-readable operator name.
+    """
+
+    user_id: UUID
+    login: str
+    display_name: str
+
+
 class ViewerBootstrap(PublicModel):
     """One prepared run and session-bound CSRF token for the browser.
 
@@ -308,11 +327,14 @@ class ViewerBootstrap(PublicModel):
         Controls permitted for this session; empty for a shared public demo.
     run : PublicRunStatus
         Public status of the session's one scoped run.
+    operator : ViewerOperator or None
+        Logged-in demo operator; absent for legacy viewer grants.
     """
 
     csrf_token: str
     allowed_actions: list[Action]
     run: PublicRunStatus
+    operator: ViewerOperator | None = None
 
 
 class ControlRequest(PublicModel):

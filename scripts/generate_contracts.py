@@ -22,6 +22,7 @@ from metis_sim.domain.public import (
     Snapshot,
     Trajectory,
     ViewerBootstrap,
+    ViewerOperator,
     VisualMessage,
 )
 from metis_sim.domain.telemetry import ChannelReading, MeasurementFrame, OperationalEvent
@@ -46,6 +47,7 @@ MODELS: dict[str, tuple[type[BaseModel], JsonSchemaMode]] = {
     "SequenceRange": (SequenceRange, "serialization"),
     "VisualMessage": (VisualMessage, "serialization"),
     "ViewerBootstrap": (ViewerBootstrap, "serialization"),
+    "ViewerOperator": (ViewerOperator, "serialization"),
     "ControlRequest": (ControlRequest, "validation"),
 }
 

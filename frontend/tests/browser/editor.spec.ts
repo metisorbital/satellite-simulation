@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { statusAt } from '../fixtures';
+import { demoOperator, statusAt } from '../fixtures';
 
 test('constellation add and remove create a fresh run', async ({ page }) => {
   const original = statusAt(-1, 'created', 1);
@@ -19,14 +19,14 @@ test('constellation add and remove create a fresh run', async ({ page }) => {
       battery_capacity_wh: 400, battery_initial_soc: 0.85,
       loads_w: { nominal: 150, payload_active: 210, safe: 70 } },
   }));
-  await page.route('**/v1/viewer/bootstrap', route => route.fulfill({
-    json: { csrf_token: 'test-csrf', allowed_actions: ['start', 'pause', 'resume', 'set_speed', 'stop'], run: current },
+  await page.route('**/v1/viewer/session', route => route.fulfill({
+    json: { operator: demoOperator, csrf_token: 'test-csrf', allowed_actions: ['start', 'pause', 'resume', 'set_speed', 'stop'], run: current },
   }));
   await page.route('**/v1/viewer/configuration', route => {
     if (route.request().method() === 'GET') return route.fulfill({ json: { satellites } });
     submitted = route.request().postDataJSON();
     current = replacement;
-    return route.fulfill({ json: { csrf_token: 'next-csrf', allowed_actions: ['start', 'stop'], run: replacement } });
+    return route.fulfill({ json: { operator: demoOperator, csrf_token: 'next-csrf', allowed_actions: ['start', 'stop'], run: replacement } });
   });
   await page.route('**/v1/runs/*/snapshot?history=41', route => route.fulfill({
     json: { status: current, frames: [] },
