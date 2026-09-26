@@ -9,6 +9,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    LargeBinary,
     MetaData,
     String,
     Table,
@@ -171,4 +172,58 @@ shift_log_entries = Table(
     Column("created_at", DateTime(timezone=True), nullable=False),
     CheckConstraint("kind IN ('note','decision','action','unresolved_issue','event')"),
     schema="private",
+)
+
+# Source corpora outlive run retention. Bounded compressed CSV chunks preserve
+# original lexical values without multiplying storage for millions of rows.
+observed_datasets = Table(
+    "observed_datasets",
+    metadata,
+    Column("dataset_id", String(64), primary_key=True),
+    Column("title", String(200), nullable=False),
+    Column("satellite_id", String(64), nullable=False),
+    Column("catalog_version", String(32), nullable=False),
+    Column("observed_start", DateTime(timezone=True), nullable=False),
+    Column("observed_end", DateTime(timezone=True), nullable=False),
+    Column("duration_s", Integer, nullable=False),
+    Column("sample_count", Integer, nullable=False),
+    Column("columns", document, nullable=False),
+    Column("archive_sha256", String(64), nullable=False),
+    Column("csv_sha256", String(64), nullable=False),
+    Column("provenance", document, nullable=False),
+    Column("imported_at", DateTime(timezone=True), nullable=False),
+    CheckConstraint("sample_count > 0 AND duration_s >= 0"),
+    CheckConstraint("observed_end >= observed_start"),
+    schema="private",
+)
+observed_sample_chunks = Table(
+    "observed_sample_chunks",
+    metadata,
+    Column("dataset_id", ForeignKey("private.observed_datasets.dataset_id"), primary_key=True),
+    Column("first_sequence", Integer, primary_key=True),
+    Column("sample_count", Integer, nullable=False),
+    Column("first_elapsed_s", Integer, nullable=False),
+    Column("last_elapsed_s", Integer, nullable=False),
+    Column("first_observed_at", DateTime(timezone=True), nullable=False),
+    Column("last_observed_at", DateTime(timezone=True), nullable=False),
+    Column("raw_size_bytes", Integer, nullable=False),
+    Column("csv_sha256", String(64), nullable=False),
+    Column("compressed_csv", LargeBinary, nullable=False),
+    CheckConstraint("first_sequence >= 0 AND sample_count BETWEEN 1 AND 4096"),
+    CheckConstraint("first_elapsed_s >= 0 AND last_elapsed_s >= first_elapsed_s"),
+    CheckConstraint("last_observed_at >= first_observed_at"),
+    CheckConstraint("raw_size_bytes BETWEEN 1 AND 4194304"),
+    schema="private",
+)
+Index(
+    "observed_chunks_elapsed",
+    observed_sample_chunks.c.dataset_id,
+    observed_sample_chunks.c.last_elapsed_s,
+    observed_sample_chunks.c.first_sequence,
+)
+Index(
+    "observed_chunks_time",
+    observed_sample_chunks.c.dataset_id,
+    observed_sample_chunks.c.last_observed_at,
+    observed_sample_chunks.c.first_sequence,
 )
