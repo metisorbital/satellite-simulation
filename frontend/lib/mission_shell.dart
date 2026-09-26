@@ -347,7 +347,10 @@ class _Brand extends StatelessWidget {
               )
             : Container(
                 margin: const EdgeInsets.symmetric(horizontal: 12),
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 8,
+                ),
                 decoration: BoxDecoration(
                   color: const Color(0xfff4f7ff),
                   borderRadius: BorderRadius.circular(8),
