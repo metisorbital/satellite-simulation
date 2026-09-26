@@ -2,9 +2,22 @@
 window.metisGlobe = (() => {
   const scenes = new Map();
   const C = window.Cesium;
+  function frameEarth(scene) {
+    const viewer = scene.viewer;
+    if (!viewer || viewer.isDestroyed() || !scene.autoFrame || scene.follow) return;
+    if (!viewer.canvas.clientWidth || !viewer.canvas.clientHeight) return;
+    // Cesium uses horizontal FOV for wide canvases; fit the smaller angle.
+    viewer.resize();
+    const frustum = viewer.camera.frustum;
+    const vertical = frustum.fovy / 2;
+    const horizontal = Math.atan(Math.tan(vertical) * frustum.aspectRatio);
+    const radius = viewer.scene.globe.ellipsoid.maximumRadius;
+    const altitude = Math.max(13700000, radius * 1.25 / Math.sin(Math.min(vertical, horizontal)) - radius);
+    viewer.camera.setView({ destination: C.Cartesian3.fromDegrees(120, 18, altitude) });
+  }
   return {
     create(element, onSelect) {
-      const scene = { viewer: null, run: null, selected: '', hidden: new Set(), paths: '', follow: false, error: null, fps: null, count: 0, began: performance.now() };
+      const scene = { viewer: null, run: null, selected: '', hidden: new Set(), paths: '', follow: false, autoFrame: true, resizeObserver: null, cameraInput: null, error: null, fps: null, count: 0, began: performance.now() };
       scenes.set(element.id, scene);
       try {
         C.CreditDisplay.cesiumCredit = new C.Credit('<a href="https://cesium.com/cesiumjs/" target="_blank" rel="noreferrer">CesiumJS</a>', true);
@@ -51,6 +64,30 @@ window.metisGlobe = (() => {
         viewer.screenSpaceEventHandler.removeInputAction(C.ScreenSpaceEventType.LEFT_DOUBLE_CLICK);
         C.SingleTileImageryProvider.fromUrl('/assets/earth_atmos_2048.jpg', {credit: 'Earth imagery · three.js contributors (MIT)'})
           .then(provider => { if (!viewer.isDestroyed()) viewer.imageryLayers.addImageryProvider(provider); }).catch(() => {});
+        const pointers = new Map();
+        const releasePointer = event => pointers.delete(event.pointerId);
+        scene.cameraInput = {
+          pointerdown(event) {
+            pointers.set(event.pointerId, [event.clientX, event.clientY]);
+            if (pointers.size > 1) scene.autoFrame = false;
+          },
+          pointermove(event) {
+            const start = pointers.get(event.pointerId);
+            // A marker click keeps responsive framing; an actual drag takes over.
+            if (start && Math.hypot(event.clientX - start[0], event.clientY - start[1]) >= 4) {
+              scene.autoFrame = false;
+            }
+          },
+          pointerup: releasePointer,
+          pointercancel: releasePointer,
+          pointerleave: releasePointer,
+          wheel() { scene.autoFrame = false; },
+        };
+        for (const [type, handler] of Object.entries(scene.cameraInput)) {
+          viewer.canvas.addEventListener(type, handler, { passive: true });
+        }
+        scene.resizeObserver = new ResizeObserver(() => frameEarth(scene));
+        scene.resizeObserver.observe(element);
         this.command(element.id, 'reset');
       } catch (_) { scene.error = 'The 3D view needs WebGL 2. Satellite measurements remain available.'; }
     },
@@ -129,8 +166,10 @@ window.metisGlobe = (() => {
       if (!viewer) return;
       if (action === 'reset') {
         scene.follow = false; viewer.trackedEntity = undefined;
-        viewer.camera.setView({ destination: C.Cartesian3.fromDegrees(120, 18, 13700000) });
+        scene.autoFrame = true;
+        frameEarth(scene);
       } else if (action === 'follow') {
+        scene.autoFrame = false;
         if (scene.follow) {
           scene.follow = false;
           viewer.trackedEntity = undefined;
@@ -141,13 +180,27 @@ window.metisGlobe = (() => {
           viewer.trackedEntity = viewer.entities.getById(scene.selected);
         }
       }
-      else if (action === 'in') viewer.camera.zoomIn(viewer.camera.positionCartographic.height * .3);
-      else if (action === 'out') viewer.camera.zoomOut(viewer.camera.positionCartographic.height * .3);
+      else if (action === 'in' || action === 'out') {
+        scene.autoFrame = false;
+        const distance = viewer.camera.positionCartographic.height * .3;
+        if (action === 'in') viewer.camera.zoomIn(distance);
+        else viewer.camera.zoomOut(distance);
+      }
     },
     diagnostics(id) {
       const scene = scenes.get(id);
       return JSON.stringify({ error: scene?.error ?? null, fps: scene?.fps ?? null });
     },
-    destroy(id) { const scene = scenes.get(id); scene?.viewer?.destroy(); scenes.delete(id); }
+    destroy(id) {
+      const scene = scenes.get(id);
+      scene?.resizeObserver?.disconnect();
+      if (scene?.viewer) {
+        for (const [type, handler] of Object.entries(scene.cameraInput ?? {})) {
+          scene.viewer.canvas.removeEventListener(type, handler);
+        }
+        scene.viewer.destroy();
+      }
+      scenes.delete(id);
+    }
   };
 })();

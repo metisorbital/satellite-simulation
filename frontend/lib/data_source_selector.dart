@@ -5,15 +5,25 @@ import 'api/mission.dart';
 
 /// Selects the producer for a new run while keeping run controls unchanged.
 class DataSourceSelector extends StatelessWidget {
-  const DataSourceSelector({super.key, required this.mission});
+  const DataSourceSelector({
+    super.key,
+    required this.mission,
+    this.compact = false,
+  });
 
   final Mission mission;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
     final currentDataset = mission.status?['dataset_id'] as String?;
     final value = mission.isObserved ? 'dataset:$currentDataset' : 'physics';
     final enabled = !mission.busy && mission.canReplaceRun;
+    final guidance = !mission.canReplaceRun && mission.canControl
+        ? 'Stop this run to change its data source.'
+        : mission.isObserved
+        ? 'Start run replays from the selected source time. Choose a position in Overview.'
+        : 'Start run generates measurements from the configured physics model.';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -88,6 +98,14 @@ class DataSourceSelector extends StatelessWidget {
                 ),
               ),
             ),
+            if (compact)
+              Padding(
+                padding: const EdgeInsets.only(left: 8),
+                child: Tooltip(
+                  message: guidance,
+                  child: const Icon(Icons.info_outline, size: 15),
+                ),
+              ),
             if (mission.datasetsError != null)
               IconButton(
                 tooltip: 'Retry loading recorded datasets',
@@ -98,15 +116,13 @@ class DataSourceSelector extends StatelessWidget {
               ),
           ],
         ),
-        const SizedBox(height: 7),
-        Text(
-          !mission.canReplaceRun && mission.canControl
-              ? 'Stop this run to change its data source.'
-              : mission.isObserved
-              ? 'Start run replays from the selected source time. Choose a position in Overview.'
-              : 'Start run generates measurements from the configured physics model.',
-          style: const TextStyle(fontSize: 10, color: Color(0xff94a4b7)),
-        ),
+        if (!compact) ...[
+          const SizedBox(height: 7),
+          Text(
+            guidance,
+            style: const TextStyle(fontSize: 10, color: Color(0xff94a4b7)),
+          ),
+        ],
         if (mission.datasetsError != null)
           const Padding(
             padding: EdgeInsets.only(top: 5),
