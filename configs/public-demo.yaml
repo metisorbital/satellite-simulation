@@ -5,7 +5,7 @@ run:
   duration_s: 600
   tick_s: 1
   telemetry_period_s: 1
-  speed: 5
+  speed: 90
   seed: 42
   earth_model: wgs84_j2_v1
   orbit_model: j2_cartesian

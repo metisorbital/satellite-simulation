@@ -462,7 +462,7 @@
     },
     "RunConfiguration": {
       "additionalProperties": false,
-      "description": "Simulation timing, seed, and versioned model selections.\n\nAttributes\n----------\nepoch_utc : datetime\n    UTC-normalized instant at which the run starts.\nduration_s : int\n    Configured elapsed duration in simulated seconds; samples include\n    both tick zero and the endpoint.\ntick_s, telemetry_period_s : int\n    Fixed physical and telemetry cadence; both are one second in P0.\nspeed : {1, 5, 20}\n    Requested wall-clock multiplier.\nseed : int\n    Reproducibility seed within JavaScript's exact integer range.\nearth_model, orbit_model, sun_model : str\n    Versioned model identifiers used by the run.",
+      "description": "Simulation timing, seed, and versioned model selections.\n\nAttributes\n----------\nepoch_utc : datetime\n    UTC-normalized instant at which the run starts.\nduration_s : int\n    Configured elapsed duration in simulated seconds; samples include\n    both tick zero and the endpoint.\ntick_s, telemetry_period_s : int\n    Fixed physical and telemetry cadence; both are one second in P0.\nspeed : int\n    Requested wall-clock multiplier.\nseed : int\n    Reproducibility seed within JavaScript's exact integer range.\nearth_model, orbit_model, sun_model : str\n    Versioned model identifiers used by the run.",
       "properties": {
         "duration_s": {
           "default": 21600,
@@ -493,7 +493,7 @@
           "type": "integer"
         },
         "speed": {
-          "default": 20,
+          "default": 90,
           "minimum": 1,
           "title": "Speed",
           "type": "integer"

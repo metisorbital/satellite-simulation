@@ -71,7 +71,7 @@ The fixed P0 validation matrix is:
 |---|---|
 | `run.tick_s`, `run.telemetry_period_s` | Both exactly 1. |
 | `run.duration_s` | Integer 1–86,400; default 21,600. |
-| `run.speed` | 1, 5, 20; default 20. |
+| `run.speed` | Positive whole-number multiplier; default 90. |
 | `run.seed` | Integer 0 through `2^53-1`; required. |
 | `run.earth_model` / `orbit_model` / `sun_model` | `wgs84_j2_v1` / `j2_cartesian` / `astropy_builtin`. |
 | `panel.pointing.type` / `battery.type` | `ideal_sun_tracking` / `energy_store`. |

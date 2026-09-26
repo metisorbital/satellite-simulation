@@ -657,7 +657,8 @@ class SimulationService:
                 return existing
             # This immutable revision is retained only for switching back to
             # physics; no synthetic configuration is used to produce observations.
-            self.repository.configuration(configuration_id)
+            revision = self.repository.configuration(configuration_id)
+            config = load_configuration(json.dumps(revision["configuration"]), "json")
             dataset, first = self._replay_start(dataset_id, start_elapsed_s)
             display_orbit = display_orbit or default_bupt1_orbit(dataset.observed_start)
             self._make_prepared_room()
@@ -673,7 +674,7 @@ class SimulationService:
                 epoch_utc=dataset.observed_start,
                 duration_s=dataset.duration_s,
                 playback_start_s=first.elapsed_s,
-                requested_speed=1,
+                requested_speed=config.run.speed,
                 committed_sequence=-1,
                 satellites=[
                     PublicSpacecraft(
@@ -965,6 +966,9 @@ class SimulationService:
                     canonical_hash(config.model_dump(mode="json")),
                 ),
             )
+            data_source: Literal["physics", "satellitecots"] = (
+                "satellitecots" if len(self.observed.list_datasets()) == 1 else "physics"
+            )
             return self.create_run(
                 revision["configuration_id"],
                 False,
@@ -972,6 +976,7 @@ class SimulationService:
                 viewer=True,
                 user_id=user_id,
                 viewer_expires_at=viewer_expires_at,
+                data_source=data_source,
             )
 
     def stop_viewer_run(

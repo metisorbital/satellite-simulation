@@ -15,7 +15,7 @@ Use one mandatory P0 physics path for all synthetic satellites:
 
 This is the lowest-risk route for configurable fictional satellites. It is materially better than drawing a circular orbit, but remains small enough to inspect and test. It also leaves a clean `OrbitPropagator` boundary for a later SGP4/TLE adapter or Basilisk adapter.
 
-The P0 target is three configured satellites, with the same code path supporting 1–10 satellites. Default output is 1 telemetry sample per simulated second and the demo default is 20x wall-clock speed. Speed changes how many fixed ticks are executed per wall-clock interval; it does not change the physics step.
+The P0 target is three configured satellites, with the same code path supporting 1–10 satellites. Default output is 1 telemetry sample per simulated second and the demo default is 90x wall-clock speed. Speed changes how many fixed ticks are executed per wall-clock interval; it does not change the physics step.
 
 ## Why this path
 
@@ -159,7 +159,7 @@ These values are a calibration starting point. They are selected to make the pow
 ```yaml
 epoch_utc: "2026-09-26T08:00:00Z"
 telemetry_period_sim_s: 1
-default_speed: 20
+default_speed: 90
 
 common_orbit:
   frame: GCRS
