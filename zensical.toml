@@ -10,9 +10,13 @@ site_name = "Metis Simulation"
 # repo_name = "user/repo"
 # edit_uri = "edit/main/docs/"
 
+watch = ["backend/src/metis_sim/adapters/tables.py"]
+
 nav = [
   { "Overview" = "index.md" },
   { "Run a Local Demo" = "getting-started.md" },
+  { "Database Tables" = "reference/database.md" },
+  { "Shift Log" = "reference/shift-log.md" },
   { "Consume the API" = "api.md" },
   { "Satellite Telemetry" = [
     { "Models and ML Export" = "reference/spacecraft-telemetry.md" },
@@ -110,6 +114,7 @@ toggle.name = "Switch to system preference"
 # link = "https://fosstodon.org/@user"
 
 [project.markdown_extensions]
+"metis_sim.schema_docs" = {}
 abbr = {}
 admonition = {}
 attr_list = {}

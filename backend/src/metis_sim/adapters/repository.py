@@ -17,6 +17,7 @@ from metis_sim.adapters.records import (
     record_result,
     utc_now,
 )
+from metis_sim.adapters.shift_log import append_control_action
 from metis_sim.application.errors import ServiceError
 
 Idempotent = tuple[str, str, str]
@@ -108,6 +109,8 @@ class Repository:
             Exempt the run from ordinary history expiration.
         token : Idempotent
             Durable mutation identity.
+        user_id : str, optional
+            Registered operator owning the run; legacy runs may remain anonymous.
         catalog_versions : dict of str to str, optional
             Complete satellite-to-catalog mapping from the validated profile.
             Omission supports callers producing the legacy power catalog.
@@ -212,6 +215,10 @@ class Repository:
         events: list[dict[str, Any]],
         truth: list[dict[str, Any]],
         token: Idempotent | None = None,
+        *,
+        user_id: str | None = None,
+        action: str | None = None,
+        speed: int | None = None,
     ) -> dict[str, Any]:
         """Atomically append immutable outputs, update clock and acknowledge control.
 
@@ -223,6 +230,12 @@ class Repository:
             Frozen outputs reused unchanged after a failed transaction.
         token : tuple, optional
             Request identity whose result commits with this boundary.
+        user_id : str, optional
+            Authenticated command actor; omitted for autonomous transitions.
+        action : str, optional
+            Successful simulation command to record in the actor's shift.
+        speed : int, optional
+            Requested speed for a set_speed command.
 
         Returns
         -------
@@ -279,6 +292,8 @@ class Repository:
             connection.execute(
                 update(tables.runs).where(tables.runs.c.run_id == run_id).values(**values)
             )
+            if user_id is not None and action is not None:
+                append_control_action(connection, status, user_id, action, speed)
             if token is not None:
                 record_result(connection, *token, status)
         return status
@@ -386,6 +401,9 @@ class Repository:
                         tables.runs.c.retain.is_(False),
                         tables.runs.c.manifest["viewer_owned"].as_boolean().is_(True),
                         tables.configurations.c.created_at < cutoff,
+                        ~select(tables.shift_logs.c.shift_id)
+                        .where(tables.shift_logs.c.run_id == tables.runs.c.run_id)
+                        .exists(),
                     )
                     .limit(100)
                 ).mappings()

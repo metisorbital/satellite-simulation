@@ -12,6 +12,7 @@ from sqlalchemy import (
     MetaData,
     String,
     Table,
+    Text,
     text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
@@ -29,6 +30,15 @@ configurations = Table(
     Column("created_at", DateTime(timezone=True), nullable=False),
     schema="private",
 )
+users = Table(
+    "users",
+    metadata,
+    Column("user_id", String(36), primary_key=True),
+    Column("login", String(128), nullable=False, unique=True),
+    Column("display_name", String(200), nullable=False),
+    Column("created_at", DateTime(timezone=True), nullable=False),
+    schema="private",
+)
 runs = Table(
     "runs",
     metadata,
@@ -39,7 +49,12 @@ runs = Table(
         nullable=False,
     ),
     Column("source_id", String(64), nullable=False),
-    Column("user_id", String(36), nullable=True),
+    Column(
+        "user_id",
+        ForeignKey("private.users.user_id", name="runs_user_id_fkey"),
+        nullable=True,
+        index=True,
+    ),
     Column("status", String(16), nullable=False),
     Column("public_status", document, nullable=False),
     Column("manifest", document, nullable=False),
@@ -115,5 +130,45 @@ idempotency = Table(
     Column("key", String(128), primary_key=True),
     Column("request_hash", String(64), nullable=False),
     Column("response", document, nullable=False),
+    schema="private",
+)
+
+shift_logs = Table(
+    "shift_logs",
+    metadata,
+    Column("shift_id", String(36), primary_key=True),
+    Column("run_id", ForeignKey("private.runs.run_id"), nullable=False, index=True),
+    Column("user_id", ForeignKey("private.users.user_id"), nullable=False, index=True),
+    Column("status", String(16), nullable=False),
+    Column("summary", Text, nullable=False),
+    Column("created_at", DateTime(timezone=True), nullable=False),
+    Column("updated_at", DateTime(timezone=True), nullable=False),
+    Column("submitted_at", DateTime(timezone=True)),
+    CheckConstraint("status IN ('draft', 'submitted')"),
+    CheckConstraint(
+        "(status = 'draft' AND submitted_at IS NULL) OR "
+        "(status = 'submitted' AND submitted_at IS NOT NULL)"
+    ),
+    schema="private",
+)
+Index(
+    "one_draft_shift_per_run_user",
+    shift_logs.c.run_id,
+    shift_logs.c.user_id,
+    unique=True,
+    postgresql_where=text("status = 'draft'"),
+    sqlite_where=text("status = 'draft'"),
+)
+shift_log_entries = Table(
+    "shift_log_entries",
+    metadata,
+    Column("entry_id", String(36), primary_key=True),
+    Column("shift_id", ForeignKey("private.shift_logs.shift_id"), nullable=False, index=True),
+    Column("user_id", ForeignKey("private.users.user_id"), nullable=False, index=True),
+    Column("kind", String(32), nullable=False),
+    Column("text", Text, nullable=False),
+    Column("details", document, nullable=False),
+    Column("created_at", DateTime(timezone=True), nullable=False),
+    CheckConstraint("kind IN ('note','decision','action','unresolved_issue','event')"),
     schema="private",
 )

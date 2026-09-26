@@ -24,3 +24,5 @@ See the [object guide](../python-api.md) for how these modules connect.
 ::: metis_sim.adapters.reads
 
 ::: metis_sim.adapters.tables
+
+::: metis_sim.adapters.shift_log

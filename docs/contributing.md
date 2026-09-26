@@ -47,10 +47,12 @@ Python Pydantic models define the supported configuration and public API shapes.
 
 ```bash
 uv run python scripts/generate_contracts.py
-git diff -- schemas frontend/lib/api/generated.dart
+git diff -- schemas frontend/lib/api/generated.dart frontend/lib/api/shift_log_generated.dart
 ```
 
-Review the generated diff and commit it with its Python source change. Do not edit `schemas/*.json` or `frontend/lib/api/generated.dart` directly. Add a contract test for a new accepted field and a meaningful rejected input when validation changes.
+Review the generated diff and commit it with its Python source change. Do not edit `schemas/*.json`, `frontend/lib/api/generated.dart`, or
+`frontend/lib/api/shift_log_generated.dart` directly.
+The Shift Log contract is generated separately from public telemetry contracts. Add a contract test for a new accepted field and a meaningful rejected input when validation changes.
 
 ## Run Checks for the Changed Boundary
 

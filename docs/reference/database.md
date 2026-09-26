@@ -15,6 +15,11 @@ No database connection or stored data is used to build this page.
 
 ## How the Data Fits Together
 
+**Users** identify operators. **Shift logs** collect an operator’s handover for a run,
+and **shift log entries** record notes, decisions, actions, events, and unresolved issues.
+Each entry references one user; one user can author many entries.
+See [Operator Shift Log](shift-log.md) for the workflow and identity boundary.
+
 A **configuration revision** stores submitted and resolved configuration.
 A **run** executes one revision and records its lifecycle and provenance.
 Each run has **streams** identifying its satellites' public measurements.
@@ -22,12 +27,12 @@ Each run has **streams** identifying its satellites' public measurements.
 **Truth records** hold private scenario/evaluation data for a satellite within a run.
 **Idempotency records** store retry responses by scope and key, independently of foreign keys.
 
-- The `private` schema contains configuration revisions, runs, truth, and idempotency records.
+- The `private` schema contains configuration revisions, runs, truth, idempotency records, users, and shift logs with their entries.
 - The `public` schema contains stream metadata and durable measurement/event logs.
   The schema name does not grant anonymous API or database access.
   Public API responses use allowlisted projections; they do not expose every database column.
-- `source_id`, `satellite_id`, and `user_id` are identifiers, not foreign keys to
-  separate source, satellite, or user tables in this project.
+- `source_id` and `satellite_id` are identifiers without separate source or satellite
+  tables in this project. `user_id` references the private user directory.
   Satellite definitions live inside configuration JSON; telemetry values live inside payload JSON.
 - Frames and events each have separate foreign keys to their run and stream.
   Those constraints alone do not prove that both references describe the same run
@@ -40,12 +45,9 @@ See [data contracts](../contracts.md) for JSON payload meanings and privacy rule
 [public data models](public-data.md) for generated Python field documentation,
 and [persistence interfaces](persistence.md) for read/write behavior.
 
-!!! warning "Model schema versus migration history"
-
-    The stream catalog is revision `0003` and run ownership is revision `0004`.
-    Revision `0004` checks both columns because older databases stamped `0003`
-    may have applied either migration before their duplicate IDs were resolved.
-    This page does not verify which migrations a running database has applied.
+Revision `0004` reconciles historical duplicate `0003` schemas; revision `0005`
+adds users and Shift Log tables while preserving historical run ownership.
+This model reference does not inspect a deployed database.
 
 ::: metis-database-schema
 

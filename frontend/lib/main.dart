@@ -1,14 +1,17 @@
 import 'dart:math' as math;
 import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:pointer_interceptor/pointer_interceptor.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter/scheduler.dart';
+
 import 'api/mission.dart';
 import 'auth/operator_gate.dart';
 import 'scene/globe.dart';
 import 'scene/playback.dart';
 import 'telemetry/dashboard.dart';
+import 'shift_log/shift_log_dialog.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -1054,6 +1057,21 @@ class _MissionPageState extends State<MissionPage> {
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(color: textColor, fontSize: 11),
             ),
+          ),
+          TextButton.icon(
+            onPressed: mission.canUseShiftLog && mission.status != null
+                ? () => showDialog<void>(
+                    context: context,
+                    barrierDismissible: false,
+                    builder: (_) => ShiftLogDialog(
+                      mission: mission,
+                      runId: mission.status!['run_id'] as String,
+                      operatorName: operator['display_name'] as String,
+                    ),
+                  )
+                : null,
+            icon: const Icon(Icons.assignment_outlined, size: 15),
+            label: const Text('Shift Log'),
           ),
           Tooltip(
             message: mission.busy

@@ -20,9 +20,11 @@ from metis_sim.adapters.configuration import ConfigurationParsingError
 from metis_sim.adapters.database import Database
 from metis_sim.adapters.reads import PublicReader
 from metis_sim.adapters.repository import Repository
+from metis_sim.adapters.shift_log import ShiftLogRepository
 from metis_sim.api.auth import Auth
 from metis_sim.api.openapi import install_openapi
 from metis_sim.api.routes import router
+from metis_sim.api.shift_log import router as shift_log_router
 from metis_sim.api.visual import router as visual_router
 from metis_sim.application.errors import ServiceError
 from metis_sim.application.runner import Runner
@@ -65,6 +67,7 @@ def create_app(
     auth = Auth(settings)
     database = Database(settings.database_url, settings.source_id)
     repository = Repository(database)
+    shift_logs = ShiftLogRepository(database)
 
     def check_capacity() -> None:
         stats = database.storage_stats()
@@ -95,6 +98,9 @@ def create_app(
             if setup_schema:
                 database.create_test_schema()
             database.acquire_writer()
+            shift_logs.ensure_users(
+                [operator.model_dump(mode="json") for operator in auth.operators.values()]
+            )
             repository.recover()
             repository.expire_terminal(days=0 if settings.public_demo else 7)
             if settings.local_demo and prepare_demo:
@@ -118,6 +124,7 @@ def create_app(
         auth=auth,
         database=database,
         repository=repository,
+        shift_logs=shift_logs,
         reader=PublicReader(database, settings.session_secret),
         runner=runner,
         service=service,
@@ -247,6 +254,7 @@ def create_app(
         )
 
     app.include_router(router)
+    app.include_router(shift_log_router)
     app.include_router(visual_router)
     install_openapi(app)
     if settings.frontend_path.is_dir():
