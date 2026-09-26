@@ -327,7 +327,7 @@ class _MissionPageState extends State<MissionPage> {
                   children: [
                     Text(
                       mission.canReplaceRun
-                          ? 'Saving creates a new run and clears scheduled mode changes. The current run remains in history.'
+                          ? 'Saving creates a new run with the scheduled mode changes preserved. The current run remains in history.'
                           : 'Stop this run before saving constellation changes.',
                       style: TextStyle(fontSize: 12, color: muted),
                     ),
@@ -547,9 +547,6 @@ class _MissionPageState extends State<MissionPage> {
                             );
                             return;
                           }
-                          for (final satellite in draft) {
-                            satellite['operations'] = <dynamic>[];
-                          }
                           Navigator.pop(dialogContext);
                           mission.replaceSatellites(draft);
                         }
@@ -651,7 +648,10 @@ class _MissionPageState extends State<MissionPage> {
         );
       },
     );
-    if (mounted && speed != null && !mission.busy && mission.canPerform('set_speed')) {
+    if (mounted &&
+        speed != null &&
+        !mission.busy &&
+        mission.canPerform('set_speed')) {
       await mission.control('set_speed', speed);
     }
   }

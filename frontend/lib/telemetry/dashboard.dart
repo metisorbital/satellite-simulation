@@ -5,6 +5,8 @@ import '../scene/playback.dart';
 import 'chart.dart';
 import 'panels.dart';
 import 'dashboard_widgets.dart';
+import 'time_controls.dart';
+import 'layout.dart';
 
 /// Catalog-driven spacecraft telemetry, synchronized with mission playback.
 class TelemetryDashboard extends StatefulWidget {
@@ -32,7 +34,28 @@ class TelemetryDashboard extends StatefulWidget {
 
 class _TelemetryDashboardState extends State<TelemetryDashboard> {
   String _tab = 'Overview';
-  int _window = 60;
+  int _window = 3600;
+  int _presetWindow = 3600;
+  DateTime? _fixedEnd;
+  String? _runId;
+  final _layout = TelemetryLayout.load();
+  List<JsonMap>? _filteredSource;
+  DateTime? _filteredStart, _filteredEnd;
+  List<JsonMap> _filteredFrames = const [];
+  JsonMap? _catalogSource;
+  Map<String, JsonMap> _definitions = {};
+
+  Map<String, JsonMap> _catalogDefinitions(JsonMap? catalog) {
+    if (!identical(catalog, _catalogSource)) {
+      _catalogSource = catalog;
+      _definitions = {
+        for (final raw in catalog?['channels'] as List? ?? [])
+          (raw as Map)['channel_id'] as String: Map<String, dynamic>.from(raw),
+      };
+    }
+    return _definitions;
+  }
+
   TelemetryPanel? _expanded;
   bool _focusedBeforeExpansion = false;
   final _search = TextEditingController();
@@ -51,69 +74,193 @@ class _TelemetryDashboardState extends State<TelemetryDashboard> {
     _scheduleHistory();
   }
 
+  String get _selectedId {
+    final configured = (widget.mission.status?['satellites'] as List? ?? [])
+        .map((item) => item['satellite_id'] as String)
+        .toList();
+    final visible = widget.visibleSatelliteIds == null
+        ? configured
+        : configured.where(widget.visibleSatelliteIds!.contains).toList();
+    return visible.contains(widget.selected)
+        ? widget.selected
+        : visible.firstOrNull ?? '';
+  }
+
+  DateTime? get _epoch => widget.mission.status == null
+      ? null
+      : DateTime.parse(widget.mission.status!['epoch_utc'] as String);
+  DateTime? get _latest =>
+      _epoch == null || (widget.mission.status!['committed_tick'] as int) < 0
+      ? null
+      : _epoch!.add(
+          Duration(seconds: widget.mission.status!['committed_tick'] as int),
+        );
+  DateTime? get _rangeEnd =>
+      _fixedEnd ??
+      (_epoch == null || widget.seconds == null
+          ? null
+          : _epoch!.add(Duration(seconds: widget.seconds!.floor())));
+  DateTime? get _rangeStart {
+    final end = _rangeEnd;
+    if (end == null || _epoch == null) return null;
+    final start = end.subtract(Duration(seconds: _window));
+    return start.isBefore(_epoch!) ? _epoch : start;
+  }
+
   void _scheduleHistory() {
     final mission = widget.mission;
-    final key = '${mission.status?['run_id']}:${widget.selected}:$_window';
-    if (mission.status == null || key == _historyKey) return;
+    final runId = mission.status?['run_id'] as String?;
+    if (_runId != runId) {
+      _runId = runId;
+      _fixedEnd = null;
+      _historyKey = null;
+    }
+    final selected = _selectedId;
+    final key = '$runId:$selected:$_window:$_fixedEnd';
+    if (runId == null || key == _historyKey) return;
     _historyKey = key;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && key == _historyKey) {
-        mission.loadTelemetryHistory(widget.selected, _window);
+        mission.cancelTelemetryHistory();
+        if (selected.isNotEmpty) {
+          mission.loadTelemetryHistory(selected, _window, end: _fixedEnd);
+        }
       }
     });
   }
 
-  void _setWindow(int seconds) {
-    setState(() => _window = seconds);
+  void _setSelection(TelemetryRangeSelection selection) {
+    setState(() {
+      _window = selection.seconds;
+      _fixedEnd = selection.end;
+      if (selection.end == null) _presetWindow = selection.seconds;
+    });
     _scheduleHistory();
   }
 
-  Future<void> _customWindow() async {
-    final form = GlobalKey<FormState>();
-    var minutes = '${_window ~/ 60}';
-    final seconds = await showDialog<int>(
-      context: context,
-      builder: (dialogContext) {
-        void apply() {
-          if (form.currentState!.validate()) {
-            Navigator.pop(dialogContext, int.parse(minutes.trim()) * 60);
-          }
-        }
-
-        return AlertDialog(
-          title: const Text('Custom buffered window'),
-          content: Form(
-            key: form,
-            child: TextFormField(
-              initialValue: minutes,
-              autofocus: true,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: 'Minutes',
-                helperText: '1–1440 whole minutes (up to 24 hours)',
-              ),
-              onChanged: (value) => minutes = value,
-              validator: (value) {
-                final amount = int.tryParse(value?.trim() ?? '');
-                return amount == null || amount < 1 || amount > 1440
-                    ? 'Enter a whole number from 1 to 1440.'
-                    : null;
-              },
-              onFieldSubmitted: (_) => apply(),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(onPressed: apply, child: const Text('Apply')),
-          ],
-        );
-      },
+  void _selectRange(DateTime start, DateTime end) {
+    if (_epoch == null || _latest == null || !_latest!.isAfter(_epoch!)) return;
+    final available = _latest!.difference(_epoch!).inSeconds;
+    final width = end
+        .difference(start)
+        .inSeconds
+        .clamp(1, math.min(86400, available))
+        .toInt();
+    final last = end
+        .difference(_epoch!)
+        .inSeconds
+        .clamp(width, available)
+        .toInt();
+    _setSelection(
+      TelemetryRangeSelection(width, end: _epoch!.add(Duration(seconds: last))),
     );
-    if (mounted && seconds != null) _setWindow(seconds);
   }
+
+  void _zoomRange(double factor) {
+    final start = _rangeStart, end = _rangeEnd;
+    if (start == null || end == null) return;
+    final width = math.max(
+      1,
+      (end.difference(start).inSeconds * factor).round(),
+    );
+    final center = start.add(
+      Duration(seconds: end.difference(start).inSeconds ~/ 2),
+    );
+    final nextStart = center.subtract(Duration(seconds: width ~/ 2));
+    _selectRange(nextStart, nextStart.add(Duration(seconds: width)));
+  }
+
+  void _shiftRange(int direction) {
+    final start = _rangeStart, end = _rangeEnd;
+    if (start == null || end == null) return;
+    final shift = Duration(
+      seconds: math.max(1, end.difference(start).inSeconds ~/ 2) * direction,
+    );
+    _selectRange(start.add(shift), end.add(shift));
+  }
+
+  void _resetRange() => _setSelection(TelemetryRangeSelection(_presetWindow));
+  void _refreshHistory() =>
+      widget.mission.loadTelemetryHistory(_selectedId, _window, end: _fixedEnd);
+
+  List<JsonMap> _framesInRange(
+    List<JsonMap> source,
+    DateTime? start,
+    DateTime? end,
+  ) {
+    if (identical(source, _filteredSource) &&
+        start == _filteredStart &&
+        end == _filteredEnd) {
+      return _filteredFrames;
+    }
+    _filteredSource = source;
+    _filteredStart = start;
+    _filteredEnd = end;
+    return _filteredFrames = start == null || end == null
+        ? const []
+        : source
+              .where((frame) {
+                final time = sampleTime(frame);
+                return !time.isBefore(start) && !time.isAfter(end);
+              })
+              .toList(growable: false);
+  }
+
+  Future<void> _editPanels() async {
+    if (await editTelemetryLayout(
+          context,
+          _layout,
+          _tab,
+          telemetryPanels[_tab]!,
+        ) &&
+        mounted) {
+      setState(() {});
+    }
+  }
+
+  Widget _panelMenu(TelemetryPanel panel) => PopupMenuButton<String>(
+    tooltip: 'Panel layout: ${panel.title}',
+    onSelected: (value) => setState(() {
+      if (value == 'width') _layout.setWide(panel, !_layout.isWide(panel));
+      if (value == 'height') _layout.setTall(panel, !_layout.isTall(panel));
+      _layout.save();
+    }),
+    itemBuilder: (_) => [
+      PopupMenuItem(
+        value: 'width',
+        child: Text(
+          _layout.isWide(panel) ? 'Standard width' : 'Full row width',
+        ),
+      ),
+      PopupMenuItem(
+        value: 'height',
+        child: Text(_layout.isTall(panel) ? 'Standard height' : 'Tall panel'),
+      ),
+    ],
+    icon: const Icon(Icons.more_vert, size: 17, color: telemetryMuted),
+  );
+
+  Widget _timeControls(DateTime? start, DateTime? end) => TelemetryTimeControls(
+    seconds: _window,
+    start: start,
+    end: end,
+    epoch: _epoch,
+    latest: _latest,
+    live: _fixedEnd == null,
+    loading: widget.mission.historyLoading,
+    onSelect: _setSelection,
+    onZoom: _zoomRange,
+    onShift: _shiftRange,
+    onToggleLive: () {
+      if (_fixedEnd == null && end != null) {
+        _selectRange(end.subtract(Duration(seconds: _window)), end);
+      } else {
+        _setSelection(TelemetryRangeSelection(_window));
+      }
+    },
+    onReset: _resetRange,
+    onRefresh: _refreshHistory,
+  );
 
   void _expand(TelemetryPanel panel) {
     _focusedBeforeExpansion = widget.focused;
@@ -142,51 +289,32 @@ class _TelemetryDashboardState extends State<TelemetryDashboard> {
     final visibleIds = widget.visibleSatelliteIds == null
         ? availableIds
         : widget.visibleSatelliteIds!.where(availableIds.contains).toList();
-    final selected = visibleIds.contains(widget.selected)
-        ? widget.selected
-        : (visibleIds.isEmpty ? widget.selected : visibleIds.first);
-    final current = mission.playback.frameAt(selected, widget.seconds);
-    final received = mission.playback.history[selected] ?? <JsonMap>[];
-    final eligible = status == null || widget.seconds == null
-        ? <JsonMap>[]
-        : received
-              .where(
-                (frame) =>
-                    frameSeconds(frame, status) <= widget.seconds! + 1e-7,
-              )
-              .toList();
-    final end = eligible.isEmpty ? null : sampleTime(eligible.last);
-    final chartWindow = end == null || status == null
+    final selected = _selectedId;
+    final liveCurrent = mission.playback.frameAt(selected, widget.seconds);
+    final received = mission.telemetryHistory(selected, end: _fixedEnd);
+    final end = _rangeEnd;
+    final start = _rangeStart;
+    final chartWindow = start == null || end == null
         ? _window
-        : math.max(
-            1,
-            math.min(
-              _window,
-              end
-                  .difference(DateTime.parse(status['epoch_utc'] as String))
-                  .inSeconds,
-            ),
-          );
-    final frames = end == null
-        ? <JsonMap>[]
-        : eligible
-              .where(
-                (frame) => !sampleTime(
-                  frame,
-                ).isBefore(end.subtract(Duration(seconds: _window))),
-              )
-              .toList();
+        : math.max(1, end.difference(start).inSeconds);
+    final frames = _framesInRange(received, start, end);
+    final current = _fixedEnd == null ? liveCurrent : frames.lastOrNull;
+    final sourceKind = (current ?? liveCurrent)?['source_kind'];
+    final sourceLabel = sourceKind == 'observed'
+        ? 'OBSERVED'
+        : sourceKind == 'synthetic'
+        ? 'SYNTHETIC'
+        : 'AWAITING SOURCE';
     final version =
         (current ??
+                liveCurrent ??
                 (received.isEmpty ? null : received.last))?['catalog_version']
             as String?;
     final catalog = mission.catalogs[version];
-    final definitions = <String, JsonMap>{
-      for (final raw in catalog?['channels'] as List? ?? [])
-        (raw as Map)['channel_id'] as String: Map<String, dynamic>.from(raw),
-    };
+    final definitions = _catalogDefinitions(catalog);
     final query = _search.text.trim().toLowerCase();
-    final panels = telemetryPanels[_tab]!
+    final panels = _layout
+        .visiblePanels(_tab, telemetryPanels[_tab]!)
         .where(
           (panel) =>
               query.isEmpty ||
@@ -229,7 +357,7 @@ class _TelemetryDashboardState extends State<TelemetryDashboard> {
                 children: [
                   Expanded(
                     child: Text(
-                      '$selected · $_tab · ${_window ~/ 60} min · $connection · ${current?['source_kind'] ?? 'Awaiting source'}',
+                      '$selected · $_tab · ${rangeDuration(chartWindow)} · ${_fixedEnd == null ? 'Live' : 'Historical'} · $connection · $sourceLabel',
                       style: const TextStyle(
                         fontSize: 12,
                         color: telemetryMuted,
@@ -244,6 +372,15 @@ class _TelemetryDashboardState extends State<TelemetryDashboard> {
                 ],
               ),
               const SizedBox(height: 12),
+              _timeControls(start, end),
+              if (mission.historyLoading)
+                const LinearProgressIndicator(minHeight: 2),
+              if (mission.historyError != null)
+                Text(
+                  mission.historyError!,
+                  style: const TextStyle(color: telemetryMuted, fontSize: 11),
+                ),
+              const SizedBox(height: 12),
               Expanded(
                 child: TelemetryChart(
                   key: ValueKey('expanded:$selected:${_expanded!.title}'),
@@ -254,6 +391,8 @@ class _TelemetryDashboardState extends State<TelemetryDashboard> {
                   windowSeconds: chartWindow,
                   end: end,
                   expanded: true,
+                  onRangeSelected: _selectRange,
+                  onResetRange: _resetRange,
                 ),
               ),
             ],
@@ -338,12 +477,12 @@ class _TelemetryDashboardState extends State<TelemetryDashboard> {
                   runSpacing: 7,
                   children: [
                     TelemetryBadge(
-                      current?['source_kind'] == 'observed'
-                          ? 'OBSERVED'
-                          : current?['source_kind'] == 'synthetic'
-                          ? 'SYNTHETIC'
-                          : 'AWAITING SOURCE',
+                      _fixedEnd == null ? 'LIVE RANGE' : 'HISTORICAL RANGE',
+                      color: _fixedEnd == null
+                          ? telemetryAccent
+                          : const Color(0xffffc568),
                     ),
+                    TelemetryBadge(sourceLabel),
                     IconButton(
                       tooltip: widget.focused
                           ? 'Exit focus mode'
@@ -364,6 +503,8 @@ class _TelemetryDashboardState extends State<TelemetryDashboard> {
           ],
         ),
         const SizedBox(height: 16),
+        _timeControls(start, end),
+        const SizedBox(height: 12),
         Container(
           decoration: const BoxDecoration(
             border: Border(bottom: BorderSide(color: telemetryBorder)),
@@ -455,58 +596,18 @@ class _TelemetryDashboardState extends State<TelemetryDashboard> {
                 ),
               ),
             ),
-            Wrap(
-              spacing: 12,
-              runSpacing: 8,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                const Text(
-                  'Buffered window',
-                  style: TextStyle(fontSize: 11, color: telemetryMuted),
-                ),
-                SegmentedButton<int>(
-                  segments: const [
-                    ButtonSegment(value: 60, label: Text('1 min')),
-                    ButtonSegment(value: 300, label: Text('5 min')),
-                    ButtonSegment(value: 600, label: Text('10 min')),
-                  ],
-                  selected: {
-                    if (const [60, 300, 600].contains(_window)) _window,
-                  },
-                  emptySelectionAllowed: true,
-                  showSelectedIcon: false,
-                  onSelectionChanged: (value) {
-                    if (value.isNotEmpty) {
-                      _setWindow(value.single);
-                    }
-                  },
-                  style: SegmentedButton.styleFrom(
-                    visualDensity: VisualDensity.compact,
-                    textStyle: const TextStyle(fontSize: 11),
-                    selectedForegroundColor: telemetryAccent,
-                    selectedBackgroundColor: telemetryAccent.withValues(
-                      alpha: .1,
-                    ),
-                  ),
-                ),
-                OutlinedButton(
-                  onPressed: _customWindow,
-                  child: Text(
-                    const [60, 300, 600].contains(_window)
-                        ? 'Custom'
-                        : 'Custom: ${_window ~/ 60} min',
-                    style: const TextStyle(fontSize: 11),
-                  ),
-                ),
-              ],
+            OutlinedButton.icon(
+              onPressed: _editPanels,
+              icon: const Icon(Icons.dashboard_customize_outlined, size: 17),
+              label: const Text('Edit panels'),
             ),
           ],
         ),
         const SizedBox(height: 10),
         Text(
           frames.isEmpty
-              ? 'No received samples at the displayed time.'
-              : '${frames.length} received samples · ${coverage}s of ${_window}s window · '
+              ? 'No samples in the selected time range.'
+              : '${frames.length} received samples · ${coverage}s of ${chartWindow}s displayed · '
                     '${utcTime(sampleTime(frames.first))}–${utcTime(sampleTime(frames.last))} UTC'
                     '${gaps > 0 ? ' · $gaps sequence gaps' : ''}',
           style: const TextStyle(fontSize: 10, color: telemetryMuted),
@@ -529,8 +630,11 @@ class _TelemetryDashboardState extends State<TelemetryDashboard> {
                 ),
               ),
               TextButton(
-                onPressed: () =>
-                    mission.loadTelemetryHistory(selected, _window),
+                onPressed: () => mission.loadTelemetryHistory(
+                  selected,
+                  _window,
+                  end: _fixedEnd,
+                ),
                 child: const Text('Retry history'),
               ),
             ],
@@ -538,7 +642,7 @@ class _TelemetryDashboardState extends State<TelemetryDashboard> {
         if (!widget.focused) const SizedBox(height: 5),
         if (!widget.focused)
           const Text(
-            'The selected window includes stored committed history. Gaps remain blank; diamonds mark saturated readings.',
+            'Drag across a chart to zoom all panels. Missing readings stay blank; diamonds mark saturated samples.',
             style: TextStyle(fontSize: 10, color: telemetryMuted, height: 1.5),
           ),
         const SizedBox(height: 17),
@@ -552,8 +656,9 @@ class _TelemetryDashboardState extends State<TelemetryDashboard> {
         else if (panels.isEmpty)
           TelemetryNotice(
             icon: Icons.search_off,
-            text:
-                'No panels match “${_search.text}” in $_tab. Clear the filter or choose another subsystem.',
+            text: query.isEmpty
+                ? 'No panels are visible. Use Edit panels to restore them.'
+                : 'No panels match “${_search.text}” in $_tab. Clear the filter or choose another subsystem.',
           )
         else ...[
           if (_tab == 'Space weather')
@@ -576,7 +681,10 @@ class _TelemetryDashboardState extends State<TelemetryDashboard> {
             ),
           LayoutBuilder(
             builder: (context, constraints) {
-              final columns = constraints.maxWidth >= 760 ? 2 : 1;
+              final columns = math.min(
+                _layout.columns,
+                math.max(1, (constraints.maxWidth / 440).floor()),
+              );
               final width =
                   (constraints.maxWidth - (columns - 1) * 18) / columns;
               return Wrap(
@@ -585,8 +693,12 @@ class _TelemetryDashboardState extends State<TelemetryDashboard> {
                 children: [
                   for (final panel in panels)
                     SizedBox(
-                      width: width,
-                      height: widget.focused ? 405 : 365,
+                      width: _layout.isWide(panel)
+                          ? constraints.maxWidth
+                          : width,
+                      height: _layout.isTall(panel)
+                          ? 540
+                          : (widget.focused ? 425 : 390),
                       child: TelemetryChart(
                         key: ValueKey('$selected:${panel.title}'),
                         panel: panel,
@@ -596,6 +708,9 @@ class _TelemetryDashboardState extends State<TelemetryDashboard> {
                         windowSeconds: chartWindow,
                         end: end,
                         onExpand: () => _expand(panel),
+                        onRangeSelected: _selectRange,
+                        onResetRange: _resetRange,
+                        headerActions: _panelMenu(panel),
                       ),
                     ),
                 ],

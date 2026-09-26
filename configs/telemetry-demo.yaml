@@ -76,6 +76,7 @@ satellites:
   - start_s: 3600
     end_s: 3900
     mode: payload_active
+    repeat: orbit
   visual:
     color: '#F7C873'
     asset_id: null

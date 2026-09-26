@@ -64,19 +64,34 @@ state. Panels retain channel quality, committed sample times, units, and gaps.
 The default `power-leo.v1` configuration also works, with only its available
 catalog channels.
 
-Buffered windows offer 1, 5, and 10 minute presets plus a custom whole-minute
-duration from 1 to 1440 minutes. Windows end at the displayed committed sample,
-with the start clamped to the run epoch for shorter runs. Selecting a spacecraft
-or window loads its stored committed samples in bounded pages. A 60-minute
-window includes 3601 samples at 1 Hz once that much history exists. Loading and
-retry messages distinguish pending or failed history reads from real gaps.
+The fl_chart dashboard defaults to the last hour, with quick ranges from one
+minute to 24 hours. The range picker accepts custom relative minutes or absolute
+UTC start/end times, bounded by committed run history. Following live advances
+the window with displayed telemetry; zooming, panning, or dragging across a chart
+pins a historical range shared by all panels. Use zoom buttons, previous/next
+half-window controls, Reset, or Follow live to navigate. Historical selection
+does not seek or change simulation playback.
+
+Selecting a spacecraft or range loads stored committed samples in bounded pages.
+A 60-minute window includes 3601 samples at 1 Hz once that much history exists.
+Loading and retry messages distinguish pending or failed history reads from real
+gaps. Dense chart paths retain per-bucket extrema; hover inspection uses original
+samples, showing UTC, value, unit, quality, and window min/max. Click legend
+entries to toggle individual series. Invalid/missing readings remain gaps;
+saturated samples use diamonds.
+
+Use **Edit panels** to reorder or hide panels and select one, two, or three
+columns. A panel's layout menu toggles full-row width and tall height. The grid
+adapts to narrow screens. Layout preferences persist in this browser; they contain
+no telemetry values or identity. **Reset defaults** and **Apply** restore the
+current tab's default panel arrangement.
 
 The first demo login may prepare a complete simulation. Login allows up to
 three minutes for this preparation; ordinary API requests retain their
 20-second timeout.
 
 The dashboard groups committed measurements into Overview, EPS, Flight computer,
-Payload, ADCS, and Space weather. Channel search and 1/5/10-minute windows filter
+Payload, ADCS, and Space weather. Channel search and the shared time range filter
 committed history. Initial/reconnect snapshots contain up to 41 samples for
 playback; telemetry separately refills the selected window from public replay.
 The displayed sample UTC and actual coverage identify the data on screen.

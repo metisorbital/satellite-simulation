@@ -108,3 +108,39 @@ Detailed evidence is in `frontend/artifacts/ten-spacecraft/browser-performance.j
 The frontend is split into an approximately 260 KB raw interface bundle and a 4.14 MB raw lazy Cesium bundle; the complete prepared distribution is approximately 14 MB. Cesium's bundle-size warning remains visible during builds. These sizes describe the built artifact, not network-transfer or cold-start guarantees.
 
 The measurement script records both Cesium scene render rate and browser callback cadence, renderer identity, sample age, errors, and external requests. These short three- and ten-spacecraft browser observations establish the 30 FPS target on this graphics hardware during the measured intervals. They do not establish the separate ten-wall-minute backend throughput gate or performance on other graphics hardware. Cold initialization, camera interaction, and software rendering are outside the native-renderer performance observations.
+
+## Flutter Telemetry Completion — September 26, 2026
+
+The Flutter telemetry dashboard now uses `fl_chart`, shared relative/absolute UTC ranges,
+chart drag-to-zoom, historical replay independent of simulation playback, and browser-persisted panel layouts.
+Expanded charts retain the synthetic/observed source label.
+See the [viewer instructions](../../frontend/README.md#open-the-telemetry-dashboard) for controls.
+
+Validation used macOS 26.6.2 on arm64, Flutter 3.47.5, and Dart 3.13.4.
+The compiled viewer and current worktree backend ran at `http://localhost:8895`
+with `configs/telemetry-demo.yaml` and a new isolated SQLite database.
+Existing local services and databases were not changed.
+
+| Check | Result |
+|---|---|
+| `flutter analyze` | No issues |
+| `flutter test` | 18 existing tests passed; no tests added |
+| `npm test` and `node --check web/globe.js` | Two interpolation checks and syntax check passed |
+| `flutter build web --release --no-web-resources-cdn` | Passed; non-fatal CupertinoIcons font warning remains |
+| Changed Dart formatting and `git diff --check` | Passed |
+| Backend recurrence changes | Independent review; Ruff, formatting, mypy, 30 contract tests, and four non-slow engine tests passed |
+| Generated schemas | Both changed schema files matched in-memory generator output |
+
+Browser checks at 1280×720 and 390×844 confirmed:
+
+- Start, speed change from 20× to 5×, and pause worked; the run paused at sequence 2657.
+- The one-hour range loaded all 2658 committed samples available in that run.
+- Absolute UTC 00:00:10–00:01:10 returned exactly 61 samples while the live simulation continued independently.
+- Chart dragging selected a shared 21-second historical range, and reset restored live following.
+- Panel expansion/close preserved the selected range and source label.
+- Hiding a panel survived a reload; drag reordering and resetting the default layout worked.
+- The layout editor and time picker fit the narrow viewport; zero-minute input was rejected.
+
+These are local functional checks, not production deployment, a full legacy E2E-suite result,
+or a new physics/performance certification.
+The simulator's documented model limits and public/private data boundaries remain applicable.

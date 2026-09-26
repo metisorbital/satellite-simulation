@@ -61,7 +61,7 @@ Preserve one complete end-to-end power scenario before adding subsystem breadth.
 | CFG-02 | P0 | Configure 1–10 satellites; ship a three-satellite demonstration using one spacecraft profile and distinct orbital phases. |
 | RUN-01 | P0 | Create, start, pause, resume, change speed, and stop a run; reproduce a run from its manifest and seed. |
 | PHY-01 | P0 | Compute backend positions, Earth orientation, Sun geometry, eclipse, panel incidence, solar power, load, and battery energy from simulation time. |
-| EPS-01 | P0 | Include nominal, payload-active, and safe electrical loads; integrate bounded battery energy and expose a power balance. |
+| EPS-01 | P0 | Include nominal, payload-active, and safe electrical loads; integrate bounded battery energy and expose a power balance. The demonstration repeats METIS-02's 300-second, 210 W total payload-active operation once per nominal orbit, anchored at 3600 simulated seconds; see [schedule payload operations](physics-model.md#schedule-payload-operations). |
 | FLT-01 | P0 | One configurable progressive solar-array derating scenario, one matched healthy control, and an explicit energy-limit failure criterion. |
 | DATA-01 | P0 | Store immutable 1 Hz simulated-time frames, operational events, configuration provenance, and separate private truth. |
 | DATA-02 | P0 | Expose cursor-based batch reads and replay for consumers; use a separate bounded WebSocket presentation stream for the viewer. |

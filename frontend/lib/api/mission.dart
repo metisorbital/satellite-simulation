@@ -127,6 +127,7 @@ class Mission extends ChangeNotifier {
       now,
     );
     if (previousRun != status?['run_id']) {
+      _resetTelemetryHistory();
       _pendingCatalogs.clear();
       _catalogErrors.clear();
     }
@@ -182,18 +183,66 @@ class Mission extends ChangeNotifier {
 
   String? _historySatellite;
   int _historySeconds = 60;
+  DateTime? _historyEnd;
+  List<JsonMap> _pinnedHistory = const [];
   int _historyRequest = 0;
   bool historyLoading = false;
   String? historyError;
 
-  /// Fill a bounded telemetry window from committed public replay pages.
-  Future<void> loadTelemetryHistory(String satelliteId, int seconds) async {
-    final run = status;
-    if (_closed || run == null) return;
-    _historySatellite = satelliteId;
-    _historySeconds = seconds.clamp(1, 86400);
-    playback.retainHistory(satelliteId, _historySeconds);
+  /// Return live history or the selected fixed range without copying each frame.
+  List<JsonMap> telemetryHistory(String satelliteId, {DateTime? end}) {
+    if (end == null) return playback.history[satelliteId] ?? const [];
+    return satelliteId == _historySatellite && end == _historyEnd
+        ? _pinnedHistory
+        : const [];
+  }
+
+  void _resetTelemetryHistory() {
+    _historyRequest++;
+    _historySatellite = null;
+    _historyEnd = null;
+    _pinnedHistory = const [];
+    historyLoading = false;
+    historyError = null;
+  }
+
+  /// Invalidate in-flight replay when the dashboard changes its selection.
+  void cancelTelemetryHistory() {
+    _resetTelemetryHistory();
+    if (!_closed) notifyListeners();
+  }
+
+  /// Fill an inclusive committed window without changing live playback.
+  ///
+  /// With [end], retain a separate fixed UTC range while new samples arrive.
+  /// Otherwise refill the rolling live history, including its playback lag.
+  Future<void> loadTelemetryHistory(
+    String satelliteId,
+    int seconds, {
+    DateTime? end,
+  }) async {
+    final selectedEnd = end?.toUtc();
+    final selectedSeconds = seconds.clamp(1, 86400);
+    final sameRange =
+        _historySatellite == satelliteId &&
+        _historyEnd == selectedEnd &&
+        _historySeconds == selectedSeconds;
     final request = ++_historyRequest;
+    _historySatellite = satelliteId;
+    _historySeconds = selectedSeconds;
+    _historyEnd = selectedEnd;
+    if (!sameRange || selectedEnd == null) _pinnedHistory = const [];
+    historyLoading = false;
+    historyError = null;
+    final run = status;
+    if (_closed) return;
+    if (run == null) {
+      notifyListeners();
+      return;
+    }
+    if (selectedEnd == null) {
+      playback.retainHistory(satelliteId, selectedSeconds);
+    }
     final generation = _generation;
     final id = run['run_id'] as String;
     final satellite = (run['satellites'] as List)
@@ -201,21 +250,35 @@ class Mission extends ChangeNotifier {
         .where((item) => item['satellite_id'] == satelliteId)
         .firstOrNull;
     if (satellite == null) {
-      historyLoading = false;
-      historyError = null;
       notifyListeners();
       return;
     }
     final stream = Uri.encodeQueryComponent(satellite['stream_id'] as String);
-    final end = run['committed_tick'] as int;
-    final start = max(0, end - _historySeconds - 40);
+    final committed = run['committed_tick'] as int;
+    final epoch = DateTime.parse(run['epoch_utc'] as String);
+    final endSeconds = selectedEnd == null
+        ? committed.toDouble()
+        : selectedEnd.difference(epoch).inMicroseconds / 1000000;
+    if (selectedEnd != null && (endSeconds < 0 || endSeconds > committed)) {
+      _pinnedHistory = const [];
+      historyError = 'Choose a time range within committed simulation history.';
+      notifyListeners();
+      return;
+    }
+    // Telemetry has one endpoint per whole simulated second. A fractional
+    // selection includes only endpoints inside its exact UTC boundaries.
+    final lastSequence = endSeconds.floor();
+    final firstSequence = max(
+      0,
+      (endSeconds - selectedSeconds - (selectedEnd == null ? 40 : 0)).ceil(),
+    );
     bool active() => _current(generation, id) && request == _historyRequest;
+    final pinnedFrames = <int, JsonMap>{};
     historyLoading = true;
-    historyError = null;
     notifyListeners();
     try {
-      for (var first = start; first <= end; first += 2000) {
-        final last = min(end, first + 1999);
+      for (var first = firstSequence; first <= lastSequence; first += 2000) {
+        final last = min(lastSequence, first + 1999);
         final page = await _request(
           '/v1/telemetry?stream_id=$stream&from_sequence=$first&through_sequence=$last&limit=2000',
         );
@@ -227,15 +290,31 @@ class Mission extends ChangeNotifier {
             items.any(
               (frame) =>
                   frame['stream_id'] != satellite['stream_id'] ||
+                  frame['sequence'] is! int ||
                   (frame['sequence'] as int) < first ||
-                  (frame['sequence'] as int) > last,
+                  (frame['sequence'] as int) > last ||
+                  frameSeconds(frame, run) < first ||
+                  frameSeconds(frame, run) > last,
             )) {
           throw const FormatException(
             'History response does not match the selected window.',
           );
         }
-        playback.mergeHistory(items);
-        notifyListeners();
+        if (selectedEnd == null) {
+          playback.mergeHistory(items);
+          notifyListeners();
+        } else {
+          for (final frame in items) {
+            pinnedFrames[frame['sequence'] as int] = frame;
+          }
+        }
+      }
+      if (active() && selectedEnd != null) {
+        final ordered = pinnedFrames.values.toList()
+          ..sort(
+            (a, b) => (a['sequence'] as int).compareTo(b['sequence'] as int),
+          );
+        _pinnedHistory = List<JsonMap>.unmodifiable(ordered);
       }
     } catch (exception) {
       if (active()) historyError = 'History unavailable: $exception';
@@ -264,7 +343,13 @@ class Mission extends ChangeNotifier {
       snapshot['frames'] as List,
     );
     if (_historySatellite != null) {
-      unawaited(loadTelemetryHistory(_historySatellite!, _historySeconds));
+      unawaited(
+        loadTelemetryHistory(
+          _historySatellite!,
+          _historySeconds,
+          end: _historyEnd,
+        ),
+      );
     }
   }
 
@@ -531,9 +616,7 @@ class Mission extends ChangeNotifier {
     if (_closed) return;
     _closed = true;
     _generation++;
-    _historyRequest++;
-    historyLoading = false;
-    historyError = null;
+    _resetTelemetryHistory();
     _reconnect?.cancel();
     _demoRefresh?.cancel();
     _socket?.sink.close();

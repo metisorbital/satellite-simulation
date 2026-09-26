@@ -16,6 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from metis_sim.domain.immutable import FrozenDict
 from metis_sim.domain.subsystems import HousekeepingConfiguration
+from metis_sim.models.operations import resolve_operations
 
 MAX_SAFE_INTEGER = 9_007_199_254_740_991
 ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,64}$", re.ASCII)
@@ -339,11 +340,15 @@ class Operation(ContractModel):
         Simulated-second bounds of the half-open interval ``[start_s, end_s)``.
     mode : SatelliteMode
         Mode active during the interval.
+    repeat : {"orbit"} or None
+        Repeat at the satellite's nominal orbital period, or run once when
+        omitted. Every repetition preserves ``end_s - start_s`` seconds.
     """
 
     start_s: Annotated[int, Field(ge=0, le=86_400)]
     end_s: Annotated[int, Field(ge=1, le=86_400)]
     mode: SatelliteMode
+    repeat: Literal["orbit"] | None = None
 
     @model_validator(mode="after")
     def validate_interval(self) -> Operation:
@@ -568,6 +573,7 @@ class SimulationConfig(ContractModel):
             for operation in satellite.operations:
                 if operation.end_s > self.run.duration_s:
                     raise ValueError("operation interval must be within run.duration_s")
+            resolve_operations(satellite.operations, self.run.duration_s, satellite.orbit.a_m)
         constellation_ids = [item.constellation_id for item in self.constellations]
         if len(constellation_ids) != len(set(constellation_ids)):
             raise ValueError("constellation_id values must be unique")

@@ -56,6 +56,12 @@ Use a safe YAML loader, reject duplicate mapping keys, disable user-defined tags
 Reject aliases that exceed bounded nesting/expansion; no executable expressions, arbitrary URLs, or environment-variable expansion are permitted in submitted physics configuration.
 
 The schema must validate positive capacity/area, efficiency in `(0,1]`, SOC and illumination in `[0,1]`, supported orbital envelope, an existing profile for every satellite, monotonically ordered fault control points, schedule intervals within the run, and unique membership IDs.
+An operation has integer `start_s` and `end_s` and a mode; its optional `repeat` accepts `orbit` or `null`/omission, with null/omission meaning one-time.
+For `orbit`, derive the fixed recurrence period from the satellite's initial `a_m` as `2*pi*sqrt(a_m**3/MU)`, with `MU=3.986004418e14 m^3/s^2`.
+Starts are `start_s + round(n*T)` for `n=0,1,...`, using Python nearest-integer ties-to-even rounding, and each end is its start plus the declared interval duration.
+Cadence is anchored to the first operation and is not adjusted for J2 crossings or phase.
+Require the first declared interval to fit the run; consider later windows whose starts are at or before run end, integrate only to run duration, and retain active terminal mode if the last window extends past it.
+Reject overlaps among declared and generated intervals, and restore `initial_mode` outside operation windows.
 P0 allows at most one `solar_derating` scenario instance in the whole run; supporting more affected satellites later does not require a new fault type, but is outside the initial validation envelope.
 All per-satellite operational schedule overlaps, including safe-mode overlaps, are rejected in P0.
 
@@ -71,6 +77,7 @@ The fixed P0 validation matrix is:
 | `panel.pointing.type` / `battery.type` | `ideal_sun_tracking` / `energy_store`. |
 | `sensors.noise.type` | `none` in the baseline; optional seeded noise requires a separately specified supported model. |
 | `initial_mode`, operation `mode` | `nominal`, `payload_active`, `safe`. |
+| operation `repeat` | Omitted or `null` for one-time; `orbit` for fixed nominal two-body recurrence. |
 | `scenario[].type` / `outcome.type` | `solar_derating` / `energy_reserve_violation`; empty scenario list allowed. |
 | Outcome | `reserve_soc` strictly between 0 and 1; `dwell_s` positive integer; baseline dwell 60. |
 

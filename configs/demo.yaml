@@ -45,7 +45,7 @@ satellites:
     profile_id: leo_power_demo
     orbit: {a_m: 6928137.0, e: 0.001, i_deg: 97.6, raan_deg: 0.0, argp_deg: 0.0, true_anomaly_deg: 120.0}
     initial_mode: nominal
-    operations: [{start_s: 3600, end_s: 3900, mode: payload_active}]
+    operations: [{start_s: 3600, end_s: 3900, mode: payload_active, repeat: orbit}]
     visual: {color: "#F7C873", asset_id: null}
   - satellite_id: METIS-03
     name: Metis Three

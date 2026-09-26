@@ -31,8 +31,8 @@ Payload active power must fit within the existing `loads_w.payload_active` total
 The example uses an 8.2 V battery terminal, 12 V solar branch, 5 V load bus, and a 20 W payload requiring five fully powered seconds per image.
 Each image occupies 1,048,576 bytes in a 1,073,741,824-byte store.
 These are illustrative configuration choices, not parameters inferred from a real spacecraft.
-The example schedules `METIS-02` payload operation over simulated seconds 3,600–3,900; its solar derating begins later, at second 5,400.
-That configuration does not demonstrate payload acquisition during the later power deficit without another scheduled payload window.
+The example schedules a 300-second `METIS-02` payload operation beginning at simulated second 3,600 and repeats it once per nominal orbit; its solar derating begins later, at second 5,400.
+The fixed two-body cadence and partial final-window behavior are defined in [schedule payload operations](../physics-model.md#schedule-payload-operations).
 
 Sampling remains one second in simulated UTC: an initial state at sequence zero, then each completed tick through the configured duration.
 At zero, `sample_window_s=0` and no energy, temperature, uptime, or image count advances; later windows are one second.

@@ -191,9 +191,11 @@ charge_efficiency: 0.95
 discharge_efficiency: 0.95
 loads_w:
   nominal: 150.0
-  imaging_increment: 60.0
-  downlink_increment: 40.0
+  payload_active: 210.0
+  safe: 70.0
 ```
+
+The `imaging_increment` and `downlink_increment` fields shown in the earlier research draft were illustrative load increments, not the current mode contract. The current payload-active value is a 210 W total spacecraft load (150 W nominal plus 60 W additional), while safe mode is 70 W total. A fully supplied 300-second payload activation therefore uses 17.5 Wh total, 5 Wh above nominal; actual battery change depends on generation during the interval and charging/discharging efficiency. The METIS-02 orbit recurrence and run-boundary behavior are specified in [schedule payload operations](../physics-model.md#schedule-payload-operations).
 
 Face-on solar power is about 343 W before shadow and degradation. Under an illustrative 35-minute eclipse in a 95.65-minute orbit, the simplified healthy energy balance is about +90 Wh/orbit, while a fully degraded factor of 0.35 is about -124 Wh/orbit at the nominal 150 W load. Actual eclipse duration comes from geometry.
 

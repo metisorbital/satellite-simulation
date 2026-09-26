@@ -19,7 +19,7 @@ from metis_sim.models.constants import (
 )
 from metis_sim.models.environment import illumination_fraction, solar_generation_w
 from metis_sim.models.frames import FrameAdapter
-from metis_sim.models.operations import operational_mode
+from metis_sim.models.operations import operational_mode, resolve_operations
 from metis_sim.models.orbit import (
     FloatArray,
     acceleration,
@@ -186,9 +186,11 @@ class SimulationEngine:
                 midpoint_illumination[:, index],
                 **panel_parameters,
             )
+            operations = resolve_operations(
+                satellite.operations, self.duration_s, satellite.orbit.a_m
+            )
             modes = tuple(
-                operational_mode(tick, satellite.initial_mode, satellite.operations)
-                for tick in range(count)
+                operational_mode(tick, satellite.initial_mode, operations) for tick in range(count)
             )
             self._modes.append(modes)
             scenario = self._scenarios.get(satellite.satellite_id)

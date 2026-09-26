@@ -128,10 +128,82 @@ It uses the normative pinned ERFA revision, two-part TT/UT1 JD `(2400000.5,53736
 The expected matrix is fixed source data, not calculated through the production implementation.
 This injection seam verifies the celestial/terrestrial matrix convention; P-03 independently exercises actual UTC/IERS lookup and rotating velocities.
 
-## Inspect the Six-Hour Causal Outcome
+## Verify Periodic Payload Operations
 
-All four runs preserve METIS-02's orbit, initial 340 Wh, 400 Wh capacity, mode schedule, and seed.
-The nominal load is 150 W with the same 210 W payload interval from 3,600 through 3,900 seconds.
+On 2026-09-26, the repeating schedule was checked on Apple M3 Pro, 18 GiB RAM,
+macOS 26.6.2 ARM64, and Python 3.12.12.
+An independent reviewer inspected recurrence expansion, overlap validation,
+endpoint semantics, and the viewer's schedule-preservation path without finding
+a correctness blocker.
+
+A six-hour `SimulationEngine` run loaded `configs/telemetry-demo.yaml` through
+`load_configuration`, removed its scenario for a fully supplied reference, and
+summed `load_requested_w * sample_window_s / 3600` and
+`load_served_w * sample_window_s / 3600` over METIS-02's completed active intervals.
+Initialization took 31.11 seconds during concurrent local validation; this is
+not a throughput benchmark.
+
+| Active interval (simulated seconds) | Integrated active seconds | Requested load energy | Supplied load energy |
+|---|---:|---:|---:|
+| 3600–3900 | 300 | 17.5 Wh | 17.5 Wh |
+| 9339–9639 | 300 | 17.5 Wh | 17.5 Wh |
+| 15078–15378 | 300 | 17.5 Wh | 17.5 Wh |
+| 20817–21117 | 300 | 17.5 Wh | 17.5 Wh |
+
+At each start, endpoint `mode` was `payload_active` while `interval_mode` was
+`nominal`; at each end these were `nominal` and `payload_active`, respectively.
+The resolver retained `[9339,9639)` for a run ending at 9500, keeping its terminal
+mode active. Configuration loading rejected a one-time safe interval at
+9340–9350 that collided only with the second repetition, and rejected an
+unsupported `repeat: daily` value. All four shipped configurations validated.
+
+The existing six-hour counterfactual check also passed with the periodic schedule:
+
+```bash
+uv run pytest tests/physics/test_engine.py::test_full_six_hour_matched_control_and_varied_scenarios -q -s
+```
+
+| Run | First reserve entry | Confirmed outcome | Minimum SOC | Final SOC |
+|---|---:|---:|---:|---:|
+| Baseline | 20350 s | 20410 s | 0 | 0 |
+| Matched healthy | None | None | 0.7530587307 | 0.8135359172 |
+| Milder | None | None | 0.7529964916 | 0.8135034635 |
+| Delayed | None | None | 0.2714094178 | 0.2714094178 |
+
+These are engine results, not live deployment or persisted-run evidence.
+The recurrence uses a fixed nominal period from initial semi-major axis, with
+nearest-tick starts; it does not track J2 orbit crossings.
+The fully supplied reference demonstrates 17.5 Wh per complete activation;
+depleted runs still report unserved demand instead of manufacturing energy.
+Existing stored configurations and runs retain their original schedules;
+create a run from an updated configuration to use recurrence.
+
+The focused existing contract, engine, scenario, viewer API, and Dart-contract
+suite passed 46 checks with one Dart-dependent skip and one slow check deselected.
+The slow comparison above passed separately; rerunning the Dart contracts with
+`DART_EXECUTABLE=/tmp/metis-flutter/bin/dart` passed all five checks.
+Ruff, mypy (55 source files), Flutter analysis, 18 existing Flutter checks,
+the release web build, and the strict Zensical build passed.
+No test files were added or edited.
+
+The existing browser editor check
+(`npm run test:e2e -- tests/browser/editor.spec.ts`) timed out looking for
+`Edit constellation` directly on the overview; that action is now under Settings.
+Its later assertion also still requires saving to clear every schedule.
+A manual Playwright browser check against the release build followed
+Settings → Edit constellation → Save as new run with mocked API responses;
+the submitted METIS-02 operation retained `start_s: 3600`, `end_s: 3900`,
+`mode: payload_active`, and `repeat: orbit`.
+The legacy browser check needs updating before that automated gate can pass.
+The Dart format check also reports a pre-existing multiline-format issue in
+`main.dart`'s custom-speed condition, outside this change.
+
+## Inspect the Historical Six-Hour Causal Outcome
+
+The measurements below are historical engine-boundary evidence from runs with a one-time METIS-02 payload interval from 3,600 through 3,900 seconds; they do not validate the current per-orbit recurrence contract.
+All four historical runs preserve METIS-02's orbit, initial 340 Wh, 400 Wh capacity, mode schedule, and seed.
+The nominal load is 150 W and the payload-active load is 210 W total.
+Current recurrence rules are defined in [schedule payload operations](../physics-model.md#schedule-payload-operations).
 The reserve is 15% SOC and requires 60 uninterrupted simulated seconds below that threshold.
 
 | Run | Private generation change | First reserve entry | Confirmed outcome | Minimum SOC | Final SOC |

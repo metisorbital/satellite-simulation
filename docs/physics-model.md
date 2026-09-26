@@ -98,6 +98,7 @@ Orbit can be precomputed for the configured interval and shared read-only with r
 Batch time/frame conversion across satellites and cache common environment inputs before introducing multiprocessing.
 
 For the two-body test mode only (`J2=0`), the reference period is `T=2*pi*sqrt(a^3/mu)`; a 550 km circular-radius reference orbit is about 95.65 minutes.
+The orbit recurrence schedule also uses this two-body period as a fixed nominal cadence while physical propagation retains J2; it does not represent J2-adjusted orbit crossings. See [schedule payload operations](#schedule-payload-operations).
 Do not enforce exact Kepler energy conservation with J2 enabled; validate the corresponding conservative potential or compare against an independent integration of the same force model.
 
 **Why not SGP4 first:** synthetic osculating elements are easy to configure; they are not TLE mean elements.
@@ -178,6 +179,7 @@ E_next = E + eta_c*charge_w*dt_h - discharge_w*dt_h/eta_d
 Use midpoint illumination/generation for interval energy integration; split an interval at the battery full/empty boundary if necessary or use the above energy-limited average power consistently.
 The outputs `charge_w`, `discharge_w`, `served_w`, `curtailed_w`, and `unserved_w` represent the interval-average power over `(t-dt,t]` when stamped at endpoint `t`; `solar_power_w` and `load_requested_w` use the same interval-average convention.
 The frame's required `interval_mode` identifies the operational mode used for these powers; top-level `mode` identifies the endpoint mode.
+
 Position, illumination, incidence, mode, SOC, and battery energy are endpoint states at `t`; the catalog must disclose this distinction.
 At t=0, publish initial state and instantaneous power allocation with no energy advancement, marked `sample_window_s=0` in the frame; all subsequent P0 frames use `sample_window_s=1`.
 For this sequence-zero branch, do not call a formula that divides by `dt_h`: use `charge_w=min(G-L,max_charge_w)` only when `G>=L` and `E<C`, otherwise zero; use `discharge_w=min(L-G,max_discharge_w)` only when `G<L` and `E>0`, otherwise zero.
@@ -205,6 +207,31 @@ The physical battery model continues after a reserve violation so later unserved
 Sunlight/eclipse is an environment state, not an exclusive operational mode: a satellite can operate its payload while in eclipse if scheduled.
 P0 schedules may command safe mode at a configured tick, but there is no automatic low-SOC safe-mode protection by default.
 If P1 adds autonomous protection, its thresholds, delay/hysteresis, and priority must be explicit and evaluations must distinguish protected from unprotected runs.
+
+### Schedule Payload Operations
+
+An operation's `start_s` and `end_s` define its first half-open interval `[start_s,end_s)`. `repeat` is optional and defaults to `null`, which means the operation occurs once. P0 also accepts `repeat: orbit`, which repeats the same operation at a fixed nominal two-body cadence derived from that satellite's initial semi-major axis:
+
+```text
+T = 2*pi*sqrt(a_m^3 / MU)
+MU = 3.986004418e14 m^3/s^2
+start_n = start_s + round(n*T), n = 0, 1, 2, ...
+end_n = start_n + (end_s - start_s)
+```
+
+`round` uses Python's nearest-integer, ties-to-even behavior.
+This recurrence is anchored to the first declared start; it does not track J2-adjusted orbital crossings or phase.
+For `a_m=6928137`, `T` is approximately `5738.993 s`.
+Every operation's first declared interval must fit within the run.
+Recurring windows whose starts are at or before the run end are considered; integration stops at the configured duration, so its last window can be partial.
+If that window extends beyond the run, the endpoint mode remains active.
+Reject any overlaps between declared or generated operation intervals, including overlaps between recurring operations.
+Outside active windows, use `initial_mode`.
+
+The demonstration schedules METIS-02 for a 300-second payload-active interval beginning at 3600 seconds on every nominal orbit.
+The payload-active `210 W` is the total spacecraft load; nominal and safe modes use `150 W` and `70 W` totals, respectively.
+A fully supplied 300-second activation consumes `17.5 Wh` of total spacecraft load, of which `5 Wh` is additional to nominal operation.
+Battery energy change also depends on solar generation during the interval and charge/discharge efficiency.
 
 ## 6. Define the First Fault Outcome
 
@@ -277,7 +304,7 @@ satellites:
     profile_id: leo_power_demo
     orbit: {a_m: 6928137.0, e: 0.001, i_deg: 97.6, raan_deg: 0.0, argp_deg: 0.0, true_anomaly_deg: 120.0}
     initial_mode: nominal
-    operations: [{start_s: 3600, end_s: 3900, mode: payload_active}]
+    operations: [{start_s: 3600, end_s: 3900, mode: payload_active, repeat: orbit}]
     visual: {color: "#F7C873", asset_id: null}
   - satellite_id: METIS-03
     name: Metis Three

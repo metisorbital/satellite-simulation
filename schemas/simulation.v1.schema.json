@@ -235,7 +235,7 @@
     },
     "Operation": {
       "additionalProperties": false,
-      "description": "Half-open scheduled operational mode interval.\n\nAttributes\n----------\nstart_s, end_s : int\n    Simulated-second bounds of the half-open interval ``[start_s, end_s)``.\nmode : SatelliteMode\n    Mode active during the interval.",
+      "description": "Half-open scheduled operational mode interval.\n\nAttributes\n----------\nstart_s, end_s : int\n    Simulated-second bounds of the half-open interval ``[start_s, end_s)``.\nmode : SatelliteMode\n    Mode active during the interval.\nrepeat : {\"orbit\"} or None\n    Repeat at the satellite's nominal orbital period, or run once when\n    omitted. Every repetition preserves ``end_s - start_s`` seconds.",
       "properties": {
         "end_s": {
           "maximum": 86400,
@@ -251,6 +251,19 @@
           ],
           "title": "Mode",
           "type": "string"
+        },
+        "repeat": {
+          "anyOf": [
+            {
+              "const": "orbit",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Repeat"
         },
         "start_s": {
           "maximum": 86400,
