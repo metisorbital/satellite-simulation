@@ -411,6 +411,10 @@ class SimulationService:
                 manifest,
                 retain,
                 token,
+                catalog_versions={
+                    satellite.satellite_id: config.profiles[satellite.profile_id].sensors.catalog
+                    for satellite in config.satellites
+                },
                 user_id=user_id,
             )
             self.runner.prepared[run_id] = PreparedRun(

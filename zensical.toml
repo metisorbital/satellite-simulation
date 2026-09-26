@@ -14,6 +14,11 @@ nav = [
   { "Overview" = "index.md" },
   { "Run a Local Demo" = "getting-started.md" },
   { "Consume the API" = "api.md" },
+  { "Satellite Telemetry" = [
+    { "Models and ML Export" = "reference/spacecraft-telemetry.md" },
+    { "Sample Field Reference" = "reference/sample-telemetry.md" },
+    { "Validation and Limits" = "validation/spacecraft-telemetry.md" },
+  ] },
   { "Flutter Viewer" = "frontend.md" },
   { "Python API Reference" = [
     { "Object Guide" = "python-api.md" },

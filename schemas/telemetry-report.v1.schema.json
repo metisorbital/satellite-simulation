@@ -1,0 +1,473 @@
+{
+  "$defs": {
+    "ChannelSummary": {
+      "additionalProperties": false,
+      "description": "Summarize valid numeric readings without filling missing observations.\n\nNotes\n-----\nMin/max/mean are elementwise for vectors and include the initial sample.\nInterval integrals and weighted means exclude zero-duration samples and\nexclude saturated/invalid/missing readings. Counts still retain every quality.",
+      "properties": {
+        "channel_id": {
+          "title": "Channel Id",
+          "type": "string"
+        },
+        "interval_integral": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Interval Integral"
+        },
+        "interval_weighted_mean": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Interval Weighted Mean"
+        },
+        "invalid_count": {
+          "default": 0,
+          "title": "Invalid Count",
+          "type": "integer"
+        },
+        "maximum": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Maximum"
+        },
+        "mean": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Mean"
+        },
+        "minimum": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Minimum"
+        },
+        "missing_count": {
+          "default": 0,
+          "title": "Missing Count",
+          "type": "integer"
+        },
+        "sampling_semantics": {
+          "title": "Sampling Semantics",
+          "type": "string"
+        },
+        "saturated_count": {
+          "default": 0,
+          "title": "Saturated Count",
+          "type": "integer"
+        },
+        "unit": {
+          "title": "Unit",
+          "type": "string"
+        },
+        "valid_count": {
+          "default": 0,
+          "title": "Valid Count",
+          "type": "integer"
+        },
+        "valid_interval_duration_s": {
+          "default": 0.0,
+          "title": "Valid Interval Duration S",
+          "type": "number"
+        }
+      },
+      "required": [
+        "channel_id",
+        "unit",
+        "sampling_semantics"
+      ],
+      "title": "ChannelSummary",
+      "type": "object"
+    },
+    "PublicModelProvenance": {
+      "additionalProperties": false,
+      "description": "Allowlisted public model and Earth-orientation provenance.\n\nNotes\n-----\nFields may be absent when the producer has not supplied that metadata.\nUnknown fields are rejected so private manifest parameters cannot cross\nthe public response boundary through an unrestricted metadata mapping.",
+      "properties": {
+        "accuracy_claim": {
+          "title": "Accuracy Claim",
+          "type": "string"
+        },
+        "astropy_iers_data_version": {
+          "title": "Astropy Iers Data Version",
+          "type": "string"
+        },
+        "astropy_version": {
+          "title": "Astropy Version",
+          "type": "string"
+        },
+        "attitude_model": {
+          "title": "Attitude Model",
+          "type": "string"
+        },
+        "attitude_model_limits": {
+          "title": "Attitude Model Limits",
+          "type": "string"
+        },
+        "coverage_validated": {
+          "title": "Coverage Validated",
+          "type": "boolean"
+        },
+        "earth_model": {
+          "title": "Earth Model",
+          "type": "string"
+        },
+        "earth_orientation_source": {
+          "title": "Earth Orientation Source",
+          "type": "string"
+        },
+        "eclipse_model": {
+          "title": "Eclipse Model",
+          "type": "string"
+        },
+        "electrical_model": {
+          "title": "Electrical Model",
+          "type": "string"
+        },
+        "eps_model_limits": {
+          "title": "Eps Model Limits",
+          "type": "string"
+        },
+        "erfa_version": {
+          "title": "Erfa Version",
+          "type": "string"
+        },
+        "force_model_limits": {
+          "title": "Force Model Limits",
+          "type": "string"
+        },
+        "frame": {
+          "title": "Frame",
+          "type": "string"
+        },
+        "housekeeping_model": {
+          "title": "Housekeeping Model",
+          "type": "string"
+        },
+        "housekeeping_model_limits": {
+          "title": "Housekeeping Model Limits",
+          "type": "string"
+        },
+        "iers_first_mjd": {
+          "title": "Iers First Mjd",
+          "type": "number"
+        },
+        "iers_last_mjd": {
+          "title": "Iers Last Mjd",
+          "type": "number"
+        },
+        "iers_sha256": {
+          "title": "Iers Sha256",
+          "type": "string"
+        },
+        "iers_values": {
+          "enum": [
+            "observed",
+            "predicted"
+          ],
+          "title": "Iers Values",
+          "type": "string"
+        },
+        "inertial_frame": {
+          "title": "Inertial Frame",
+          "type": "string"
+        },
+        "integrator": {
+          "title": "Integrator",
+          "type": "string"
+        },
+        "leap_seconds_expiry": {
+          "title": "Leap Seconds Expiry",
+          "type": "string"
+        },
+        "leap_seconds_sha256": {
+          "title": "Leap Seconds Sha256",
+          "type": "string"
+        },
+        "magnetic_model": {
+          "title": "Magnetic Model",
+          "type": "string"
+        },
+        "midpoint_model": {
+          "title": "Midpoint Model",
+          "type": "string"
+        },
+        "network_updates": {
+          "title": "Network Updates",
+          "type": "boolean"
+        },
+        "numpy_version": {
+          "title": "Numpy Version",
+          "type": "string"
+        },
+        "orbit_model": {
+          "title": "Orbit Model",
+          "type": "string"
+        },
+        "panel_model": {
+          "title": "Panel Model",
+          "type": "string"
+        },
+        "payload_model": {
+          "title": "Payload Model",
+          "type": "string"
+        },
+        "sun_model": {
+          "title": "Sun Model",
+          "type": "string"
+        },
+        "thermal_model": {
+          "title": "Thermal Model",
+          "type": "string"
+        },
+        "time_advance_scale": {
+          "title": "Time Advance Scale",
+          "type": "string"
+        }
+      },
+      "title": "PublicModelProvenance",
+      "type": "object"
+    },
+    "StreamSummary": {
+      "additionalProperties": false,
+      "description": "Report retained coverage and channel quality for one satellite stream.\n\nNotes\n-----\n``complete_window`` describes coverage of the selected committed window,\nnot completion of the entire configured run.",
+      "properties": {
+        "catalog_version": {
+          "title": "Catalog Version",
+          "type": "string"
+        },
+        "channels": {
+          "items": {
+            "$ref": "#/$defs/ChannelSummary"
+          },
+          "title": "Channels",
+          "type": "array"
+        },
+        "complete_window": {
+          "title": "Complete Window",
+          "type": "boolean"
+        },
+        "expected_frame_count": {
+          "title": "Expected Frame Count",
+          "type": "integer"
+        },
+        "first_observed_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "First Observed At"
+        },
+        "first_sequence": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "First Sequence"
+        },
+        "frame_count": {
+          "title": "Frame Count",
+          "type": "integer"
+        },
+        "last_observed_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Last Observed At"
+        },
+        "last_sequence": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Last Sequence"
+        },
+        "satellite_id": {
+          "title": "Satellite Id",
+          "type": "string"
+        },
+        "source_id": {
+          "title": "Source Id",
+          "type": "string"
+        },
+        "stream_id": {
+          "title": "Stream Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_id",
+        "stream_id",
+        "satellite_id",
+        "catalog_version",
+        "frame_count",
+        "expected_frame_count",
+        "complete_window",
+        "first_sequence",
+        "last_sequence",
+        "first_observed_at",
+        "last_observed_at",
+        "channels"
+      ],
+      "title": "StreamSummary",
+      "type": "object"
+    }
+  },
+  "$id": "https://metisorbital.local/schemas/telemetry-report.v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Summarize a fixed committed boundary without exposing evaluator truth.\n\nNotes\n-----\nThe watermark and stream identities also define a reproducible public\nexport boundary. Consumers must retain the run identity for dataset grouping.",
+  "properties": {
+    "committed_tick": {
+      "title": "Committed Tick",
+      "type": "integer"
+    },
+    "from_sequence": {
+      "title": "From Sequence",
+      "type": "integer"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Limitations",
+      "type": "array"
+    },
+    "model_provenance": {
+      "$ref": "#/$defs/PublicModelProvenance"
+    },
+    "nominal_cadence_s": {
+      "const": 1,
+      "default": 1,
+      "title": "Nominal Cadence S",
+      "type": "integer"
+    },
+    "run_id": {
+      "title": "Run Id",
+      "type": "string"
+    },
+    "run_status": {
+      "title": "Run Status",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "telemetry-report.v1",
+      "default": "telemetry-report.v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source_kind": {
+      "const": "synthetic",
+      "default": "synthetic",
+      "title": "Source Kind",
+      "type": "string"
+    },
+    "streams": {
+      "items": {
+        "$ref": "#/$defs/StreamSummary"
+      },
+      "title": "Streams",
+      "type": "array"
+    },
+    "through_sequence": {
+      "title": "Through Sequence",
+      "type": "integer"
+    },
+    "time_domain": {
+      "const": "simulation_utc",
+      "default": "simulation_utc",
+      "title": "Time Domain",
+      "type": "string"
+    }
+  },
+  "required": [
+    "run_id",
+    "run_status",
+    "committed_tick",
+    "from_sequence",
+    "through_sequence",
+    "model_provenance",
+    "streams"
+  ],
+  "title": "telemetry-report.v1",
+  "type": "object"
+}

@@ -94,27 +94,33 @@ class Repository:
         token: Idempotent,
         *,
         user_id: str | None = None,
+        catalog_versions: dict[str, str] | None = None,
     ) -> dict[str, Any]:
-        """Allocate a run, private operator identity, and streams atomically.
+        """Allocate a new run and its independent streams in one transaction.
 
         Parameters
         ----------
         configuration_id : str
-            Immutable configuration revision to execute.
+            Saved immutable configuration revision.
         status, manifest : dict
-            Public projection and private reproducibility record.
+            Separate public run projection and private reproducibility record.
         retain : bool
-            Whether to preserve this run during retention cleanup.
+            Exempt the run from ordinary history expiration.
         token : Idempotent
-            Scope, key, and request hash for exact mutation retries.
-        user_id : str or None
-            Stable mock operator UUID; legacy runs have no operator identity.
+            Durable mutation identity.
+        catalog_versions : dict of str to str, optional
+            Complete satellite-to-catalog mapping from the validated profile.
+            Omission supports callers producing the legacy power catalog.
 
         Returns
         -------
         dict
-            Created public status, excluding the private operator identity.
+            The committed public run projection.
         """
+        if catalog_versions is not None and set(catalog_versions) != {
+            satellite["satellite_id"] for satellite in status["satellites"]
+        }:
+            raise ValueError("catalog_versions must cover exactly the run satellites")
         with self.database.writer_transaction() as connection:
             existing = prior_result(connection, *token)
             if existing is not None:
@@ -139,6 +145,9 @@ class Repository:
                         source_id=self.database.source_id,
                         satellite_id=s["satellite_id"],
                         run_id=status["run_id"],
+                        catalog_version=(catalog_versions or {}).get(
+                            s["satellite_id"], "power-leo.v1"
+                        ),
                         first_sequence=0,
                         last_sequence=-1,
                         expired=False,

@@ -64,6 +64,7 @@ streams = Table(
     Column("source_id", String(64), nullable=False),
     Column("satellite_id", String(64), nullable=False),
     Column("run_id", ForeignKey("private.runs.run_id"), nullable=False, index=True),
+    Column("catalog_version", String(32), nullable=False, server_default="power-leo.v1"),
     Column("first_sequence", Integer, nullable=False, default=0),
     Column("last_sequence", Integer, nullable=False, default=-1),
     Column("expired", Boolean, nullable=False, default=False),

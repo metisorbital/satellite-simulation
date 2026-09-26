@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 Vector3 = tuple[float, float, float]
+ChannelValue = float | Vector3 | tuple[float, float, float, float] | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -97,8 +98,9 @@ class PhysicsSample:
     unserved_power_w: float
     sun_position_itrf_m: Vector3
     truth: TruthSample
+    housekeeping_channels: tuple[tuple[str, ChannelValue], ...] = ()
 
-    def public_channels(self) -> dict[str, float | list[float]]:
+    def public_channels(self) -> dict[str, float | list[float] | None]:
         """Project only the immutable public catalog's physical values.
 
         Returns
@@ -107,7 +109,7 @@ class PhysicsSample:
             Exact channel IDs and finite primitive values, with no scenario,
             reserve threshold, future state, or private configuration.
         """
-        return {
+        channels: dict[str, float | list[float] | None] = {
             "orbit.position_itrf_m": list(self.position_itrf_m),
             "orbit.velocity_itrf_m_s": list(self.velocity_itrf_m_s),
             "orbit.latitude_deg": self.latitude_deg,
@@ -124,3 +126,8 @@ class PhysicsSample:
             "eps.curtailed_power_w": self.curtailed_power_w,
             "eps.unserved_power_w": self.unserved_power_w,
         }
+        channels.update(
+            (name, list(value) if isinstance(value, tuple) else value)
+            for name, value in self.housekeeping_channels
+        )
+        return channels

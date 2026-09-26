@@ -8,13 +8,27 @@ from typing import cast
 import numpy as np
 
 from metis_sim.domain.config import SatelliteMode, SimulationConfig
-from metis_sim.domain.physics import OrbitSample, PhysicsSample, TruthSample, Vector3
-from metis_sim.models.constants import EARTH_RADIUS_M, J2, MAX_ALTITUDE_M, MIN_ALTITUDE_M, MU_M3_S2
+from metis_sim.domain.physics import ChannelValue, OrbitSample, PhysicsSample, TruthSample, Vector3
+from metis_sim.models.constants import (
+    AU_M,
+    EARTH_RADIUS_M,
+    J2,
+    MAX_ALTITUDE_M,
+    MIN_ALTITUDE_M,
+    MU_M3_S2,
+)
 from metis_sim.models.environment import illumination_fraction, solar_generation_w
 from metis_sim.models.frames import FrameAdapter
 from metis_sim.models.operations import operational_mode
-from metis_sim.models.orbit import FloatArray, elements_to_cartesian, hermite_midpoints, propagate
+from metis_sim.models.orbit import (
+    FloatArray,
+    acceleration,
+    elements_to_cartesian,
+    hermite_midpoints,
+    propagate,
+)
 from metis_sim.models.power import allocate_power
+from metis_sim.models.satellite import Satellite
 from metis_sim.models.scenarios import ReserveEvaluator, derating_multipliers
 
 
@@ -146,6 +160,7 @@ class SimulationEngine:
         # curtailed, unserved: all powers describe one completed interval.
         self._ledger = np.empty((count, satellites, 7), dtype=np.float64)
         self._modes: list[tuple[str, ...]] = []
+        self._housekeeping: list[dict[str, FloatArray]] = []
         self._derating = np.ones((count, satellites), dtype=np.float64)
         self._interval_derating = np.ones((count, satellites), dtype=np.float64)
         self._truth_ticks = np.full((count, satellites, 3), -1, dtype=np.int64)
@@ -187,6 +202,31 @@ class SimulationEngine:
                 evaluator = ReserveEvaluator(scenario.outcome.reserve_soc, scenario.outcome.dwell_s)
             interval_generation = np.concatenate(([endpoint_generation[0]], midpoint_generation))
             interval_generation *= self._interval_derating[:, index]
+            spacecraft = (
+                Satellite(
+                    satellite.satellite_id,
+                    profile.housekeeping,
+                    battery.charge_efficiency,
+                    battery.discharge_efficiency,
+                )
+                if profile.housekeeping is not None
+                else None
+            )
+            housekeeping: dict[str, FloatArray] = {}
+            if spacecraft is not None:
+                endpoint_distance = np.linalg.norm(
+                    sun_gcrs[::2] - self._gcrs[:, index, :3], axis=-1
+                )
+                midpoint_distance = np.linalg.norm(
+                    sun_gcrs[1::2] - midpoints[:, index, :3], axis=-1
+                )
+                interval_flux = panel.irradiance_1au_w_m2 * np.concatenate(
+                    (
+                        [(AU_M / endpoint_distance[0]) ** 2 * self._illumination[0, index]],
+                        (AU_M / midpoint_distance) ** 2 * midpoint_illumination[:, index],
+                    )
+                )
+                endpoint_acceleration = acceleration(self._gcrs[:, index, :3], axis)
             energy = battery.usable_capacity_wh * battery.initial_soc
             for tick in range(count):
                 interval_mode = modes[max(tick - 1, 0)]
@@ -211,6 +251,26 @@ class SimulationEngine:
                     allocation.curtailed_w,
                     allocation.unserved_w,
                 )
+                if spacecraft is not None:
+                    for name, value in spacecraft.step(
+                        dt_s=float(tick != 0),
+                        interval_mode=interval_mode,
+                        allocation=allocation,
+                        solar_flux_w_m2=float(interval_flux[tick]),
+                        position_gcrs_m=self._vector(self._gcrs[tick, index, :3]),
+                        velocity_gcrs_m_s=self._vector(self._gcrs[tick, index, 3:]),
+                        acceleration_gcrs_m_s2=self._vector(endpoint_acceleration[tick]),
+                        sun_gcrs_m=self._vector(sun_gcrs[2 * tick]),
+                        earth_pole_gcrs=self._vector(axis),
+                    ):
+                        if value is None:
+                            raise ValueError(
+                                "A modeled housekeeping channel must have a physical value."
+                            )
+                        if name not in housekeeping:
+                            shape = (len(value),) if isinstance(value, tuple) else ()
+                            housekeeping[name] = np.empty((count, *shape), dtype=np.float64)
+                        housekeeping[name][tick] = value
                 if evaluator is not None:
                     evaluator.evaluate(tick, energy / battery.usable_capacity_wh)
                     self._truth_ticks[tick, index] = tuple(
@@ -221,6 +281,9 @@ class SimulationEngine:
                             evaluator.failure_tick,
                         )
                     )
+            for values in housekeeping.values():
+                values.setflags(write=False)
+            self._housekeeping.append(housekeeping)
         for array in (
             self._elapsed,
             self._itrs,
@@ -251,6 +314,25 @@ class SimulationEngine:
             "eps_model_limits": "Ideal bus allocation and bounded energy store; no electrochemistry or ADCS dynamics.",
             "accuracy_claim": "Numerical agreement with the declared synthetic short-arc model; not flight ephemeris accuracy.",
         }
+        if any(profile.housekeeping is not None for profile in self.config.profiles.values()):
+            self._provenance.update(
+                {
+                    "housekeeping_model": "spacecraft_housekeeping_v1",
+                    "electrical_model": "ideal_regulated_rails_v1",
+                    "thermal_model": "three_node_euler_fixed_1s_v1",
+                    "payload_model": "power_gated_camera_storage_v1",
+                    "attitude_model": "ideal_lvlh_v1",
+                    "magnetic_model": "centered_axial_dipole_v1",
+                    "housekeeping_model_limits": (
+                        "Declared synthetic parameters, not mission calibration. Ideal regulated rails; "
+                        "three isothermal nodes with radiation and conduction, no Earth IR/albedo; "
+                        "power-gated acquisition without downlink or heaters; ideal body tracking, "
+                        "no actuator/control dynamics. Equivalent solar array remains independently "
+                        "Sun tracking; curtailed generation is rejected upstream without onboard dump heat. "
+                        "Unknown mission codes and unsupported sensors remain missing."
+                    ),
+                }
+            )
         self._initialized = True
         return self
 
@@ -326,6 +408,18 @@ class SimulationEngine:
                     unserved_power_w=unserved,
                     sun_position_itrf_m=self._vector(self._sun_itrs[tick]),
                     truth=truth,
+                    housekeeping_channels=tuple(
+                        (
+                            name,
+                            cast(
+                                ChannelValue,
+                                float(values[tick])
+                                if values.ndim == 1
+                                else tuple(float(value) for value in values[tick]),
+                            ),
+                        )
+                        for name, values in self._housekeeping[index].items()
+                    ),
                 )
             )
         return tuple(samples)

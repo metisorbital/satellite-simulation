@@ -1,5 +1,32 @@
 {
   "$defs": {
+    "AttitudeConfiguration": {
+      "additionalProperties": false,
+      "description": "Declare an ideal nadir attitude and a centered axial magnetic dipole.\n\nAttributes\n----------\ntype : str\n    ``ideal_lvlh_v1`` prescribes the body axes: +Z toward Earth's center,\n    +Y opposite the orbital angular momentum, and +X = +Y cross +Z.\n    There is no attitude-control or actuator dynamics model.\nmagnetic_model : str\n    ``centered_axial_dipole_v1`` places a magnetic dipole at Earth's\n    center, antiparallel to the terrestrial north pole fixed at the run\n    epoch. Tilt, higher multipoles, secular changes, and space weather\n    are excluded.\nequatorial_field_t : float\n    Dipole field magnitude at the WGS84 equatorial reference radius in\n    tesla. The default 30.6 microtesla is a declared reference strength,\n    not a fit to the supplied spacecraft measurements or an IGRF model.\n\nNotes\n-----\nQuaternion outputs use Hamilton scalar-first ``(w, x, y, z)`` order and\nactively map body vectors into GCRS. The stateless attitude kernel chooses\npositive w, or the first nonzero vector component at w=0. Thus q and -q\nrepresent the same physical orientation, and its canonical output can\nchange sign as a trajectory crosses a half-turn. A time-series composer\ncan choose the equivalent sign nearest the preceding quaternion.\n\nReferences\n----------\nNASA's Earth Fact Sheet lists a reference dipole strength of\n0.306 gauss times Earth-radius cubed, corresponding to the default\nequatorial surface strength used here:\nhttps://nssdc.gsfc.nasa.gov/planetary/factsheet/earthfact.html",
+      "properties": {
+        "equatorial_field_t": {
+          "default": 3.06e-05,
+          "exclusiveMinimum": 0,
+          "maximum": 0.001,
+          "title": "Equatorial Field T",
+          "type": "number"
+        },
+        "magnetic_model": {
+          "const": "centered_axial_dipole_v1",
+          "default": "centered_axial_dipole_v1",
+          "title": "Magnetic Model",
+          "type": "string"
+        },
+        "type": {
+          "const": "ideal_lvlh_v1",
+          "default": "ideal_lvlh_v1",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "title": "AttitudeConfiguration",
+      "type": "object"
+    },
     "BatteryConfiguration": {
       "additionalProperties": false,
       "description": "Ideal bounded energy-store nameplate and starting condition.\n\nAttributes\n----------\ntype : str\n    P0 battery model, currently ``energy_store``.\nusable_capacity_wh : float\n    Fixed usable energy capacity in watt-hours.\ninitial_soc : float\n    Initial state of charge as a fraction of usable capacity.\ncharge_efficiency, discharge_efficiency : float\n    Energy conversion efficiencies in ``(0, 1]``.\nmax_charge_w, max_discharge_w : float\n    Bus-power limits in watts.",
@@ -57,7 +84,7 @@
     },
     "ChannelReading": {
       "additionalProperties": false,
-      "description": "One allowlisted channel value and its measurement quality.\n\nAttributes\n----------\nvalue : float, tuple of float, or None\n    Scalar or fixed three-vector reading. Failed readings use ``None``.\nquality : {\"valid\", \"missing\", \"invalid\", \"saturated\"}\n    Quality state that explains whether ``value`` is usable.\n\nNotes\n-----\nValid and saturated readings require a value; missing and invalid\nreadings require ``None``.",
+      "description": "One allowlisted channel value and its measurement quality.\n\nAttributes\n----------\nvalue : float, tuple of float, or None\n    Scalar, declared string code, or fixed three/four-vector reading.\n    Failed readings use ``None``; vector meaning comes from the catalog.\nquality : {\"valid\", \"missing\", \"invalid\", \"saturated\"}\n    Quality state that explains whether ``value`` is usable.\n\nNotes\n-----\nValid and saturated readings require a value; missing and invalid\nreadings require ``None``.",
       "properties": {
         "quality": {
           "enum": [
@@ -90,6 +117,29 @@
               "maxItems": 3,
               "minItems": 3,
               "type": "array"
+            },
+            {
+              "additionalItems": false,
+              "items": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "maxItems": 4,
+              "minItems": 4,
+              "type": "array"
+            },
+            {
+              "type": "string"
             },
             {
               "type": "null"
@@ -230,6 +280,55 @@
       "title": "DeratingPoint",
       "type": "object"
     },
+    "ElectricalConfiguration": {
+      "additionalProperties": false,
+      "description": "Ideal regulated rails connected to the existing energy ledger.\n\nAttributes\n----------\nbattery_voltage_v : float\n    Constant ideal energy-store terminal voltage; no voltage sag model.\nsolar_voltage_v : float\n    Constant solar converter output voltage on the generation branch.\nbus_voltage_v : float\n    Constant regulated load-bus voltage when load power is supplied.",
+      "properties": {
+        "battery_voltage_v": {
+          "default": 8.2,
+          "maximum": 100,
+          "minimum": 1,
+          "title": "Battery Voltage V",
+          "type": "number"
+        },
+        "bus_voltage_v": {
+          "default": 5.0,
+          "maximum": 100,
+          "minimum": 1,
+          "title": "Bus Voltage V",
+          "type": "number"
+        },
+        "solar_voltage_v": {
+          "default": 12.0,
+          "maximum": 100,
+          "minimum": 1,
+          "title": "Solar Voltage V",
+          "type": "number"
+        }
+      },
+      "title": "ElectricalConfiguration",
+      "type": "object"
+    },
+    "HousekeepingConfiguration": {
+      "additionalProperties": false,
+      "description": "Opt in to physical housekeeping around the orbit and EPS models.\n\nAttributes\n----------\nelectrical : ElectricalConfiguration\n    Ideal circuit rails used to derive currents from the energy ledger.\nthermal : ThermalConfiguration\n    Three-node conduction and radiation network.\npayload : PayloadConfiguration\n    Powered camera acquisition and storage model.\nattitude : AttitudeConfiguration\n    Ideal nadir body attitude and centered dipole magnetic field.",
+      "properties": {
+        "attitude": {
+          "$ref": "#/$defs/AttitudeConfiguration"
+        },
+        "electrical": {
+          "$ref": "#/$defs/ElectricalConfiguration"
+        },
+        "payload": {
+          "$ref": "#/$defs/PayloadConfiguration"
+        },
+        "thermal": {
+          "$ref": "#/$defs/ThermalConfiguration"
+        }
+      },
+      "title": "HousekeepingConfiguration",
+      "type": "object"
+    },
     "LowEnergyLimitDetails": {
       "additionalProperties": false,
       "description": "Allowlisted observed public SOC limit transition details.\n\nAttributes\n----------\nchannel_id : str\n    Public SOC channel associated with the limit.\noperator : {\"lt\", \"gt\"}\n    Comparison used to enter or clear the limit.\nvalue, clear_value : float\n    Entry and hysteresis-clear SOC thresholds.",
@@ -274,7 +373,10 @@
       "description": "Allowlisted producer-neutral telemetry measurement frame.\n\nAttributes\n----------\nschema_version : str\n    Breaking-contract identifier, currently ``telemetry.v1``.\nsource_id : str\n    Stable producer identity.\nstream_id : UUID\n    Monotonic sequence namespace for one spacecraft stream.\nsequence : int\n    Zero-based stream sequence, bounded by the exact JSON integer range.\nsatellite_id : str\n    Logical spacecraft identity.\nsource_kind : {\"synthetic\", \"observed\"}\n    Provenance of the producer data.\ntime_domain : {\"simulation_utc\", \"mission_utc\"}\n    Meaning of ``observed_at``.\nobserved_at, emitted_at : datetime\n    UTC represented sample time and producer emission time.\nsample_window_s : float\n    Interval length ending at ``observed_at`` for interval-average\n    channels; zero denotes the initial instantaneous frame.\ncatalog_version : str\n    Versioned channel catalog identifier.\nmode, interval_mode : Mode or None\n    Endpoint mode and mode used for interval-average channels.\nchannels : mapping of str to ChannelReading\n    Allowlisted measured or derived public channel values.\n\nNotes\n-----\nTimestamps are normalized to UTC and channel mappings are frozen after\nvalidation. Private scenario parameters, seeds, and future outcomes do\nnot belong in this envelope.",
       "properties": {
         "catalog_version": {
-          "const": "power-leo.v1",
+          "enum": [
+            "power-leo.v1",
+            "spacecraft.v1"
+          ],
           "title": "Catalog Version",
           "type": "string"
         },
@@ -723,6 +825,49 @@
       "title": "PanelConfiguration",
       "type": "object"
     },
+    "PayloadConfiguration": {
+      "additionalProperties": false,
+      "description": "Powered acquisition and finite storage parameters.\n\nAttributes\n----------\nactive_power_w : float\n    Portion of the scheduled ``payload_active`` load allocated to payload.\nimage_period_s : int\n    Consecutive fully powered active seconds required per image.\nimage_size_bytes, storage_capacity_bytes, initial_storage_bytes : int\n    Image size, fixed storage capacity, and initially occupied bytes.\n\nNotes\n-----\nThe model has no downlink schedule, compression, deletion, heater, or\nmission-specific camera status encoding. Acquisition stops at capacity.",
+      "properties": {
+        "active_power_w": {
+          "default": 20.0,
+          "exclusiveMinimum": 0,
+          "maximum": 10000,
+          "title": "Active Power W",
+          "type": "number"
+        },
+        "image_period_s": {
+          "default": 5,
+          "maximum": 86400,
+          "minimum": 1,
+          "title": "Image Period S",
+          "type": "integer"
+        },
+        "image_size_bytes": {
+          "default": 1048576,
+          "maximum": 1000000000,
+          "minimum": 1,
+          "title": "Image Size Bytes",
+          "type": "integer"
+        },
+        "initial_storage_bytes": {
+          "default": 0,
+          "maximum": 1000000000000,
+          "minimum": 0,
+          "title": "Initial Storage Bytes",
+          "type": "integer"
+        },
+        "storage_capacity_bytes": {
+          "default": 1073741824,
+          "maximum": 1000000000000,
+          "minimum": 1,
+          "title": "Storage Capacity Bytes",
+          "type": "integer"
+        }
+      },
+      "title": "PayloadConfiguration",
+      "type": "object"
+    },
     "PointingConfiguration": {
       "additionalProperties": false,
       "description": "Supported panel pointing policy.\n\nAttributes\n----------\ntype : str\n    P0 panel policy, currently ``ideal_sun_tracking``.",
@@ -817,6 +962,14 @@
           "title": "Astropy Version",
           "type": "string"
         },
+        "attitude_model": {
+          "title": "Attitude Model",
+          "type": "string"
+        },
+        "attitude_model_limits": {
+          "title": "Attitude Model Limits",
+          "type": "string"
+        },
         "coverage_validated": {
           "title": "Coverage Validated",
           "type": "boolean"
@@ -833,6 +986,10 @@
           "title": "Eclipse Model",
           "type": "string"
         },
+        "electrical_model": {
+          "title": "Electrical Model",
+          "type": "string"
+        },
         "eps_model_limits": {
           "title": "Eps Model Limits",
           "type": "string"
@@ -847,6 +1004,14 @@
         },
         "frame": {
           "title": "Frame",
+          "type": "string"
+        },
+        "housekeeping_model": {
+          "title": "Housekeeping Model",
+          "type": "string"
+        },
+        "housekeeping_model_limits": {
+          "title": "Housekeeping Model Limits",
           "type": "string"
         },
         "iers_first_mjd": {
@@ -885,6 +1050,10 @@
           "title": "Leap Seconds Sha256",
           "type": "string"
         },
+        "magnetic_model": {
+          "title": "Magnetic Model",
+          "type": "string"
+        },
         "midpoint_model": {
           "title": "Midpoint Model",
           "type": "string"
@@ -905,8 +1074,16 @@
           "title": "Panel Model",
           "type": "string"
         },
+        "payload_model": {
+          "title": "Payload Model",
+          "type": "string"
+        },
         "sun_model": {
           "title": "Sun Model",
+          "type": "string"
+        },
+        "thermal_model": {
+          "title": "Thermal Model",
           "type": "string"
         },
         "time_advance_scale": {
@@ -1270,7 +1447,10 @@
       "description": "Public channel catalog and sensor-noise policy.\n\nAttributes\n----------\ncatalog : str\n    Versioned public channel catalog identifier.\nnoise : NoiseConfiguration\n    Noise policy applied after the physical calculation.",
       "properties": {
         "catalog": {
-          "const": "power-leo.v1",
+          "enum": [
+            "power-leo.v1",
+            "spacecraft.v1"
+          ],
           "title": "Catalog",
           "type": "string"
         },
@@ -1424,6 +1604,17 @@
         "battery": {
           "$ref": "#/$defs/BatteryConfiguration"
         },
+        "housekeeping": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HousekeepingConfiguration"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "loads_w": {
           "additionalProperties": {
             "minimum": 0,
@@ -1461,6 +1652,94 @@
         "sensors"
       ],
       "title": "SpacecraftProfile",
+      "type": "object"
+    },
+    "ThermalConfiguration": {
+      "additionalProperties": false,
+      "description": "Battery, avionics bus, and payload thermal network.\n\nAttributes\n----------\nbattery, bus, payload : ThermalNodeConfiguration\n    Three internally isothermal nodes; all electrical dissipation enters\n    its corresponding node.\nbattery_bus_conductance_w_k, payload_bus_conductance_w_k : float\n    Symmetric conductive links, in watts per kelvin.\nsink_temperature_k : float\n    Effective radiative sink; omits explicit Earth IR and albedo.",
+      "properties": {
+        "battery": {
+          "$ref": "#/$defs/ThermalNodeConfiguration"
+        },
+        "battery_bus_conductance_w_k": {
+          "default": 1.0,
+          "maximum": 10,
+          "minimum": 0,
+          "title": "Battery Bus Conductance W K",
+          "type": "number"
+        },
+        "bus": {
+          "$ref": "#/$defs/ThermalNodeConfiguration"
+        },
+        "payload": {
+          "$ref": "#/$defs/ThermalNodeConfiguration"
+        },
+        "payload_bus_conductance_w_k": {
+          "default": 1.0,
+          "maximum": 10,
+          "minimum": 0,
+          "title": "Payload Bus Conductance W K",
+          "type": "number"
+        },
+        "sink_temperature_k": {
+          "default": 3.0,
+          "maximum": 100,
+          "minimum": 0,
+          "title": "Sink Temperature K",
+          "type": "number"
+        }
+      },
+      "title": "ThermalConfiguration",
+      "type": "object"
+    },
+    "ThermalNodeConfiguration": {
+      "additionalProperties": false,
+      "description": "One isothermal node with radiation and directly absorbed sunlight.\n\nAttributes\n----------\ninitial_temperature_k : float\n    Initial absolute temperature in kelvin.\nheat_capacity_j_k : float\n    Constant lumped thermal capacity in joules per kelvin.\nsolar_area_m2, radiating_area_m2 : float\n    Effective Sun-facing absorbed area and emitting area, in square metres.\nabsorptivity, emissivity : float\n    Dimensionless surface coefficients.\n\nNotes\n-----\nParameter bounds keep the explicit one-second thermal update stable\nthroughout its declared 100--500 K operating envelope.",
+      "properties": {
+        "absorptivity": {
+          "default": 0.3,
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Absorptivity",
+          "type": "number"
+        },
+        "emissivity": {
+          "default": 0.8,
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Emissivity",
+          "type": "number"
+        },
+        "heat_capacity_j_k": {
+          "default": 5000.0,
+          "maximum": 10000000,
+          "minimum": 100,
+          "title": "Heat Capacity J K",
+          "type": "number"
+        },
+        "initial_temperature_k": {
+          "default": 293.15,
+          "maximum": 400,
+          "minimum": 150,
+          "title": "Initial Temperature K",
+          "type": "number"
+        },
+        "radiating_area_m2": {
+          "default": 0.1,
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Radiating Area M2",
+          "type": "number"
+        },
+        "solar_area_m2": {
+          "default": 0.02,
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Solar Area M2",
+          "type": "number"
+        }
+      },
+      "title": "ThermalNodeConfiguration",
       "type": "object"
     },
     "Trajectory": {

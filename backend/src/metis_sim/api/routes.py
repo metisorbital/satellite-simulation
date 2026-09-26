@@ -4,12 +4,14 @@ import json
 import time
 from dataclasses import asdict
 from datetime import datetime
+from typing import Literal
 
 from fastapi import APIRouter, Query, Request, Response
 from starlette.concurrency import run_in_threadpool
 
 from metis_sim.adapters.configuration import normalize_configuration
 from metis_sim.adapters.records import prior_result, record_result
+from metis_sim.adapters.reports import telemetry_report
 from metis_sim.api.auth import ACTIONS, COOKIE, Principal
 from metis_sim.api.requests import (
     CreateRunRequest,
@@ -21,7 +23,7 @@ from metis_sim.api.requests import (
     parse_json,
 )
 from metis_sim.application.errors import ServiceError
-from metis_sim.domain.catalog import CHANNELS
+from metis_sim.domain.catalog import CATALOGS
 from metis_sim.domain.public import (
     ControlRequest,
     PublicRunStatus,
@@ -29,6 +31,7 @@ from metis_sim.domain.public import (
     Trajectory,
     ViewerBootstrap,
 )
+from metis_sim.domain.reports import TelemetryReport
 
 router = APIRouter()
 PUBLIC_READERS = {"operator", "consumer", "viewer_control"}
@@ -51,14 +54,31 @@ def ready(request: Request) -> dict:
 
 
 @router.get("/v1/catalog")
-def catalog(request: Request) -> dict:
+def catalog(
+    request: Request, version: Literal["power-leo.v1", "spacecraft.v1"] = "power-leo.v1"
+) -> dict:
     """Expose only public channel and physical-model descriptors."""
     request.app.state.auth.principal(request).require(PUBLIC_READERS)
     return {
-        "catalog_version": "power-leo.v1",
+        "catalog_version": version,
         "schema_version": "telemetry.v1",
-        "models": {"orbit": "j2_cartesian", "earth": "wgs84_j2_v1", "sun": "astropy_builtin"},
-        "channels": [asdict(channel) for channel in CHANNELS],
+        "models": {
+            "orbit": "j2_cartesian",
+            "earth": "wgs84_j2_v1",
+            "sun": "astropy_builtin",
+            **(
+                {
+                    "electrical": "ideal_regulated_rails_v1",
+                    "thermal": "three_node_euler_fixed_1s_v1",
+                    "payload": "power_gated_camera_storage_v1",
+                    "attitude": "ideal_lvlh_v1",
+                    "magnetic": "centered_axial_dipole_v1",
+                }
+                if version == "spacecraft.v1"
+                else {}
+            ),
+        },
+        "channels": [asdict(channel) for channel in CATALOGS[version]],
     }
 
 
@@ -168,6 +188,34 @@ def _page(request: Request, stream_id: str, after: str | None, limit: int, kind:
     principal.require(PUBLIC_READERS)
     principal.require(PUBLIC_READERS, context.reader.stream_run(stream_id))
     return context.reader.page(stream_id, after, limit, kind)
+
+
+@router.get("/v1/runs/{run_id}/telemetry-report", response_model=TelemetryReport)
+def report(
+    run_id: str,
+    request: Request,
+    from_sequence: int = Query(0, ge=0, le=86400),
+    through_sequence: int | None = Query(None, ge=0, le=86400),
+) -> TelemetryReport:
+    """Report retained public telemetry at a fixed committed boundary.
+
+    Parameters
+    ----------
+    run_id : str
+        Run whose committed measurements should be summarized.
+    request : Request
+        Authenticated HTTP request; viewer sessions remain run-scoped.
+    from_sequence, through_sequence : int and int or None
+        Inclusive window, with the current committed tick as the default end.
+
+    Returns
+    -------
+    TelemetryReport
+        Public statistics, coverage and model limits, excluding evaluator labels.
+    """
+    context = request.app.state
+    context.auth.principal(request).require(PUBLIC_READERS, run_id)
+    return telemetry_report(context.database, run_id, from_sequence, through_sequence)
 
 
 @router.get("/v1/runs/{run_id}/snapshot", response_model=Snapshot)

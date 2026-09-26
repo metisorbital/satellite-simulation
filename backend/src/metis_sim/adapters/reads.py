@@ -37,7 +37,6 @@ class PublicReader:
                     **dict(row),
                     "source_kind": "synthetic",
                     "time_domain": "simulation_utc",
-                    "catalog_version": "power-leo.v1",
                 }
                 for row in connection.execute(statement).mappings()
             ]

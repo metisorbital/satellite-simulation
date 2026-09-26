@@ -25,6 +25,7 @@ from metis_sim.domain.public import (
     ViewerOperator,
     VisualMessage,
 )
+from metis_sim.domain.reports import TelemetryReport
 from metis_sim.domain.telemetry import ChannelReading, MeasurementFrame, OperationalEvent
 from pydantic import BaseModel
 from pydantic.json_schema import JsonSchemaMode
@@ -229,6 +230,7 @@ def main() -> None:
     individual = {
         "simulation.v1.schema.json": _schema(SimulationConfig, "simulation.v1"),
         "telemetry.v1.schema.json": _schema(MeasurementFrame, "telemetry.v1"),
+        "telemetry-report.v1.schema.json": _schema(TelemetryReport, "telemetry-report.v1"),
         "operational_event.v1.schema.json": _schema(OperationalEvent, "operational_event.v1"),
     }
     for filename, schema in individual.items():

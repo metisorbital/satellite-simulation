@@ -9,7 +9,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from metis_sim.domain.catalog import CHANNELS_BY_ID
+from metis_sim.domain.catalog import CHANNELS_BY_CATALOG
 from metis_sim.domain.immutable import FrozenDict
 
 MAX_SAFE_INTEGER = 9_007_199_254_740_991
@@ -42,7 +42,8 @@ class ChannelReading(PublicModel):
     Attributes
     ----------
     value : float, tuple of float, or None
-        Scalar or fixed three-vector reading. Failed readings use ``None``.
+        Scalar, declared string code, or fixed three/four-vector reading.
+        Failed readings use ``None``; vector meaning comes from the catalog.
     quality : {"valid", "missing", "invalid", "saturated"}
         Quality state that explains whether ``value`` is usable.
 
@@ -52,7 +53,7 @@ class ChannelReading(PublicModel):
     readings require ``None``.
     """
 
-    value: float | tuple[float, float, float] | None
+    value: float | tuple[float, float, float] | tuple[float, float, float, float] | str | None
     quality: Literal["valid", "missing", "invalid", "saturated"]
 
     @field_validator("value", mode="before")
@@ -123,7 +124,7 @@ class MeasurementFrame(PublicModel):
     observed_at: datetime
     sample_window_s: Annotated[float, Field(ge=0)]
     emitted_at: datetime
-    catalog_version: Literal["power-leo.v1"]
+    catalog_version: Literal["power-leo.v1", "spacecraft.v1"]
     mode: Mode
     interval_mode: Mode | None
     channels: dict[str, ChannelReading]
@@ -144,14 +145,20 @@ class MeasurementFrame(PublicModel):
     def validate_channels_against_catalog(self) -> MeasurementFrame:
         """Enforce catalog membership and scalar/vector channel types."""
         for channel_id, reading in self.channels.items():
-            definition = CHANNELS_BY_ID.get(channel_id)
+            definition = CHANNELS_BY_CATALOG[self.catalog_version].get(channel_id)
             if definition is None:
                 raise ValueError(f"unsupported public channel: {channel_id}")
+            if definition.availability == "unavailable" and reading.quality != "missing":
+                raise ValueError(f"{channel_id} has no supported physical model")
             if reading.value is None:
                 continue
-            if definition.value_type == "vector[3]":
-                if not isinstance(reading.value, tuple) or len(reading.value) != 3:
-                    raise ValueError(f"{channel_id} must be a vector of length 3")
+            if definition.value_type in {"vector[3]", "vector[4]"}:
+                length = 3 if definition.value_type == "vector[3]" else 4
+                if not isinstance(reading.value, tuple) or len(reading.value) != length:
+                    raise ValueError(f"{channel_id} must be a vector of length {length}")
+            elif definition.value_type == "string":
+                if not isinstance(reading.value, str):
+                    raise ValueError(f"{channel_id} must be a string")
             elif not isinstance(reading.value, (float, int)) or isinstance(reading.value, bool):
                 raise ValueError(f"{channel_id} must be a scalar number")
             if isinstance(reading.value, (float, int)) and not math.isfinite(reading.value):
