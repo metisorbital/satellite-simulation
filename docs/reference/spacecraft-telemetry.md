@@ -14,7 +14,10 @@ The [210-field sample inventory](sample-telemetry.md) defines the kinds of telem
 CSV values are never loaded, replayed, interpolated, or fitted by these models.
 
 The simulator remains a synthetic measurement source with a database and public read APIs.
-Model training, health inference, real-spacecraft calibration, and a telemetry dashboard are separate work.
+The Flutter viewer includes a catalog-backed telemetry dashboard; open **Telemetry dashboard** after selecting a satellite and starting a run.
+Its Overview, EPS, Flight computer, Payload, ADCS, and Space weather tabs show committed samples with units, UTC time, quality, and explicitly unavailable channels.
+The 1/5/10-minute controls filter recent received history (up to 600 samples per satellite; initial/reconnect snapshots contain up to 41), rather than fetching a complete historical window.
+Model training, health inference, and real-spacecraft calibration remain separate work.
 See the [data contracts](../contracts.md) and [physics model](../physics-model.md) for the unchanged clock, orbit, energy, and privacy boundaries.
 Executed checks and remaining gates are recorded in [telemetry validation](../validation/spacecraft-telemetry.md).
 
