@@ -50,7 +50,7 @@ Frame names are never just `ECI` or `ECEF` without a defined convention:
 - Integration state: Earth-centered GCRS Cartesian position in metres and velocity in metres per second, at each sample's epoch.
 - Public rendering state: ITRS Earth-fixed coordinates, exposed under `*_itrf_*` channel names as the P0 realization of that terrestrial frame. The descriptor states `frame=ITRS`, pinned Earth-orientation inputs, and no survey-grade realization claim.
 - Geographic readout: WGS84 geodetic latitude, east-positive longitude, and ellipsoidal height.
-- Body attitude, if output later: quaternion `[x,y,z,w]` mapping body vectors into ITRS at the stated epoch. This is an explicit convention, not implicit Cesium inference.
+- Body attitude in the optional `spacecraft.v1` extension: Hamilton quaternion `[w,x,y,z]`, scalar first, actively mapping body vectors into GCRS at the stated epoch. This supersedes the earlier proposed future ITRS/xyzw convention; rendering must explicitly convert frames/order rather than infer Cesium compatibility.
 
 Convert state and velocity together using the frame transformation's differential support.
 Rotating velocity components alone misses the rotating-frame term and is incorrect.
@@ -380,3 +380,20 @@ test input position (m): [4000000, 3000000, 5000000]
 Inject these time/EOP inputs through the production coordinate adapter and compare against the fixed matrix acting on the test vector; do not only call ERFA's own self-test.
 P-03 separately checks the production UTC/IERS path and velocities; the matrix fixture alone does not validate timestamp parsing or rotating velocity terms.
 If a gate fails, fix the model or reduce the supported envelope explicitly; do not widen tolerances without documented numerical evidence.
+
+## 10. Optional Physical Housekeeping Models
+
+The subsequent `spacecraft.v1` extension adds declared models around the existing conserved orbit/EPS ledger; the historical P0 fidelity table above describes `power-leo.v1`.
+Its [model reference](reference/spacecraft-telemetry.md#interpret-the-physical-models) records exact equations, units, and limits, and [telemetry configuration](../configs/telemetry-demo.yaml) provides an explicit opt-in example.
+No supplied CSV values enter simulation or substitute for a physical model.
+
+Ideal regulated rails derive charge/discharge terminal currents using the existing efficiencies and `I=P/V`; converter losses enter a three-node battery/avionics/payload heat ledger.
+One-second forward Euler combines electrical heat, distance/eclipse-dependent direct solar absorption, symmetric conduction, and Stefan–Boltzmann radiation.
+There is no electrochemical voltage curve, thermal feedback into EPS, Earth IR/albedo, thermostat, or heater model; temperatures outside 100–500 K fail instead of being clamped.
+Payload power is a portion of served mode load, with acquisition gated on full supply and available storage; counters advance only on completed simulated intervals.
+
+Ideal LVLH body axes are `+Z=-r_hat`, `+Y=-h_hat`, and `+X=+Y×+Z`; target attitude equals actual attitude by prescription.
+Quaternion output uses the body-to-GCRS wxyz convention above; analytic axis derivatives produce angular rate, and a centered axial dipole produces the body magnetic vector.
+The independent equivalent solar array remains ideally Sun tracking, as if freely gimbaled, rather than fixed to that nadir body.
+Actuator/wheel/control dynamics and mission sensor calibration remain absent; unsupported quantities are explicitly missing.
+The solar-derating scenario can change electrical/thermal behavior and power available to a scheduled payload, but does not introduce an attitude failure, thermal-aging model, or predictor.

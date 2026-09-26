@@ -55,6 +55,7 @@ The [implementation guide](docs/implementation.md) maps the data flow and explai
 
 | Task | Start here |
 |---|---|
+| Generate physics-backed telemetry for ML | [Spacecraft telemetry and export guide](docs/reference/spacecraft-telemetry.md) |
 | Read telemetry from another service | [API consumer guide](docs/api.md) and [standalone Python example](examples/consumer.py) |
 | Understand API objects and Python classes | [Python class reference](docs/python-api.md) and [generated public schema](schemas/public-api.v1.schema.json) |
 | Change a configuration or public channel | [First-change guide](docs/contributing.md) and [contracts](docs/contracts.md) |

@@ -337,6 +337,14 @@ class PublicModelProvenance {
     this.force_model_limits,
     this.eps_model_limits,
     this.accuracy_claim,
+    this.housekeeping_model,
+    this.electrical_model,
+    this.thermal_model,
+    this.payload_model,
+    this.magnetic_model,
+    this.housekeeping_model_limits,
+    this.attitude_model,
+    this.attitude_model_limits,
   });
 
   final String? frame;
@@ -365,6 +373,14 @@ class PublicModelProvenance {
   final String? force_model_limits;
   final String? eps_model_limits;
   final String? accuracy_claim;
+  final String? housekeeping_model;
+  final String? electrical_model;
+  final String? thermal_model;
+  final String? payload_model;
+  final String? magnetic_model;
+  final String? housekeeping_model_limits;
+  final String? attitude_model;
+  final String? attitude_model_limits;
 
   factory PublicModelProvenance.fromJson(Map<String, dynamic> json) => PublicModelProvenance(
     frame: json['frame'] == null ? null : json['frame'] as String,
@@ -393,6 +409,14 @@ class PublicModelProvenance {
     force_model_limits: json['force_model_limits'] == null ? null : json['force_model_limits'] as String,
     eps_model_limits: json['eps_model_limits'] == null ? null : json['eps_model_limits'] as String,
     accuracy_claim: json['accuracy_claim'] == null ? null : json['accuracy_claim'] as String,
+    housekeeping_model: json['housekeeping_model'] == null ? null : json['housekeeping_model'] as String,
+    electrical_model: json['electrical_model'] == null ? null : json['electrical_model'] as String,
+    thermal_model: json['thermal_model'] == null ? null : json['thermal_model'] as String,
+    payload_model: json['payload_model'] == null ? null : json['payload_model'] as String,
+    magnetic_model: json['magnetic_model'] == null ? null : json['magnetic_model'] as String,
+    housekeeping_model_limits: json['housekeeping_model_limits'] == null ? null : json['housekeeping_model_limits'] as String,
+    attitude_model: json['attitude_model'] == null ? null : json['attitude_model'] as String,
+    attitude_model_limits: json['attitude_model_limits'] == null ? null : json['attitude_model_limits'] as String,
   );
 
   Map<String, dynamic> toJson() => {
@@ -422,6 +446,14 @@ class PublicModelProvenance {
     if (force_model_limits != null) 'force_model_limits': force_model_limits!,
     if (eps_model_limits != null) 'eps_model_limits': eps_model_limits!,
     if (accuracy_claim != null) 'accuracy_claim': accuracy_claim!,
+    if (housekeeping_model != null) 'housekeeping_model': housekeeping_model!,
+    if (electrical_model != null) 'electrical_model': electrical_model!,
+    if (thermal_model != null) 'thermal_model': thermal_model!,
+    if (payload_model != null) 'payload_model': payload_model!,
+    if (magnetic_model != null) 'magnetic_model': magnetic_model!,
+    if (housekeeping_model_limits != null) 'housekeeping_model_limits': housekeeping_model_limits!,
+    if (attitude_model != null) 'attitude_model': attitude_model!,
+    if (attitude_model_limits != null) 'attitude_model_limits': attitude_model_limits!,
   };
 }
 

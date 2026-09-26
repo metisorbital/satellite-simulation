@@ -381,7 +381,15 @@ class SimulationService:
                 seed_derivation="SHA256(root_seed,satellite_id,sensor_channel_id); noise disabled in P0",
             )
             result = self.repository.create_run(
-                configuration_id, status.model_dump(mode="json"), manifest, retain, token
+                configuration_id,
+                status.model_dump(mode="json"),
+                manifest,
+                retain,
+                token,
+                catalog_versions={
+                    satellite.satellite_id: config.profiles[satellite.profile_id].sensors.catalog
+                    for satellite in config.satellites
+                },
             )
             self.runner.prepared[run_id] = PreparedRun(
                 config,

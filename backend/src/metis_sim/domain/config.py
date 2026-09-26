@@ -15,6 +15,7 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from metis_sim.domain.immutable import FrozenDict
+from metis_sim.domain.subsystems import HousekeepingConfiguration
 
 MAX_SAFE_INTEGER = 9_007_199_254_740_991
 ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,64}$", re.ASCII)
@@ -184,7 +185,7 @@ class SensorConfiguration(ContractModel):
         Noise policy applied after the physical calculation.
     """
 
-    catalog: Literal["power-leo.v1"]
+    catalog: Literal["power-leo.v1", "spacecraft.v1"]
     noise: NoiseConfiguration
 
 
@@ -238,6 +239,26 @@ class SpacecraftProfile(ContractModel):
     loads_w: dict[SatelliteMode, Annotated[float, Field(ge=0)]]
     sensors: SensorConfiguration
     public_limits: tuple[ConfiguredPublicLimit, ...] = ()
+    housekeeping: HousekeepingConfiguration | None = None
+
+    @model_validator(mode="after")
+    def validate_housekeeping(self) -> SpacecraftProfile:
+        """Keep catalog selection and the modeled payload power budget consistent.
+
+        Returns
+        -------
+        SpacecraftProfile
+            This immutable, internally consistent spacecraft profile.
+        """
+        extended = self.sensors.catalog == "spacecraft.v1"
+        if extended != (self.housekeeping is not None):
+            raise ValueError("spacecraft.v1 requires housekeeping; power-leo.v1 excludes it")
+        if (
+            self.housekeeping
+            and self.housekeeping.payload.active_power_w > self.loads_w["payload_active"]
+        ):
+            raise ValueError("payload active power must fit within the payload_active mode load")
+        return self
 
     @field_validator("loads_w", mode="before")
     @classmethod

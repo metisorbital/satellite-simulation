@@ -9,6 +9,7 @@ Deterministic synthetic orbit-to-power telemetry for a prepared run, with an Ear
 ## Start here
 
 - [Getting started](getting-started.md) — prerequisites, local demo setup, and the authentication boundary.
+- [Physics-backed spacecraft telemetry](reference/spacecraft-telemetry.md) — one-second electrical, thermal, attitude and payload measurements, reports, and ML exports.
 - [API consumer guide](api.md) — authenticate, discover a stream, and resume durable telemetry reads.
 - [Python class reference](python-api.md) — understand the main objects and how their methods fit together.
 - [First-change guide](contributing.md) — find a module and run its focused checks.

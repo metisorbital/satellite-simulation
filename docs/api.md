@@ -3,7 +3,7 @@ title: Use the Metis Simulation API
 description: Discover satellite streams and consume durable telemetry and public events with safe replay cursors.
 content-type: reference
 audience: API consumers and developers
-last-verified: 2026-09-23
+last-verified: 2026-09-26
 ---
 
 # Use the Metis Simulation API
@@ -112,7 +112,7 @@ All paths below are relative to `http://127.0.0.1:8000` in local development. Th
 |---|---|---|
 | `GET /health/live` | None | Confirm the process responds: `{"status":"alive"}`. |
 | `GET /health/ready` | None | Check database and writer readiness; returns `503` when unavailable. |
-| `GET /v1/catalog` | Operator, consumer, viewer | Read public model versions and channel definitions. |
+| `GET /v1/catalog` | Operator, consumer, viewer | Read channel definitions; `version=spacecraft.v1` selects extended physical telemetry and omission selects `power-leo.v1`. |
 | `POST /v1/configurations/validate` | Operator | Validate a complete `simulation.v1` JSON or YAML body without storing it. |
 | `POST /v1/configurations` | Operator | Store a configuration revision; returns `configuration_id`, `canonical_hash`, and `schema_version` (`201`). |
 | `POST /v1/runs` | Operator | Send `{"configuration_id":"...","retain":false}`; `retain` defaults to `false`. Returns public run status (`201`). |
@@ -121,6 +121,7 @@ All paths below are relative to `http://127.0.0.1:8000` in local development. Th
 | `GET /v1/streams` | Operator, consumer, viewer | Discover stream IDs and retained ranges; a viewer sees only its run. |
 | `GET /v1/telemetry` | Operator, consumer, viewer | Replay measurement frames using `stream_id`, optional `after`, and `limit` (default 500, maximum 2,000). |
 | `GET /v1/events` | Operator, consumer, viewer | Replay public operational events with the same query parameters and separate cursors. |
+| `GET /v1/runs/{run_id}/telemetry-report` | Operator, consumer, scoped viewer | Report committed coverage, quality counts, and statistics; optional inclusive `from_sequence` and `through_sequence`. |
 | `GET /v1/runs/{run_id}/snapshot` | Operator, scoped viewer | Read committed status and frames; optional UTC `at` and `history` (1–41, default 1). |
 | `GET /v1/runs/{run_id}/trajectory` | Operator, scoped viewer | Read orbit-only samples with `from`, `to`, and `step_s`; at most one hour and 3,601 points per satellite. |
 | `GET /v1/evaluation/runs/{run_id}/truth` | Evaluator | Read private truth with `after` offset and `limit` (default 500, maximum 2,000). |
@@ -149,3 +150,11 @@ Common statuses are `401` for missing or invalid credentials, `403` for a forbid
 The visual WebSocket sends `visual.v1` messages containing `type`, `run_id`, `sent_at`, public `status`, `frames`, and per-stream `ranges`. Types are `snapshot`, `samples`, `clock`, `lifecycle`, and `resync_required`; the schema also reserves `error`. Reconnect and fetch a fresh snapshot after resynchronization. Use HTTP telemetry and events for durable consumption because the visual feed may coalesce frames.
 
 For the design limits and privacy boundary, see the [specification](specification.md) and [contracts](contracts.md).
+
+## Export Physics-Backed Telemetry for ML
+
+The optional `spacecraft.v1` catalog adds electrical, thermal, payload, attitude, and magnetic-field measurements.
+Streams retain their catalog version in storage; discover it through `GET /v1/streams` and fetch the matching catalog before interpreting frames.
+The [spacecraft guide](reference/spacecraft-telemetry.md) provides a complete configuration, model limits, report semantics, and a command to export an unchanged, committed JSONL dataset with a checksum.
+The [report JSON Schema](../schemas/telemetry-report.v1.schema.json) describes its public summary.
+Private training labels remain behind the evaluator API and are not bundled with public measurements.

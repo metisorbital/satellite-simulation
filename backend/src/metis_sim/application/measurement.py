@@ -5,6 +5,7 @@ from typing import Any
 from uuid import UUID
 
 from metis_sim.adapters.records import utc_now
+from metis_sim.domain.catalog import CHANNELS_BY_CATALOG
 from metis_sim.domain.config import SimulationConfig
 from metis_sim.domain.physics import PhysicsSample
 from metis_sim.domain.telemetry import ChannelReading, MeasurementFrame, OperationalEvent
@@ -33,6 +34,9 @@ class MeasurementProjector:
             s.satellite_id: config.profiles[s.profile_id].public_limits for s in config.satellites
         }
         self.active_limits: dict[tuple[str, int], bool] = {}
+        self.catalogs = {
+            s.satellite_id: config.profiles[s.profile_id].sensors.catalog for s in config.satellites
+        }
 
     def project(
         self, samples: tuple[PhysicsSample, ...]
@@ -69,18 +73,26 @@ class MeasurementProjector:
                 observed_at=sample.observed_at,
                 emitted_at=emitted_at,
             )
+            catalog_version = self.catalogs[sample.satellite_id]
+            channels = sample.public_channels()
+            if catalog_version == "spacecraft.v1":
+                channels = {
+                    name: channels.get(name) for name in CHANNELS_BY_CATALOG[catalog_version]
+                }
             frame = MeasurementFrame.model_validate(
                 dict(
                     **envelope,
                     schema_version="telemetry.v1",
-                    catalog_version="power-leo.v1",
+                    catalog_version=catalog_version,
                     sequence=sample.tick,
                     sample_window_s=float(sample.sample_window_s),
                     mode=sample.mode,
                     interval_mode=sample.interval_mode,
                     channels={
-                        name: ChannelReading.model_validate(dict(value=value, quality="valid"))
-                        for name, value in sample.public_channels().items()
+                        name: ChannelReading.model_validate(
+                            dict(value=value, quality="missing" if value is None else "valid")
+                        )
+                        for name, value in channels.items()
                     },
                 )
             )
