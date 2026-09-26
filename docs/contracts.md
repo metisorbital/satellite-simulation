@@ -103,6 +103,34 @@ A real-source adapter also allocates a new stream on counter reset rather than r
 Sequences start at zero and increase by one per generated frame; a skipped/dropped frame is detectable as a sequence gap.
 P0 simulation commits all generated frames or pauses/fails rather than silently dropping them.
 
+The `satellitecots.v1` adapter reads the immutable BUPT-1 source corpus from
+Postgres and allocates a new run and stream for every playback or source-time
+seek. Its dense `sequence` counts delivered source records; `committed_tick`
+tracks elapsed source seconds and `committed_sequence` tracks the last durable
+record. These values differ after a seek or a recorded gap. Original source
+timestamps and missing intervals are preserved. `mode` and `interval_mode` are
+null because this source does not identify spacecraft operating mode.
+Its channel catalog declares endpoint semantics, with `sample_window_s=0`;
+unit-converted sensors and explicit electrical derivations are never presented
+as interval averages. See [source inventory](research/satellitecots.md).
+
+`GET /v1/datasets` exposes installed dataset metadata without future channel
+values. `POST /v1/viewer/source` selects `physics` or `satellitecots` for a new
+unstarted run; `POST /v1/viewer/seek` accepts an original-source `elapsed_s` and
+prepares a new recorded stream at the next available sample. A seek validates
+its position before stopping the current replay. Start is explicit afterward.
+Both viewer mutations retain session authorization, CSRF and idempotency rules.
+Reset preserves the selected source and returns recorded playback to zero.
+Unsupported observed nameplate values are null; no modelled orbital channel is
+added to the observed measurement stream. The existing trajectory endpoint can
+return a separate `kind=configured_orbit` presentation with an explicit
+`description`. It uses a run-snapshotted BUPT-1 orbit configuration based on the
+operator's public altitude and inclination, with disclosed phase/orientation
+assumptions. Its UTC positions follow the same replay clock. The existing viewer
+configuration endpoint permits orbit-only edits while retaining the single
+recorded spacecraft, source metadata and measurements. Reset and seek preserve
+those orbital settings; switching to physics preserves its separate constellation.
+
 | Field | Type | Meaning |
 |---|---|---|
 | `schema_version` | string | `telemetry.v1`; breaking changes create a new major schema. |

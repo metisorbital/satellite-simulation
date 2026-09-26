@@ -10,6 +10,7 @@ test('Flutter controls, telemetry, offline Cesium, and stale freeze', async ({ p
     if (/^https?:/.test(request.url()) && !request.url().startsWith('http://127.0.0.1:4173/')) external.push(request.url());
   });
   await page.route('**/v1/viewer/session', route => route.fulfill({json: {operator: demoOperator, csrf_token: 'test-csrf', allowed_actions: ['start', 'pause', 'resume', 'set_speed', 'stop'], run: current}}));
+  await page.route('**/v1/datasets', route => route.fulfill({json: {items: []}}));
   await page.route('**/v1/runs/test-run/snapshot?history=41', route => route.fulfill({json: {status: current, frames: framesBetween(Math.max(0, current.committed_tick-40), current.committed_tick)}}));
   await page.route('**/v1/runs/test-run/trajectory?*', route => route.fulfill({json: {run_id:'test-run', frame:'ITRS', kind:'predicted_orbit', satellites:[]}}));
   await page.route('**/v1/runs/test-run/control', async route => {
@@ -20,11 +21,13 @@ test('Flutter controls, telemetry, offline Cesium, and stale freeze', async ({ p
   });
   await page.routeWebSocket('**/v1/runs/test-run/visual', socket => socket.send(JSON.stringify({visual_schema_version:'visual.v1', type:'snapshot', sent_at:new Date().toISOString(), run_id:'test-run', status:current, frames:framesBetween(0,40), ranges:[], message:null})));
   await page.goto('/');
-  await expect(page.getByRole('heading', {name:'Orbital overview', exact:true})).toBeVisible();
+  await expect(page.getByRole('heading', {name:'Mission overview', exact:true})).toBeVisible();
   await expect(page.locator('#metis-earth canvas')).toBeVisible();
   await expect(page.getByText(/322\.4 W/)).toBeVisible();
-  await page.getByRole('button', {name:/METIS-02 Sunlit/}).click();
-  await expect(page.getByRole('button', {name:/METIS-02 Sunlit/})).toHaveAttribute('aria-current', 'true');
+  await page.getByRole('button', {name:'METIS-01', exact:true}).click();
+  await page.getByRole('menuitem', {name:'METIS-02', exact:true}).click();
+  await expect(page.getByRole('button', {name:'METIS-02', exact:true})).toBeVisible();
+  await expect(page.getByText('Metis Two', {exact:true})).toBeVisible();
   await page.getByRole('button', {name:'Follow selected satellite', exact:true}).click();
   await page.mouse.move(0, 0);
   await page.getByRole('button', {name:'Reset Earth view', exact:true}).click();

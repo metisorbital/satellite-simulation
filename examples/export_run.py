@@ -75,6 +75,12 @@ def export_run(base_url: str, run_id: str, output: Path, token: str) -> dict[str
     if any(not stream["complete_window"] for stream in report["streams"]):
         raise ValueError("Cannot export an incomplete retained stream")
     watermark = report["through_sequence"]
+    source_kind, time_domain = report["source_kind"], report["time_domain"]
+    if (source_kind, time_domain) not in {
+        ("synthetic", "simulation_utc"),
+        ("observed", "mission_utc"),
+    }:
+        raise ValueError("Unexpected source provenance in report")
     versions = sorted({stream["catalog_version"] for stream in report["streams"]})
     catalogs = {
         version: get_json(base_url, "/v1/catalog?" + urlencode({"version": version}), token)
@@ -108,8 +114,8 @@ def export_run(base_url: str, run_id: str, output: Path, token: str) -> dict[str
                                 "Stream identity, catalog or sequence changed during export"
                             )
                         if (
-                            frame["source_kind"] != "synthetic"
-                            or frame["time_domain"] != "simulation_utc"
+                            frame["source_kind"] != source_kind
+                            or frame["time_domain"] != time_domain
                         ):
                             raise ValueError("Unexpected source provenance")
                         encoded = (
@@ -128,8 +134,8 @@ def export_run(base_url: str, run_id: str, output: Path, token: str) -> dict[str
         manifest = {
             "schema_version": "dataset.v1",
             "run_id": run_id,
-            "source_kind": "synthetic",
-            "time_domain": "simulation_utc",
+            "source_kind": source_kind,
+            "time_domain": time_domain,
             "through_sequence": watermark,
             "frame_count": count,
             "telemetry_sha256": digest.hexdigest(),
@@ -165,7 +171,7 @@ def main() -> None:
     args = parser.parse_args()
     manifest = export_run(args.url, args.run, args.output, os.environ["METIS_CONSUMER_TOKEN"])
     print(
-        f"Exported {manifest['frame_count']} frames through tick {manifest['through_sequence']} to {args.output}"
+        f"Exported {manifest['frame_count']} frames through sequence {manifest['through_sequence']} to {args.output}"
     )
 
 

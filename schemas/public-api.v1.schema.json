@@ -252,6 +252,24 @@
       "title": "ControlRequest",
       "type": "object"
     },
+    "DatasetList": {
+      "additionalProperties": false,
+      "description": "Discover imported archives without exposing their future channel values.\n\nAttributes\n----------\nitems : list of PublicDataset\n    Archives available in this deployment's database.",
+      "properties": {
+        "items": {
+          "items": {
+            "$ref": "#/$defs/PublicDataset"
+          },
+          "title": "Items",
+          "type": "array"
+        }
+      },
+      "required": [
+        "items"
+      ],
+      "title": "DatasetList",
+      "type": "object"
+    },
     "DeratingPoint": {
       "additionalProperties": false,
       "description": "Elapsed run time and solar generation multiplier control point.\n\nAttributes\n----------\nat_s : int\n    Simulated-second location of the control point.\nmultiplier : float\n    Solar-generation multiplier in ``[0, 1]``.",
@@ -371,7 +389,8 @@
         "catalog_version": {
           "enum": [
             "power-leo.v1",
-            "spacecraft.v1"
+            "spacecraft.v1",
+            "satellitecots.v1"
           ],
           "title": "Catalog Version",
           "type": "string"
@@ -405,13 +424,20 @@
           "title": "Interval Mode"
         },
         "mode": {
-          "enum": [
-            "nominal",
-            "payload_active",
-            "safe"
+          "anyOf": [
+            {
+              "enum": [
+                "nominal",
+                "payload_active",
+                "safe"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
           ],
-          "title": "Mode",
-          "type": "string"
+          "title": "Mode"
         },
         "observed_at": {
           "format": "date-time",
@@ -736,7 +762,7 @@
     },
     "OrbitPoint": {
       "additionalProperties": false,
-      "description": "One authoritative Earth-fixed orbit state without predicted health.\n\nAttributes\n----------\nelapsed_s : int\n    Simulated elapsed time from the run epoch.\nobserved_at : datetime\n    UTC timestamp represented by the state.\nposition_itrs_m : tuple of float\n    Earth-fixed position in metres.\nvelocity_itrs_m_s : tuple of float\n    Earth-fixed velocity in metres per second.",
+      "description": "One Earth-fixed display state whose origin is declared by its trajectory.\n\nAttributes\n----------\nelapsed_s : int\n    Simulated elapsed time from the run epoch.\nobserved_at : datetime\n    UTC timestamp represented by the state.\nposition_itrs_m : tuple of float\n    Earth-fixed position in metres.\nvelocity_itrs_m_s : tuple of float\n    Earth-fixed velocity in metres per second.",
       "properties": {
         "elapsed_s": {
           "title": "Elapsed S",
@@ -920,6 +946,58 @@
       "title": "PowerUnservedDetails",
       "type": "object"
     },
+    "PublicDataset": {
+      "additionalProperties": false,
+      "description": "An available archive's public metadata, excluding future measurements.\n\nAttributes\n----------\ndataset_id, title, satellite_id, catalog_version : str\n    Stable imported archive and spacecraft identifiers.\nobserved_start, observed_end : datetime\n    Original timestamp span normalized using the documented interpretation.\nduration_s, sample_count : int\n    Elapsed archive span and number of real observations.",
+      "properties": {
+        "catalog_version": {
+          "title": "Catalog Version",
+          "type": "string"
+        },
+        "dataset_id": {
+          "title": "Dataset Id",
+          "type": "string"
+        },
+        "duration_s": {
+          "title": "Duration S",
+          "type": "integer"
+        },
+        "observed_end": {
+          "format": "date-time",
+          "title": "Observed End",
+          "type": "string"
+        },
+        "observed_start": {
+          "format": "date-time",
+          "title": "Observed Start",
+          "type": "string"
+        },
+        "sample_count": {
+          "title": "Sample Count",
+          "type": "integer"
+        },
+        "satellite_id": {
+          "title": "Satellite Id",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "dataset_id",
+        "title",
+        "satellite_id",
+        "catalog_version",
+        "observed_start",
+        "observed_end",
+        "duration_s",
+        "sample_count"
+      ],
+      "title": "PublicDataset",
+      "type": "object"
+    },
     "PublicLimit": {
       "additionalProperties": false,
       "description": "A disclosed operational limit with hysteresis.\n\nAttributes\n----------\nchannel_id : str\n    Public channel monitored by this limit.\noperator : {\"lt\", \"gt\"}\n    Comparison used to enter the limit.\nvalue, clear_value : float\n    Entry and clear thresholds exposed to a viewer or consumer.",
@@ -982,6 +1060,22 @@
         "coverage_validated": {
           "title": "Coverage Validated",
           "type": "boolean"
+        },
+        "data_mapping_version": {
+          "title": "Data Mapping Version",
+          "type": "string"
+        },
+        "dataset_repository": {
+          "title": "Dataset Repository",
+          "type": "string"
+        },
+        "dataset_revision": {
+          "title": "Dataset Revision",
+          "type": "string"
+        },
+        "dataset_sha256": {
+          "title": "Dataset Sha256",
+          "type": "string"
         },
         "earth_model": {
           "title": "Earth Model",
@@ -1087,6 +1181,10 @@
           "title": "Payload Model",
           "type": "string"
         },
+        "sampling_limits": {
+          "title": "Sampling Limits",
+          "type": "string"
+        },
         "sun_model": {
           "title": "Sun Model",
           "type": "string"
@@ -1098,6 +1196,10 @@
         "time_advance_scale": {
           "title": "Time Advance Scale",
           "type": "string"
+        },
+        "timestamp_interpretation": {
+          "title": "Timestamp Interpretation",
+          "type": "string"
         }
       },
       "title": "PublicModelProvenance",
@@ -1105,7 +1207,7 @@
     },
     "PublicRunStatus": {
       "additionalProperties": false,
-      "description": "Committed run status containing no configuration or scenario identity.\n\nAttributes\n----------\nrun_id : str\n    Identifier for this execution.\nstatus : RunState\n    Public lifecycle state.\nepoch_utc : datetime\n    Run start epoch in UTC.\nduration_s : int\n    Configured simulated duration.\ncommitted_tick : int\n    Latest durably committed simulated second, or ``-1`` before the\n    first commit.\nstatus_revision : int\n    Monotonic status revision used to order same-tick responses.\ncommitted_at : datetime or None\n    Simulation UTC timestamp of the latest committed sample; ``None``\n    before the first sample.\nrequested_speed, effective_speed : float or int\n    Requested pacing multiplier and measured effective multiplier.\nwall_lag_s : float\n    Difference between requested simulated progress and wall pacing.\nsatellites : list of PublicSpacecraft\n    Public spacecraft descriptors and stream identities.\nsource_kind : str\n    Provenance label; P0 runs are ``synthetic``.\nmodel_provenance : PublicModelProvenance\n    Allowlisted model and Earth-orientation metadata.\nframe_count : int\n    Number of committed public frames.\ndiagnostic : str or None\n    Safe terminal or health diagnostic, when present.\n\nNotes\n-----\nSeeds, scenario parameters, private manifests, and future outcome labels\nare intentionally excluded from this projection.",
+      "description": "Committed run status containing no configuration or scenario identity.\n\nAttributes\n----------\nrun_id : str\n    Identifier for this execution.\nstatus : RunState\n    Public lifecycle state.\nepoch_utc : datetime\n    Run start epoch in UTC.\nduration_s : int\n    Configured simulated duration.\ncommitted_tick : int\n    Latest durably committed elapsed source second, or ``-1`` before the\n    first commit. Observed replay advances this clock through source gaps.\ncommitted_sequence : int or None\n    Last committed observation index for recorded sources. For physics\n    runs it is omitted and the sequence equals ``committed_tick``.\nstatus_revision : int\n    Monotonic status revision used to order same-tick responses.\ncommitted_at : datetime or None\n    Simulation UTC timestamp of the latest committed sample; ``None``\n    before the first sample.\nrequested_speed, effective_speed : float or int\n    Requested pacing multiplier and measured effective multiplier.\nwall_lag_s : float\n    Difference between requested simulated progress and wall pacing.\nsatellites : list of PublicSpacecraft\n    Public spacecraft descriptors and stream identities.\nsource_kind : str\n    Provenance label, ``synthetic`` or ``observed``.\ndata_source : str\n    Selected physics or recorded dataset adapter.\ndataset_id, dataset_title : str or None\n    Imported archive identity and title, absent for physics runs.\ntime_domain : str\n    Meaning of source timestamps, simulation or mission UTC.\nnominal_cadence_s : float or None\n    Documented observation cadence; gaps are not filled to meet it.\nplayback_start_s : int\n    First source-time position selected for this independent playback.\nmodel_provenance : PublicModelProvenance\n    Allowlisted model and Earth-orientation metadata.\nframe_count : int\n    Number of committed public frames.\ndiagnostic : str or None\n    Safe terminal or health diagnostic, when present.\n\nNotes\n-----\nSeeds, scenario parameters, private manifests, and future outcome labels\nare intentionally excluded from this projection.",
       "properties": {
         "committed_at": {
           "anyOf": [
@@ -1120,10 +1222,55 @@
           "default": null,
           "title": "Committed At"
         },
+        "committed_sequence": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Committed Sequence"
+        },
         "committed_tick": {
           "default": -1,
           "title": "Committed Tick",
           "type": "integer"
+        },
+        "data_source": {
+          "default": "physics",
+          "enum": [
+            "physics",
+            "satellitecots"
+          ],
+          "title": "Data Source",
+          "type": "string"
+        },
+        "dataset_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Dataset Id"
+        },
+        "dataset_title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Dataset Title"
         },
         "diagnostic": {
           "anyOf": [
@@ -1159,6 +1306,23 @@
         "model_provenance": {
           "$ref": "#/$defs/PublicModelProvenance"
         },
+        "nominal_cadence_s": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Nominal Cadence S"
+        },
+        "playback_start_s": {
+          "default": 0,
+          "title": "Playback Start S",
+          "type": "integer"
+        },
         "requested_speed": {
           "minimum": 1,
           "title": "Requested Speed",
@@ -1176,8 +1340,11 @@
           "type": "array"
         },
         "source_kind": {
-          "const": "synthetic",
           "default": "synthetic",
+          "enum": [
+            "synthetic",
+            "observed"
+          ],
           "title": "Source Kind",
           "type": "string"
         },
@@ -1199,6 +1366,15 @@
           "title": "Status Revision",
           "type": "integer"
         },
+        "time_domain": {
+          "default": "simulation_utc",
+          "enum": [
+            "simulation_utc",
+            "mission_utc"
+          ],
+          "title": "Time Domain",
+          "type": "string"
+        },
         "wall_lag_s": {
           "default": 0,
           "title": "Wall Lag S",
@@ -1211,6 +1387,7 @@
         "epoch_utc",
         "duration_s",
         "committed_tick",
+        "committed_sequence",
         "status_revision",
         "committed_at",
         "requested_speed",
@@ -1218,6 +1395,12 @@
         "wall_lag_s",
         "satellites",
         "source_kind",
+        "data_source",
+        "dataset_id",
+        "dataset_title",
+        "time_domain",
+        "nominal_cadence_s",
+        "playback_start_s",
         "model_provenance",
         "frame_count",
         "diagnostic"
@@ -1227,11 +1410,18 @@
     },
     "PublicSpacecraft": {
       "additionalProperties": false,
-      "description": "Public nameplate and display properties of one spacecraft.\n\nAttributes\n----------\nsatellite_id : str\n    Stable spacecraft identity.\nname, color : str\n    Human-readable label and viewer marker color.\nstream_id : str\n    Durable public telemetry stream identity.\ncapacity_wh, panel_area_m2 : float\n    Disclosed battery capacity and panel area.\npublic_limits : list of PublicLimit\n    Configured limits safe to disclose to consumers.",
+      "description": "Public nameplate and display properties of one spacecraft.\n\nAttributes\n----------\nsatellite_id : str\n    Stable spacecraft identity.\nname, color : str\n    Human-readable label and viewer marker color.\nstream_id : str\n    Durable public telemetry stream identity.\ncapacity_wh, panel_area_m2 : float or None\n    Disclosed battery capacity and panel area, absent when not measured or documented.\npublic_limits : list of PublicLimit\n    Configured limits safe to disclose to consumers.",
       "properties": {
         "capacity_wh": {
-          "title": "Capacity Wh",
-          "type": "number"
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Capacity Wh"
         },
         "color": {
           "title": "Color",
@@ -1242,8 +1432,15 @@
           "type": "string"
         },
         "panel_area_m2": {
-          "title": "Panel Area M2",
-          "type": "number"
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Panel Area M2"
         },
         "public_limits": {
           "items": {
@@ -1745,8 +1942,20 @@
     },
     "Trajectory": {
       "additionalProperties": false,
-      "description": "Bounded orbit-only prediction with explicit coordinates.\n\nAttributes\n----------\nrun_id : str\n    Run whose prepared engine produced the samples.\nkind : str\n    Explicit ``predicted_orbit`` discriminator.\nframe : str\n    Coordinate frame, fixed to ``ITRS`` in P0.\nsatellites : list of SatelliteTrajectory\n    Per-spacecraft orbit samples.\n\nNotes\n-----\nThis projection contains no future electrical or health state.",
+      "description": "Bounded orbit-only prediction with explicit coordinates.\n\nAttributes\n----------\nrun_id : str\n    Run whose prepared engine produced the samples.\nkind : str\n    ``predicted_orbit`` from a physics run, or ``configured_orbit`` from\n    independently configured display elements accompanying recorded telemetry.\nframe : str\n    Coordinate frame, fixed to ``ITRS`` in P0.\nsatellites : list of SatelliteTrajectory\n    Per-spacecraft orbit samples.\ndescription : str or None\n    Explicit orbit-source assumptions and model limits when provided.\n\nNotes\n-----\nThis projection contains no future electrical or health state.",
       "properties": {
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
         "frame": {
           "const": "ITRS",
           "default": "ITRS",
@@ -1754,8 +1963,11 @@
           "type": "string"
         },
         "kind": {
-          "const": "predicted_orbit",
           "default": "predicted_orbit",
+          "enum": [
+            "predicted_orbit",
+            "configured_orbit"
+          ],
           "title": "Kind",
           "type": "string"
         },
@@ -1775,7 +1987,8 @@
         "run_id",
         "kind",
         "frame",
-        "satellites"
+        "satellites",
+        "description"
       ],
       "title": "Trajectory",
       "type": "object"
@@ -1850,6 +2063,61 @@
         "display_name"
       ],
       "title": "ViewerOperator",
+      "type": "object"
+    },
+    "ViewerSeekRequest": {
+      "additionalProperties": false,
+      "description": "Select an archive time for a new independent replay stream.\n\nAttributes\n----------\nelapsed_s : int\n    Requested seconds from the archive's original first observation.",
+      "properties": {
+        "elapsed_s": {
+          "minimum": 0,
+          "title": "Elapsed S",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "elapsed_s"
+      ],
+      "title": "ViewerSeekRequest",
+      "type": "object"
+    },
+    "ViewerSourceRequest": {
+      "additionalProperties": false,
+      "description": "Choose the source for a fresh viewer run and independent stream.\n\nAttributes\n----------\ndata_source : str\n    Select the physics engine or the imported SatelliteCOTS archive.\ndataset_id : str or None\n    Optional imported archive; omission selects the sole available archive.",
+      "properties": {
+        "data_source": {
+          "enum": [
+            "physics",
+            "satellitecots"
+          ],
+          "title": "Data Source",
+          "type": "string"
+        },
+        "dataset_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Dataset Id"
+        },
+        "start_elapsed_s": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Start Elapsed S",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "data_source"
+      ],
+      "title": "ViewerSourceRequest",
       "type": "object"
     },
     "VisualConfiguration": {
@@ -1972,6 +2240,9 @@
     "ControlRequest": {
       "$ref": "#/$defs/ControlRequest"
     },
+    "DatasetList": {
+      "$ref": "#/$defs/DatasetList"
+    },
     "MeasurementFrame": {
       "$ref": "#/$defs/MeasurementFrame"
     },
@@ -1980,6 +2251,9 @@
     },
     "OrbitPoint": {
       "$ref": "#/$defs/OrbitPoint"
+    },
+    "PublicDataset": {
+      "$ref": "#/$defs/PublicDataset"
     },
     "PublicLimit": {
       "$ref": "#/$defs/PublicLimit"
@@ -2011,6 +2285,12 @@
     "ViewerOperator": {
       "$ref": "#/$defs/ViewerOperator"
     },
+    "ViewerSeekRequest": {
+      "$ref": "#/$defs/ViewerSeekRequest"
+    },
+    "ViewerSourceRequest": {
+      "$ref": "#/$defs/ViewerSourceRequest"
+    },
     "VisualMessage": {
       "$ref": "#/$defs/VisualMessage"
     }
@@ -2031,7 +2311,11 @@
     "VisualMessage",
     "ViewerBootstrap",
     "ViewerOperator",
-    "ControlRequest"
+    "ControlRequest",
+    "PublicDataset",
+    "DatasetList",
+    "ViewerSourceRequest",
+    "ViewerSeekRequest"
   ],
   "title": "MetisPublicContracts",
   "type": "object"

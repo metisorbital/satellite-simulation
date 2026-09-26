@@ -15,6 +15,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from metis_sim.adapters.repository import TERMINAL, Idempotent, Repository
 from metis_sim.application.errors import ServiceError
 from metis_sim.application.measurement import MeasurementProjector
+from metis_sim.application.replay import PreparedReplay
 from metis_sim.domain.config import SimulationConfig
 from metis_sim.logging import safe_sqlstate
 from metis_sim.models.engine import SimulationEngine
@@ -94,7 +95,7 @@ class Runner:
         self.capacity_check = capacity_check
         self._monotonic = monotonic
         self._wait = wait
-        self.prepared: dict[str, PreparedRun] = {}
+        self.prepared: dict[str, PreparedRun | PreparedReplay] = {}
         self.commands: queue.Queue[PendingCommand] = queue.Queue(maxsize=32)
         self.stop_event = threading.Event()
         self.wakeup = threading.Event()
@@ -287,7 +288,10 @@ class Runner:
             state != "running" or status["requested_speed"] != previous_speed
         ):
             self._next_due = self._pace_wall = self._metrics_wall = self._monotonic()
-            self._pace_tick = self._metrics_tick = status["committed_tick"]
+            origin = status["committed_tick"]
+            if origin < 0:
+                origin = status.get("playback_start_s", 0) - 1
+            self._pace_tick = self._metrics_tick = origin
         return result
 
     def _advance(self, status: dict[str, Any]) -> None:
@@ -297,7 +301,11 @@ class Runner:
             self.wakeup.clear()
             return
         run = self.prepared[status["run_id"]]
-        start = status["committed_tick"] + 1
+        start = (
+            status.get("playback_start_s", 0)
+            if status["committed_tick"] < 0
+            else status["committed_tick"] + 1
+        )
         if self.capacity_check is not None and start % 100 < 4:
             self._retry_persistence(self.capacity_check, status["run_id"])
         if start > status["duration_s"]:
@@ -307,11 +315,14 @@ class Runner:
         count = min(4, max(1, status["requested_speed"] // 5)) if self.paced else 4
         end = min(status["duration_s"], start + count - 1)
         frames, events, truth = [], [], []
-        for tick in range(start, end + 1):
-            f, e, t = run.projector.project(run.engine.sample(tick))
-            frames.extend(f)
-            events.extend(e)
-            truth.extend(t)
+        if isinstance(run, PreparedReplay):
+            frames = self._retry_persistence(lambda: run.frames_through(end), status["run_id"])
+        else:
+            for tick in range(start, end + 1):
+                f, e, t = run.projector.project(run.engine.sample(tick))
+                frames.extend(f)
+                events.extend(e)
+                truth.extend(t)
         elapsed = max(1e-9, now - self._metrics_wall)
         effective = max(0.0, (end - self._metrics_tick) / elapsed)
         if elapsed < 0.5:
@@ -323,11 +334,13 @@ class Runner:
         )
         status.update(
             committed_tick=end,
-            committed_at=frames[-1]["observed_at"],
-            frame_count=(end + 1) * len(status["satellites"]),
+            committed_at=frames[-1]["observed_at"] if frames else status.get("committed_at"),
+            frame_count=status.get("frame_count", 0) + len(frames),
             effective_speed=effective,
             wall_lag_s=lag,
         )
+        if isinstance(run, PreparedReplay) and frames:
+            status["committed_sequence"] = frames[-1]["sequence"]
         self._commit(status, frames, events, truth, processing_ms=(self._monotonic() - now) * 1000)
         period = (end - start + 1) / status["requested_speed"]
         next_due = self._next_due + period

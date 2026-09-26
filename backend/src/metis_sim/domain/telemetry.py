@@ -124,8 +124,8 @@ class MeasurementFrame(PublicModel):
     observed_at: datetime
     sample_window_s: Annotated[float, Field(ge=0)]
     emitted_at: datetime
-    catalog_version: Literal["power-leo.v1", "spacecraft.v1"]
-    mode: Mode
+    catalog_version: Literal["power-leo.v1", "spacecraft.v1", "satellitecots.v1"]
+    mode: Mode | None
     interval_mode: Mode | None
     channels: dict[str, ChannelReading]
 
@@ -144,6 +144,8 @@ class MeasurementFrame(PublicModel):
     @model_validator(mode="after")
     def validate_channels_against_catalog(self) -> MeasurementFrame:
         """Enforce catalog membership and scalar/vector channel types."""
+        if self.source_kind == "synthetic" and self.mode is None:
+            raise ValueError("synthetic telemetry requires its modeled operating mode")
         for channel_id, reading in self.channels.items():
             definition = CHANNELS_BY_CATALOG[self.catalog_version].get(channel_id)
             if definition is None:

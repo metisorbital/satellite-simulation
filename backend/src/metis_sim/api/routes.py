@@ -17,6 +17,8 @@ from metis_sim.api.requests import (
     CreateRunRequest,
     ViewerConfigurationRequest,
     ViewerLoginRequest,
+    ViewerSeekRequest,
+    ViewerSourceRequest,
     body_text,
     configuration_body,
     mutation_token,
@@ -26,12 +28,14 @@ from metis_sim.application.errors import ServiceError
 from metis_sim.domain.catalog import CATALOGS
 from metis_sim.domain.public import (
     ControlRequest,
+    DatasetList,
     PublicRunStatus,
     Snapshot,
     Trajectory,
     ViewerBootstrap,
 )
 from metis_sim.domain.reports import TelemetryReport
+from metis_sim.domain.telemetry import MAX_SAFE_INTEGER
 
 router = APIRouter()
 PUBLIC_READERS = {"operator", "consumer", "viewer_control"}
@@ -55,14 +59,17 @@ def ready(request: Request) -> dict:
 
 @router.get("/v1/catalog")
 def catalog(
-    request: Request, version: Literal["power-leo.v1", "spacecraft.v1"] = "power-leo.v1"
+    request: Request,
+    version: Literal["power-leo.v1", "spacecraft.v1", "satellitecots.v1"] = "power-leo.v1",
 ) -> dict:
     """Expose only public channel and physical-model descriptors."""
     request.app.state.auth.principal(request).require(PUBLIC_READERS)
     return {
         "catalog_version": version,
         "schema_version": "telemetry.v1",
-        "models": {
+        "models": {}
+        if version == "satellitecots.v1"
+        else {
             "orbit": "j2_cartesian",
             "earth": "wgs84_j2_v1",
             "sun": "astropy_builtin",
@@ -80,6 +87,25 @@ def catalog(
         },
         "channels": [asdict(channel) for channel in CATALOGS[version]],
     }
+
+
+@router.get("/v1/datasets", response_model=DatasetList)
+def datasets(request: Request) -> DatasetList:
+    """List installed archive metadata without exposing future observations.
+
+    Parameters
+    ----------
+    request : Request
+        Authenticated consumer, operator or scoped viewer request.
+
+    Returns
+    -------
+    DatasetList
+        Sources available in this deployment's database.
+    """
+    context = request.app.state
+    context.auth.principal(request).require(PUBLIC_READERS)
+    return DatasetList(items=context.service.datasets())
 
 
 @router.post("/v1/configurations/validate")
@@ -114,6 +140,9 @@ async def create_run(request: Request) -> dict:
         command.configuration_id,
         command.retain,
         mutation_token(request, principal, body),
+        data_source=command.data_source,
+        dataset_id=command.dataset_id,
+        start_elapsed_s=command.start_elapsed_s,
     )
 
 
@@ -167,8 +196,10 @@ def telemetry(
     stream_id: str,
     after: str | None = None,
     limit: int = Query(500, ge=1, le=2000),
-    from_sequence: int | None = Query(None, ge=0, le=86400),
-    through_sequence: int | None = Query(None, ge=0, le=86400),
+    from_sequence: int | None = Query(None, ge=0, le=MAX_SAFE_INTEGER),
+    through_sequence: int | None = Query(None, ge=0, le=MAX_SAFE_INTEGER),
+    from_observed_at: datetime | None = None,
+    through_observed_at: datetime | None = None,
 ) -> dict:
     """Replay immutable frames by cursor or a bounded committed sequence range.
 
@@ -184,6 +215,8 @@ def telemetry(
         Maximum returned frames, up to 2,000.
     from_sequence, through_sequence : int or None
         Inclusive range, defaulting to zero and the committed watermark.
+    from_observed_at, through_observed_at : datetime or None
+        Inclusive source-time bounds. Use sequence bounds for keyset pagination.
 
     Returns
     -------
@@ -198,6 +231,8 @@ def telemetry(
         "telemetry",
         from_sequence=from_sequence,
         through_sequence=through_sequence,
+        from_observed_at=from_observed_at,
+        through_observed_at=through_observed_at,
     )
 
 
@@ -221,6 +256,8 @@ def _page(
     *,
     from_sequence: int | None = None,
     through_sequence: int | None = None,
+    from_observed_at: datetime | None = None,
+    through_observed_at: datetime | None = None,
 ) -> dict:
     context = request.app.state
     principal = context.auth.principal(request)
@@ -233,6 +270,8 @@ def _page(
         kind,
         from_sequence=from_sequence,
         through_sequence=through_sequence,
+        from_observed_at=from_observed_at,
+        through_observed_at=through_observed_at,
     )
 
 
@@ -240,8 +279,8 @@ def _page(
 def report(
     run_id: str,
     request: Request,
-    from_sequence: int = Query(0, ge=0, le=86400),
-    through_sequence: int | None = Query(None, ge=0, le=86400),
+    from_sequence: int = Query(0, ge=0, le=MAX_SAFE_INTEGER),
+    through_sequence: int | None = Query(None, ge=0, le=MAX_SAFE_INTEGER),
 ) -> TelemetryReport:
     """Report retained public telemetry at a fixed committed boundary.
 
@@ -615,6 +654,75 @@ async def reset_viewer_run(request: Request, response: Response) -> ViewerBootst
         context.service.recreate_viewer_run,
         principal.run_id,
         None,
+        mutation_token(request, principal, body),
+        viewer_expires_at=expires_at,
+    )
+    return _viewer_bootstrap_response(request, response, run, user_id=principal.user_id)
+
+
+@router.post("/v1/viewer/source", response_model=ViewerBootstrap)
+async def select_viewer_source(request: Request, response: Response) -> ViewerBootstrap:
+    """Prepare an independent viewer run using the selected source adapter.
+
+    Parameters
+    ----------
+    request : Request
+        Scoped viewer source selection with CSRF and idempotency headers.
+    response : Response
+        Receives the replacement run-scoped session cookie.
+
+    Returns
+    -------
+    ViewerBootstrap
+        Fresh, unstarted run and its viewer capability.
+    """
+    context = request.app.state
+    principal = context.auth.principal(request)
+    principal.require({"viewer_control"}, action="start")
+    context.auth.csrf(request, principal)
+    body = parse_json(await body_text(request))
+    command = ViewerSourceRequest.model_validate(body)
+    expires_at = time.time() + context.settings.session_lifetime_s if principal.user_id else None
+    run = await run_in_threadpool(
+        context.service.recreate_viewer_run,
+        principal.run_id,
+        None,
+        mutation_token(request, principal, body),
+        viewer_expires_at=expires_at,
+        data_source=command.data_source,
+        dataset_id=command.dataset_id,
+        start_elapsed_s=command.start_elapsed_s,
+    )
+    return _viewer_bootstrap_response(request, response, run, user_id=principal.user_id)
+
+
+@router.post("/v1/viewer/seek", response_model=ViewerBootstrap)
+async def seek_viewer_source(request: Request, response: Response) -> ViewerBootstrap:
+    """Apply a source-time seek by allocating a new immutable replay stream.
+
+    Parameters
+    ----------
+    request : Request
+        Scoped viewer position request with CSRF and idempotency headers.
+    response : Response
+        Receives the newly scoped session cookie.
+
+    Returns
+    -------
+    ViewerBootstrap
+        Created replay positioned at the next actual source observation.
+    """
+    context = request.app.state
+    principal = context.auth.principal(request)
+    principal.require({"viewer_control"}, action="start")
+    context.auth.csrf(request, principal)
+    body = parse_json(await body_text(request))
+    command = ViewerSeekRequest.model_validate(body)
+    expires_at = time.time() + context.settings.session_lifetime_s if principal.user_id else None
+    run = await run_in_threadpool(
+        context.service.seek_viewer_run,
+        principal.run_id,
+        command.elapsed_s,
         mutation_token(request, principal, body),
         viewer_expires_at=expires_at,
     )

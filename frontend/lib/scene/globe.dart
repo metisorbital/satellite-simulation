@@ -59,7 +59,9 @@ class _GlobeState extends State<Globe> {
       _clock(
         'metis-earth',
         widget.playback.status!['epoch_utc'] as String,
-        widget.seconds ?? 0,
+        widget.seconds ??
+            (widget.playback.status!['playback_start_s'] as num? ?? 0)
+                .toDouble(),
       );
     }
     renderError =
@@ -83,7 +85,8 @@ class _GlobeState extends State<Globe> {
       jsonEncode({
         'status': widget.playback.status,
         'frames': widget.playback.frames,
-        'seconds': widget.seconds,
+        'seconds':
+            widget.seconds ?? widget.playback.status?['playback_start_s'] ?? 0,
         'selected': widget.selected,
         'trajectory': widget.trajectory,
         'hidden_satellite_ids': hiddenSatelliteIds,

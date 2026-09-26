@@ -10,10 +10,13 @@ import json
 from pathlib import Path
 from typing import Any
 
+from metis_sim.api.requests import ViewerSeekRequest, ViewerSourceRequest
 from metis_sim.domain.config import SimulationConfig
 from metis_sim.domain.public import (
     ControlRequest,
+    DatasetList,
     OrbitPoint,
+    PublicDataset,
     PublicLimit,
     PublicRunStatus,
     PublicSpacecraft,
@@ -69,6 +72,10 @@ MODELS: dict[str, tuple[type[BaseModel], JsonSchemaMode]] = {
     "ViewerBootstrap": (ViewerBootstrap, "serialization"),
     "ViewerOperator": (ViewerOperator, "serialization"),
     "ControlRequest": (ControlRequest, "validation"),
+    "PublicDataset": (PublicDataset, "serialization"),
+    "DatasetList": (DatasetList, "serialization"),
+    "ViewerSourceRequest": (ViewerSourceRequest, "validation"),
+    "ViewerSeekRequest": (ViewerSeekRequest, "validation"),
 }
 
 
@@ -231,6 +238,11 @@ def render_dart(definitions: dict[str, Any]) -> str:
         lines.extend(["", f"  factory {name}.fromJson(Map<String, dynamic> json) => {name}("])
         for field, spec in properties.items():
             value = f"json['{field}']"
+            if spec.get("default") is not None:
+                # New response fields with model defaults remain readable from
+                # retained historical run projections created before the field.
+                default = json.dumps(spec["default"], ensure_ascii=True).replace("$", r"\$")
+                value = f"({value} ?? {default})"
             expression = _decode(spec, value)
             if field not in required and not _dart_type(spec).endswith("?"):
                 expression = f"{value} == null ? null : {expression}"

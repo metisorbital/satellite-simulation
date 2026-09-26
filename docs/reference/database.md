@@ -27,6 +27,14 @@ Each run has **streams** identifying its satellites' public measurements.
 **Truth records** hold private scenario/evaluation data for a satellite within a run.
 **Idempotency records** store retry responses by scope and key, independently of foreign keys.
 
+**Observed datasets** identify immutable imported corpora by pinned upstream
+revision and archive/CSV checksums. **Observed sample chunks** retain bounded,
+losslessly compressed original CSV rows with indexed sequence and time bounds.
+They live in `private`, separately from playback runs and history expiration.
+An observed run references the source identity in its manifest and writes only
+the frames actually replayed into the existing public telemetry log.
+See the [SatelliteCOTS inventory](../research/satellitecots.md) for source scope.
+
 - The `private` schema contains configuration revisions, runs, truth, idempotency records, users, and shift logs with their entries.
 - The `public` schema contains stream metadata and durable measurement/event logs.
   The schema name does not grant anonymous API or database access.
@@ -48,6 +56,8 @@ and [persistence interfaces](persistence.md) for read/write behavior.
 Revision `0004` reconciles historical duplicate `0003` schemas; revision `0005`
 adds users and Shift Log tables while preserving historical run ownership.
 This model reference does not inspect a deployed database.
+Revision `0006` adds observed source storage and immutable-row guards.
+It can adopt matching preprovisioned tables without changing their data.
 
 ::: metis-database-schema
 

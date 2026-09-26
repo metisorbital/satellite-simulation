@@ -123,6 +123,10 @@ class CommittedPlayback {
     if (status == null || (status!['satellites'] as List).isEmpty) return null;
     var start = 0.0;
     var end = (status!['committed_tick'] as num).toDouble();
+    // Source gaps advance the replay clock without repeating the last reading.
+    if (status!['source_kind'] == 'observed') {
+      return end < 0 ? null : (0, end);
+    }
     for (final satellite in status!['satellites'] as List) {
       final buffer = frames[satellite['satellite_id']];
       if (buffer == null || buffer.isEmpty) return null;
@@ -151,9 +155,13 @@ class CommittedPlayback {
 
   JsonMap? frameAt(String id, double? seconds) {
     if (seconds == null || status == null) return null;
+    final cadence = (status?['nominal_cadence_s'] as num?)?.toDouble() ?? 1;
     for (final frame in (frames[id] ?? <JsonMap>[]).reversed) {
       final lag = seconds - frameSeconds(frame, status!);
-      if (lag >= -1e-7 && lag <= 1 + 1e-7) return frame;
+      final withinSample = status?['source_kind'] == 'observed'
+          ? lag < cadence
+          : lag <= cadence + 1e-7;
+      if (lag >= -1e-7 && withinSample) return frame;
     }
     return null;
   }

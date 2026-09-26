@@ -346,7 +346,7 @@ class _LoginPanelState extends State<_LoginPanel> {
                     ),
                     const SizedBox(height: 20),
                     const Text(
-                      'Synthetic mission data · Logging out ends your active demo run',
+                      'Mission telemetry workspace · Logging out ends your active demo run',
                       textAlign: TextAlign.center,
                       style: TextStyle(color: muted, fontSize: 11, height: 1.6),
                     ),

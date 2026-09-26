@@ -320,6 +320,8 @@ class Repository:
     def final_truth(self, run_id: str, reason: str) -> list[dict[str, Any]]:
         """Preserve observed outcomes; censor all other series at the final committed tick."""
         status = self.status(run_id)
+        if status.get("source_kind") == "observed":
+            return []
         result = []
         with self.database.engine.connect() as connection:
             for satellite in status["satellites"]:

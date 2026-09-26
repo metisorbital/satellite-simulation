@@ -114,7 +114,7 @@ The measurement script records both Cesium scene render rate and browser callbac
 The Flutter telemetry dashboard now uses `fl_chart`, shared relative/absolute UTC ranges,
 chart drag-to-zoom, historical replay independent of simulation playback, and browser-persisted panel layouts.
 Expanded charts retain the synthetic/observed source label.
-See the [viewer instructions](../../frontend/README.md#open-the-telemetry-dashboard) for controls.
+See the [viewer instructions](../frontend.md) for controls.
 
 Validation used macOS 26.6.2 on arm64, Flutter 3.47.5, and Dart 3.13.4.
 The compiled viewer and current worktree backend ran at `http://localhost:8895`

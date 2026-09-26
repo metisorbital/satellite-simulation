@@ -25,6 +25,7 @@ test('first visit, failed login, reload, logout, and switching operators', async
   await page.route('**/v1/viewer/session', route => route.fulfill(session
     ? { json: session }
     : { status: 401, json: { message: 'Log in to continue.' } }));
+  await page.route('**/v1/datasets', route => route.fulfill({ json: { items: [] } }));
   await page.route('**/v1/viewer/login', async route => {
     lastLogin = route.request().postDataJSON();
     if (!['operator1', 'operator2'].includes(lastLogin!.login)) {
@@ -66,12 +67,12 @@ test('first visit, failed login, reload, logout, and switching operators', async
   await enter(page, 'Login', 'operator1');
   await enter(page, 'Password', 'demo-only');
   await page.getByRole('textbox', { name: 'Password', exact: true }).press('Enter');
-  await expect(page.getByText('Operator One · operator1', { exact: true })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Orbital overview', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Operator Operator One, operator1', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Mission overview', exact: true })).toBeVisible();
   expect(lastLogin).toEqual({ login: 'operator1', password: 'demo-only' });
   await page.reload();
-  await expect(page.getByText('Operator One · operator1', { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: /Log out/ }).click();
+  await page.getByRole('button', { name: 'Operator Operator One, operator1', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Log out', exact: true }).click();
   await expect(page.getByText('Operator login', { exact: true })).toBeVisible();
   expect(logoutToken).toBe('csrf-operator1');
   await expect(page.locator('#metis-earth')).toHaveCount(0);
@@ -83,8 +84,8 @@ test('first visit, failed login, reload, logout, and switching operators', async
   await enter(page, 'Login', 'operator2');
   await enter(page, 'Password', 'another-demo-password');
   await page.getByRole('button', { name: 'Log in', exact: true }).click();
-  await expect(page.getByText('Operator Two · operator2', { exact: true })).toBeVisible();
-  await expect(page.getByText('Operator One · operator1', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Operator Operator Two, operator2', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Operator Operator One, operator1', exact: true })).toHaveCount(0);
   expect(session!.run.run_id).toBe('run-operator2');
   expect(errors).toEqual([]);
 });

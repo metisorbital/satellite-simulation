@@ -37,12 +37,45 @@ class ViewerConfigurationRequest(BaseModel):
     satellites: list[dict[str, Any]]
 
 
+class ViewerSourceRequest(BaseModel):
+    """Choose the source for a fresh viewer run and independent stream.
+
+    Attributes
+    ----------
+    data_source : str
+        Select the physics engine or the imported SatelliteCOTS archive.
+    dataset_id : str or None
+        Optional imported archive; omission selects the sole available archive.
+    """
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+    data_source: Literal["physics", "satellitecots"]
+    dataset_id: str | None = Field(default=None, min_length=1, max_length=128)
+    start_elapsed_s: int = Field(default=0, ge=0, strict=True)
+
+
+class ViewerSeekRequest(BaseModel):
+    """Select an archive time for a new independent replay stream.
+
+    Attributes
+    ----------
+    elapsed_s : int
+        Requested seconds from the archive's original first observation.
+    """
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+    elapsed_s: int = Field(ge=0, strict=True)
+
+
 class CreateRunRequest(BaseModel):
     """A configuration revision and independent administrative retention policy."""
 
     model_config = ConfigDict(extra="forbid", strict=True)
     configuration_id: str
     retain: bool = False
+    data_source: Literal["physics", "satellitecots"] = "physics"
+    dataset_id: str | None = Field(default=None, min_length=1, max_length=128)
+    start_elapsed_s: int = Field(default=0, ge=0, strict=True)
 
 
 async def body_text(request: Request) -> str:

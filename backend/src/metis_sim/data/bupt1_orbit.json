@@ -1,0 +1,12 @@
+{
+  "orbit": {
+    "a_m": 6869266.0,
+    "e": 0.000512718534993404,
+    "i_deg": 97.371,
+    "raan_deg": 0.0,
+    "argp_deg": 0.0,
+    "true_anomaly_deg": 0.0
+  },
+  "source_url": "https://github.com/TiansuanConstellation/TiansuanExperimentPlatform/blob/e58b3f3a7652f4a58f92e3818fac16ae1769f7e8/Specifications.md",
+  "description": "BUPT-1 published altitude 487.607–494.651 km and inclination 97.3710 degrees. Semi-major axis and eccentricity use these altitude bounds with the configured WGS84 equatorial radius. RAAN, argument of periapsis and starting phase are unspecified by the source and default to zero; the archive start is an assumed element epoch. Two-body propagation is a configured display model, not a measured or reconstructed historical spacecraft position. Orbit edits do not change recorded telemetry."
+}

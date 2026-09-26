@@ -168,6 +168,22 @@
           "title": "Coverage Validated",
           "type": "boolean"
         },
+        "data_mapping_version": {
+          "title": "Data Mapping Version",
+          "type": "string"
+        },
+        "dataset_repository": {
+          "title": "Dataset Repository",
+          "type": "string"
+        },
+        "dataset_revision": {
+          "title": "Dataset Revision",
+          "type": "string"
+        },
+        "dataset_sha256": {
+          "title": "Dataset Sha256",
+          "type": "string"
+        },
         "earth_model": {
           "title": "Earth Model",
           "type": "string"
@@ -272,6 +288,10 @@
           "title": "Payload Model",
           "type": "string"
         },
+        "sampling_limits": {
+          "title": "Sampling Limits",
+          "type": "string"
+        },
         "sun_model": {
           "title": "Sun Model",
           "type": "string"
@@ -282,6 +302,10 @@
         },
         "time_advance_scale": {
           "title": "Time Advance Scale",
+          "type": "string"
+        },
+        "timestamp_interpretation": {
+          "title": "Timestamp Interpretation",
           "type": "string"
         }
       },
@@ -416,10 +440,16 @@
       "$ref": "#/$defs/PublicModelProvenance"
     },
     "nominal_cadence_s": {
-      "const": 1,
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
       "default": 1,
-      "title": "Nominal Cadence S",
-      "type": "integer"
+      "title": "Nominal Cadence S"
     },
     "run_id": {
       "title": "Run Id",
@@ -436,8 +466,11 @@
       "type": "string"
     },
     "source_kind": {
-      "const": "synthetic",
       "default": "synthetic",
+      "enum": [
+        "synthetic",
+        "observed"
+      ],
       "title": "Source Kind",
       "type": "string"
     },
@@ -453,8 +486,11 @@
       "type": "integer"
     },
     "time_domain": {
-      "const": "simulation_utc",
       "default": "simulation_utc",
+      "enum": [
+        "simulation_utc",
+        "mission_utc"
+      ],
       "title": "Time Domain",
       "type": "string"
     }

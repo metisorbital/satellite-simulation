@@ -80,7 +80,8 @@
     "catalog_version": {
       "enum": [
         "power-leo.v1",
-        "spacecraft.v1"
+        "spacecraft.v1",
+        "satellitecots.v1"
       ],
       "title": "Catalog Version",
       "type": "string"
@@ -114,13 +115,20 @@
       "title": "Interval Mode"
     },
     "mode": {
-      "enum": [
-        "nominal",
-        "payload_active",
-        "safe"
+      "anyOf": [
+        {
+          "enum": [
+            "nominal",
+            "payload_active",
+            "safe"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
       ],
-      "title": "Mode",
-      "type": "string"
+      "title": "Mode"
     },
     "observed_at": {
       "format": "date-time",

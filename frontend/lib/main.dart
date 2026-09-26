@@ -8,7 +8,9 @@ import 'package:flutter/scheduler.dart';
 
 import 'api/mission.dart';
 import 'auth/operator_gate.dart';
+import 'data_source_selector.dart';
 import 'mission_shell.dart';
+import 'observed_timeline.dart';
 import 'overview_inspector.dart';
 import 'payload_schedule.dart';
 import 'scene/globe.dart';
@@ -90,6 +92,7 @@ class _MissionPageState extends State<MissionPage> {
   Ticker? ticker;
   DialogRoute<void>? _constellationEditorRoute;
   final historyFocus = FocusNode(debugLabel: "Measurement history");
+  final overviewScroll = ScrollController();
   String selected = '', chart = 'eps.battery_soc';
   bool telemetryVisible = false;
   bool telemetryFocused = false;
@@ -125,6 +128,11 @@ class _MissionPageState extends State<MissionPage> {
             : satellites.first['satellite_id'] as String;
       }
       seconds = mission.playback.time(mission.now);
+      if (mission.isObserved && chart == 'eps.battery_soc') {
+        chart = 'eps.bus_voltage_v';
+      } else if (!mission.isObserved && chart == 'eps.bus_voltage_v') {
+        chart = 'eps.battery_soc';
+      }
     });
   }
 
@@ -138,6 +146,7 @@ class _MissionPageState extends State<MissionPage> {
     }
     ticker?.dispose();
     historyFocus.dispose();
+    overviewScroll.dispose();
     mission.removeListener(refresh);
     mission.dispose();
     super.dispose();
@@ -148,25 +157,35 @@ class _MissionPageState extends State<MissionPage> {
     builder: (context) => PointerInterceptor(
       child: SizedBox.expand(
         child: AlertDialog(
-          title: const Text('Simulation model & credits'),
-          content: const SizedBox(
+          title: Text(
+            mission.isObserved
+                ? 'Recorded data & credits'
+                : 'Simulation model & credits',
+          ),
+          content: SizedBox(
             width: 520,
             child: SingleChildScrollView(
               child: Text(
-                'Deterministic synthetic mission: backend J2 gravity, Earth-fixed positions, solar-disk eclipse geometry, ideal Sun-tracking panels, and bounded battery energy.\n\n'
-                'This is an engineering simulation, not a flight-certified model. Visual lighting is approximate; measured eclipse and power come from the backend. Symbols are enlarged. The predicted orbit contains positions only, never future power or health.\n\n'
-                'Drag to rotate · Scroll to zoom\n\nEarth texture: three.js contributors (MIT). Rendering: CesiumJS (Apache 2.0). Imagery and rendering assets are bundled locally.',
+                mission.isObserved
+                    ? 'Historical BUPT-1 spacecraft telemetry from the MobiCom24 SatelliteCOTS dataset, replayed from the database. Source UTC timestamps and gaps are preserved. One recorded spacecraft; no invented constellation members.\n\n'
+                          'The compiled rows nominally cover one second; MPPT readings update every three seconds and battery/temperature sensors every four seconds. Catalog descriptions identify source fields, unit conversions, and derived power values.\n\n'
+                          'No orbit, attitude, battery state of charge, or spacecraft operating mode is supplied. Existing dashboards retain unavailable channels.\n\n'
+                          'Dataset: TiansuanConstellation/MobiCom24-SatelliteCOTS on GitHub.'
+                    : 'Deterministic synthetic mission: backend J2 gravity, Earth-fixed positions, solar-disk eclipse geometry, ideal Sun-tracking panels, and bounded battery energy.\n\n'
+                          'This is an engineering simulation, not a flight-certified model. Visual lighting is approximate; measured eclipse and power come from the backend. Symbols are enlarged. The predicted orbit contains positions only, never future power or health.\n\n'
+                          'Drag to rotate · Scroll to zoom\n\nEarth texture: three.js contributors (MIT). Rendering: CesiumJS (Apache 2.0). Imagery and rendering assets are bundled locally.',
               ),
             ),
           ),
           actions: [
-            TextButton(
-              onPressed: () {
-                globeCommand('metis-earth', 'reset');
-                Navigator.pop(context);
-              },
-              child: const Text('Reset Earth view'),
-            ),
+            if (!mission.isObserved)
+              TextButton(
+                onPressed: () {
+                  globeCommand('metis-earth', 'reset');
+                  Navigator.pop(context);
+                },
+                child: const Text('Reset Earth view'),
+              ),
             TextButton(
               onPressed: () => Navigator.pop(context),
               child: const Text('Close'),
@@ -186,7 +205,9 @@ class _MissionPageState extends State<MissionPage> {
     final runDurationS = (mission.status!['duration_s'] as num).toInt();
     final schedules = [
       for (final satellite in draft)
-        PayloadScheduleDraft.fromOperations(satellite['operations'] as List),
+        PayloadScheduleDraft.fromOperations(
+          satellite['operations'] as List? ?? const [],
+        ),
     ];
     final allocatedSchedules = [...schedules];
     Map<String, TextEditingController> makeControllers(JsonMap satellite) {
@@ -309,6 +330,9 @@ class _MissionPageState extends State<MissionPage> {
           }) => TextFormField(
             key: ValueKey('$selectedIndex-$key'),
             controller: controllers[selectedIndex][key],
+            readOnly:
+                mission.isObserved &&
+                const {'satellite_id', 'name', 'color'}.contains(key),
             decoration: InputDecoration(labelText: title, isDense: true),
             keyboardType: numeric
                 ? const TextInputType.numberWithOptions(
@@ -343,7 +367,9 @@ class _MissionPageState extends State<MissionPage> {
                   children: [
                     Text(
                       mission.canReplaceRun
-                          ? 'Saving creates a new run with the scheduled mode changes preserved. The current run remains in history.'
+                          ? mission.isObserved
+                                ? 'Saving prepares a new recorded replay with this modelled orbit. Measurements are unchanged.'
+                                : 'Saving creates a new run with the scheduled mode changes preserved. The current run remains in history.'
                           : 'Stop this run before saving constellation changes.',
                       style: TextStyle(fontSize: 12, color: muted),
                     ),
@@ -375,7 +401,7 @@ class _MissionPageState extends State<MissionPage> {
                         ),
                         IconButton(
                           tooltip: 'Add satellite',
-                          onPressed: draft.length >= 10
+                          onPressed: mission.isObserved || draft.length >= 10
                               ? null
                               : () => update(() {
                                   final copy = Map<String, dynamic>.from(
@@ -407,7 +433,7 @@ class _MissionPageState extends State<MissionPage> {
                         ),
                         IconButton(
                           tooltip: 'Remove satellite',
-                          onPressed: draft.length <= 1
+                          onPressed: mission.isObserved || draft.length <= 1
                               ? null
                               : () => update(() {
                                   draft.removeAt(selectedIndex);
@@ -436,40 +462,42 @@ class _MissionPageState extends State<MissionPage> {
                                 'color',
                                 satellite['visual'] as Map<String, dynamic>,
                               ),
-                              DropdownButtonFormField<String>(
-                                key: ValueKey('$selectedIndex-initial_mode'),
-                                initialValue:
-                                    satellite['initial_mode'] as String,
-                                decoration: const InputDecoration(
-                                  labelText: 'Mode outside scheduled tasks',
-                                  helperText:
-                                      'Payload active here keeps the payload on between tasks.',
-                                  helperMaxLines: 2,
+                              if (!mission.isObserved) ...[
+                                DropdownButtonFormField<String>(
+                                  key: ValueKey('$selectedIndex-initial_mode'),
+                                  initialValue:
+                                      satellite['initial_mode'] as String,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Mode outside scheduled tasks',
+                                    helperText:
+                                        'Payload active here keeps the payload on between tasks.',
+                                    helperMaxLines: 2,
+                                  ),
+                                  items: [
+                                    for (final mode in [
+                                      'nominal',
+                                      'payload_active',
+                                      'safe',
+                                    ])
+                                      DropdownMenuItem(
+                                        value: mode,
+                                        child: Text(mode.replaceAll('_', ' ')),
+                                      ),
+                                  ],
+                                  onChanged: (mode) {
+                                    if (mode != null) {
+                                      satellite['initial_mode'] = mode;
+                                    }
+                                  },
                                 ),
-                                items: [
-                                  for (final mode in [
-                                    'nominal',
-                                    'payload_active',
-                                    'safe',
-                                  ])
-                                    DropdownMenuItem(
-                                      value: mode,
-                                      child: Text(mode.replaceAll('_', ' ')),
-                                    ),
-                                ],
-                                onChanged: (mode) {
-                                  if (mode != null) {
-                                    satellite['initial_mode'] = mode;
-                                  }
-                                },
-                              ),
-                              const SizedBox(height: 16),
-                              PayloadScheduleEditor(
-                                key: ObjectKey(schedules[selectedIndex]),
-                                draft: schedules[selectedIndex],
-                                runDurationS: runDurationS,
-                                onChanged: () => update(() => issue = null),
-                              ),
+                                const SizedBox(height: 16),
+                                PayloadScheduleEditor(
+                                  key: ObjectKey(schedules[selectedIndex]),
+                                  draft: schedules[selectedIndex],
+                                  runDurationS: runDurationS,
+                                  onChanged: () => update(() => issue = null),
+                                ),
+                              ],
                               const SizedBox(height: 14),
                               const Align(
                                 alignment: Alignment.centerLeft,
@@ -487,6 +515,27 @@ class _MissionPageState extends State<MissionPage> {
                                 ('True anomaly (deg)', 'true_anomaly_deg'),
                               ])
                                 field(entry.$1, entry.$2, orbit, numeric: true),
+                              if (mission.isObserved &&
+                                  satellite['orbit_provenance'] is Map) ...[
+                                const SizedBox(height: 12),
+                                if ((satellite['orbit_provenance']
+                                        as Map)['operator_modified'] ==
+                                    true)
+                                  const Text(
+                                    'Operator-edited orbit · published parameters are the baseline.',
+                                    style: TextStyle(fontSize: 11, color: gold),
+                                  ),
+                                SelectableText(
+                                  '${(satellite['orbit_provenance'] as Map)['description']}\n'
+                                  'Display epoch: ${(satellite['orbit_provenance'] as Map)['epoch_utc']}\n'
+                                  'Source: ${(satellite['orbit_provenance'] as Map)['source_url']}',
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    height: 1.5,
+                                    color: muted,
+                                  ),
+                                ),
+                              ],
                               if (power != null) ...[
                                 const SizedBox(height: 16),
                                 const Align(
@@ -564,20 +613,22 @@ class _MissionPageState extends State<MissionPage> {
                 FilledButton(
                   onPressed: mission.canReplaceRun && !saving
                       ? () async {
-                          for (
-                            var index = 0;
-                            index < schedules.length;
-                            index++
-                          ) {
-                            final error = schedules[index].validate(
-                              runDurationS,
-                            );
-                            if (error != null) {
-                              update(() {
-                                selectedIndex = index;
-                                issue = '${draft[index]['name']}: $error';
-                              });
-                              return;
+                          if (!mission.isObserved) {
+                            for (
+                              var index = 0;
+                              index < schedules.length;
+                              index++
+                            ) {
+                              final error = schedules[index].validate(
+                                runDurationS,
+                              );
+                              if (error != null) {
+                                update(() {
+                                  selectedIndex = index;
+                                  issue = '${draft[index]['name']}: $error';
+                                });
+                                return;
+                              }
                             }
                           }
                           if (!(formKey.currentState?.validate() ?? false)) {
@@ -599,9 +650,11 @@ class _MissionPageState extends State<MissionPage> {
                             );
                             return;
                           }
-                          for (var index = 0; index < draft.length; index++) {
-                            draft[index]['operations'] = schedules[index]
-                                .toOperations();
+                          if (!mission.isObserved) {
+                            for (var index = 0; index < draft.length; index++) {
+                              draft[index]['operations'] = schedules[index]
+                                  .toOperations();
+                            }
                           }
                           update(() {
                             saving = true;
@@ -699,7 +752,11 @@ class _MissionPageState extends State<MissionPage> {
 
         return PointerInterceptor(
           child: AlertDialog(
-            title: const Text('Custom simulation speed'),
+            title: Text(
+              mission.isObserved
+                  ? 'Custom replay speed'
+                  : 'Custom simulation speed',
+            ),
             content: Form(
               key: form,
               child: TextFormField(
@@ -772,8 +829,10 @@ class _MissionPageState extends State<MissionPage> {
                           style: TextStyle(fontSize: 17),
                         ),
                         const SizedBox(height: 10),
-                        const Text(
-                          'Choose spacecraft shown on the Earth view and telemetry dashboard. Hidden spacecraft continue simulating.',
+                        Text(
+                          mission.isObserved
+                              ? 'One recorded spacecraft belongs to this source. Visibility changes presentation only.'
+                              : 'Choose spacecraft shown on the Earth view and telemetry dashboard. Hidden spacecraft continue simulating.',
                           style: TextStyle(
                             color: muted,
                             fontSize: 12,
@@ -814,13 +873,17 @@ class _MissionPageState extends State<MissionPage> {
                                   },
                           ),
                         const Divider(height: 32),
-                        const Text(
-                          'Simulation configuration',
+                        Text(
+                          mission.isObserved
+                              ? 'Recorded configuration'
+                              : 'Simulation configuration',
                           style: TextStyle(fontSize: 17),
                         ),
                         const SizedBox(height: 10),
-                        const Text(
-                          'Add or edit spacecraft in a new run. An active run keeps its original configuration.',
+                        Text(
+                          mission.isObserved
+                              ? 'BUPT-1 is the single recorded spacecraft. Edit its modelled orbit below; recorded measurements stay unchanged.'
+                              : 'Add or edit spacecraft in a new run. An active run keeps its original configuration.',
                           style: TextStyle(
                             color: muted,
                             fontSize: 12,
@@ -877,6 +940,8 @@ class _MissionPageState extends State<MissionPage> {
         builder: (context, constraints) {
           final desktop = constraints.maxWidth >= 1150;
           final compact = constraints.maxWidth < 900;
+          final shortOverview =
+              !telemetryVisible && constraints.maxHeight < 600;
           final body = Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -917,36 +982,13 @@ class _MissionPageState extends State<MissionPage> {
                             ? 'Awaiting sample'
                             : '${clockTime(utc)} UTC',
                         connected: mission.playback.connected && !stale,
+                        observed: mission.isObserved,
                         compact: compact,
                       ),
-                    if (!telemetryVisible) toolbar(status, utc, desktop),
-                    if (mission.error != null)
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 22,
-                          vertical: 6,
-                        ),
-                        color: const Color(0xff2b211d),
-                        child: Row(
-                          children: [
-                            const Icon(
-                              Icons.info_outline,
-                              size: 16,
-                              color: gold,
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: txt(mission.error!, color: gold, size: 11),
-                            ),
-                            TextButton(
-                              onPressed: mission.connecting
-                                  ? null
-                                  : mission.connect,
-                              child: const Text('Reconnect'),
-                            ),
-                          ],
-                        ),
-                      ),
+                    if (!telemetryVisible && !shortOverview)
+                      toolbar(status, compact: constraints.maxHeight < 820),
+                    if (mission.error != null && !shortOverview)
+                      connectionIssue(),
                     Expanded(
                       child: telemetryVisible
                           ? TelemetryDashboard(
@@ -966,36 +1008,13 @@ class _MissionPageState extends State<MissionPage> {
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
                                 Expanded(
-                                  child: Column(
-                                    children: [
-                                      Expanded(
-                                        child: orbitStage(
-                                          status,
-                                          frame,
-                                          satellites.length,
-                                          desktop,
-                                        ),
-                                      ),
-                                      if (!compact)
-                                        Focus(
-                                          focusNode: historyFocus,
-                                          child: historyPanel(),
-                                        )
-                                      else
-                                        Padding(
-                                          padding: const EdgeInsets.all(12),
-                                          child: OutlinedButton.icon(
-                                            onPressed: () => navigate(true),
-                                            icon: const Icon(
-                                              Icons.show_chart,
-                                              size: 17,
-                                            ),
-                                            label: const Text(
-                                              'Open spacecraft telemetry',
-                                            ),
-                                          ),
-                                        ),
-                                    ],
+                                  child: overviewContent(
+                                    status,
+                                    frame,
+                                    satellites.length,
+                                    desktop: desktop,
+                                    compact: compact,
+                                    scrollToolbar: shortOverview,
                                   ),
                                 ),
                                 if (desktop)
@@ -1006,7 +1025,8 @@ class _MissionPageState extends State<MissionPage> {
                               ],
                             ),
                     ),
-                    if (!telemetryVisible) footer(status, desktop),
+                    if (!telemetryVisible && !shortOverview)
+                      footer(status, desktop),
                   ],
                 ),
               ),
@@ -1018,33 +1038,108 @@ class _MissionPageState extends State<MissionPage> {
     );
   }
 
-  Widget spacecraftSelector() => DropdownButtonHideUnderline(
-    child: DropdownButton<String>(
-      value: visibleSatellites.any((s) => s['satellite_id'] == selected)
-          ? selected
-          : null,
-      hint: txt('Awaiting spacecraft', size: 12),
-      dropdownColor: panel,
-      borderRadius: BorderRadius.circular(6),
-      items: [
-        for (final satellite in visibleSatellites)
-          DropdownMenuItem(
-            value: satellite['satellite_id'] as String,
-            child: PointerInterceptor(
-              child: Text(
-                satellite['satellite_id'] as String,
-                style: const TextStyle(fontSize: 12, color: textColor),
-              ),
-            ),
-          ),
+  Widget connectionIssue() => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 6),
+    color: const Color(0xff2b211d),
+    child: Row(
+      children: [
+        const Icon(Icons.info_outline, size: 16, color: gold),
+        const SizedBox(width: 10),
+        Expanded(child: txt(mission.error!, color: gold, size: 11)),
+        TextButton(
+          onPressed: mission.connecting ? null : mission.connect,
+          child: const Text('Reconnect'),
+        ),
       ],
-      onChanged: (id) {
-        if (id != null) setState(() => selected = id);
-      },
     ),
   );
 
-  Widget toolbar(JsonMap? status, String? utc, bool desktop) {
+  Widget overviewContent(
+    JsonMap? status,
+    JsonMap? frame,
+    int count, {
+    required bool desktop,
+    required bool compact,
+    required bool scrollToolbar,
+  }) => LayoutBuilder(
+    builder: (context, constraints) {
+      // This height also stops intrinsic layout at the platform view boundary.
+      final scene = SizedBox(
+        height: scrollToolbar
+            ? constraints.maxHeight.clamp(240.0, 320.0).toDouble()
+            : 320,
+        child: orbitStage(status, frame, count, desktop),
+      );
+      final content = Column(
+        children: [
+          if (scrollToolbar) toolbar(status, compact: true),
+          if (scrollToolbar && mission.error != null) connectionIssue(),
+          if (scrollToolbar) scene else Expanded(child: scene),
+          if (mission.isObserved) ObservedTimeline(mission: mission),
+          if (!compact)
+            Focus(focusNode: historyFocus, child: historyPanel())
+          else
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: OutlinedButton.icon(
+                onPressed: () => navigate(true),
+                icon: const Icon(Icons.show_chart, size: 17),
+                label: const Text('Open spacecraft telemetry'),
+              ),
+            ),
+          if (scrollToolbar) footer(status, desktop),
+        ],
+      );
+      return Scrollbar(
+        controller: overviewScroll,
+        thumbVisibility: true,
+        trackVisibility: true,
+        interactive: true,
+        child: SingleChildScrollView(
+          controller: overviewScroll,
+          primary: false,
+          // Keep the scroll thumb outside the platform view's pointer surface.
+          padding: const EdgeInsets.only(right: 12),
+          child: scrollToolbar
+              ? content
+              : ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                  child: IntrinsicHeight(child: content),
+                ),
+        ),
+      );
+    },
+  );
+
+  Widget spacecraftSelector({bool compact = false}) =>
+      DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          isDense: compact,
+          value: visibleSatellites.any((s) => s['satellite_id'] == selected)
+              ? selected
+              : null,
+          hint: txt('Awaiting spacecraft', size: 12),
+          dropdownColor: panel,
+          borderRadius: BorderRadius.circular(6),
+          items: [
+            for (final satellite in visibleSatellites)
+              DropdownMenuItem(
+                value: satellite['satellite_id'] as String,
+                child: PointerInterceptor(
+                  child: Text(
+                    satellite['satellite_id'] as String,
+                    style: const TextStyle(fontSize: 12, color: textColor),
+                  ),
+                ),
+              ),
+          ],
+          onChanged: (id) {
+            if (id != null) setState(() => selected = id);
+          },
+        ),
+      );
+
+  Widget toolbar(JsonMap? status, {required bool compact}) {
     final active = status?['status'] == 'running';
     final starting =
         status?['status'] == 'created' || status?['committed_tick'] == -1;
@@ -1063,8 +1158,10 @@ class _MissionPageState extends State<MissionPage> {
           'aborted',
         ].contains(status['status']);
     final controls = mission.canControl
-        ? Row(
-            mainAxisSize: MainAxisSize.min,
+        ? Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               SizedBox(
                 height: 34,
@@ -1099,7 +1196,6 @@ class _MissionPageState extends State<MissionPage> {
                 ),
               ),
               if (mission.canPerform('set_speed')) ...[
-                const SizedBox(width: 10),
                 Container(
                   height: 34,
                   padding: const EdgeInsets.all(3),
@@ -1144,7 +1240,6 @@ class _MissionPageState extends State<MissionPage> {
                 ),
               ],
               if (mission.canPerform('set_speed')) ...[
-                const SizedBox(width: 6),
                 TextButton(
                   onPressed: disabled ? null : showCustomSpeed,
                   child: Text(
@@ -1156,13 +1251,12 @@ class _MissionPageState extends State<MissionPage> {
                 ),
               ],
               if (mission.canPerform('stop')) ...[
-                const SizedBox(width: 10),
                 Container(
                   width: 34,
                   height: 34,
                   decoration: box(),
                   child: IconButton(
-                    tooltip: 'Stop simulation',
+                    tooltip: 'Stop run',
                     padding: EdgeInsets.zero,
                     onPressed: disabled || starting
                         ? null
@@ -1172,9 +1266,10 @@ class _MissionPageState extends State<MissionPage> {
                   ),
                 ),
               ],
-              const SizedBox(width: 10),
               IconButton(
-                tooltip: 'Reset simulation with a new run',
+                tooltip: mission.isObserved
+                    ? 'Restart the recorded dataset from sample 0'
+                    : 'Reset simulation with a new run',
                 onPressed: mission.busy || !mission.canReplaceRun
                     ? null
                     : mission.reset,
@@ -1187,42 +1282,62 @@ class _MissionPageState extends State<MissionPage> {
         : badge('VIEW ONLY', muted);
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
+      padding: EdgeInsets.symmetric(
+        horizontal: compact ? 16 : 24,
+        vertical: compact ? 10 : 18,
+      ),
       decoration: const BoxDecoration(
         color: background,
         border: Border(bottom: BorderSide(color: line)),
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
+          final title = Semantics(
+            header: true,
+            child: txt(
+              'Mission overview',
+              size: compact ? 20 : 24,
+              weight: FontWeight.w500,
+              spacing: -.6,
+            ),
+          );
+          final spacecraft = Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              txt('Spacecraft', size: 11, color: muted),
+              const SizedBox(width: 14),
+              spacecraftSelector(compact: compact),
+            ],
+          );
           final heading = Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Semantics(
-                header: true,
-                child: txt(
-                  'Mission overview',
-                  size: 24,
-                  weight: FontWeight.w500,
-                  spacing: -.6,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  txt('Spacecraft', size: 11, color: muted),
-                  const SizedBox(width: 14),
-                  spacecraftSelector(),
-                ],
-              ),
+              if (compact)
+                Wrap(
+                  spacing: 22,
+                  runSpacing: 6,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [title, spacecraft],
+                )
+              else ...[
+                title,
+                const SizedBox(height: 8),
+                spacecraft,
+              ],
+              SizedBox(height: compact ? 6 : 12),
+              DataSourceSelector(mission: mission, compact: compact),
             ],
           );
-          if (constraints.maxWidth >= 750) {
+          if (constraints.maxWidth >= 850) {
             return Row(
               children: [
                 Expanded(child: heading),
-                controls,
+                const SizedBox(width: 20),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 440),
+                  child: controls,
+                ),
               ],
             );
           }
@@ -1230,11 +1345,8 @@ class _MissionPageState extends State<MissionPage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               heading,
-              const SizedBox(height: 12),
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: controls,
-              ),
+              SizedBox(height: compact ? 8 : 12),
+              controls,
             ],
           );
         },
@@ -1247,7 +1359,9 @@ class _MissionPageState extends State<MissionPage> {
     final message = stale
         ? 'Data stale · view frozen'
         : status?['status'] == 'running'
-        ? 'Live simulation'
+        ? mission.isObserved
+              ? 'Recorded replay'
+              : 'Live simulation'
         : '${status?['status'] ?? 'Establishing mission link'} · committed state';
     final lag = status == null || seconds == null
         ? null
@@ -1255,6 +1369,26 @@ class _MissionPageState extends State<MissionPage> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final roomy = constraints.maxWidth >= 650;
+        final compactOverlay = constraints.maxHeight < 420;
+        final inset = compactOverlay ? 12.0 : 24.0;
+        final cameraButtons = [
+          for (final item in [
+            ('in', Icons.add, 'Zoom in'),
+            ('out', Icons.remove, 'Zoom out'),
+            ('follow', Icons.gps_fixed, 'Follow selected satellite'),
+            ('reset', Icons.fullscreen, 'Reset Earth view'),
+          ])
+            SizedBox(
+              width: compactOverlay ? 33 : null,
+              height: 33,
+              child: IconButton(
+                tooltip: item.$3,
+                padding: EdgeInsets.zero,
+                onPressed: () => globeCommand('metis-earth', item.$1),
+                icon: Icon(item.$2, size: 18, color: const Color(0xff93acb9)),
+              ),
+            ),
+        ];
         return Stack(
           children: [
             Positioned.fill(
@@ -1271,8 +1405,8 @@ class _MissionPageState extends State<MissionPage> {
               ),
             ),
             Positioned(
-              left: 26,
-              top: 26,
+              left: inset,
+              top: inset,
               child: IgnorePointer(
                 child: Container(
                   padding: roomy
@@ -1308,9 +1442,9 @@ class _MissionPageState extends State<MissionPage> {
                           ),
                         ],
                       ),
-                      if (constraints.maxWidth >= 410)
+                      if (constraints.maxWidth >= 410 && !mission.isObserved)
                         const SizedBox(width: 30),
-                      if (constraints.maxWidth >= 410)
+                      if (constraints.maxWidth >= 410 && !mission.isObserved)
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -1330,8 +1464,8 @@ class _MissionPageState extends State<MissionPage> {
             ),
             if (desktop)
               Positioned(
-                right: 22,
-                top: 24,
+                right: inset,
+                top: inset,
                 child: IgnorePointer(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.end,
@@ -1355,81 +1489,85 @@ class _MissionPageState extends State<MissionPage> {
                         ),
                       ),
                       const SizedBox(height: 10),
-                      label('J2 ORBIT MODEL', size: 6),
+                      label(
+                        mission.isObserved
+                            ? 'CONFIGURED ORBIT'
+                            : 'J2 ORBIT MODEL',
+                        size: 6,
+                      ),
                     ],
                   ),
                 ),
               ),
             Positioned(
-              right: 22,
-              bottom: desktop ? 99 : 110,
+              right: inset,
+              bottom: compactOverlay
+                  ? 82
+                  : desktop
+                  ? 99
+                  : 110,
               child: PointerInterceptor(
                 child: Container(
-                  width: 38,
-                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  width: compactOverlay ? null : 38,
+                  padding: EdgeInsets.symmetric(
+                    horizontal: compactOverlay ? 4 : 0,
+                    vertical: 4,
+                  ),
                   decoration: box(
                     color: const Color(0xed111e28),
                     border: const Color(0xff304956),
                   ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      for (final item in [
-                        ('in', Icons.add, 'Zoom in'),
-                        ('out', Icons.remove, 'Zoom out'),
-                        (
-                          'follow',
-                          Icons.gps_fixed,
-                          'Follow selected satellite',
+                  child: compactOverlay
+                      ? Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: cameraButtons,
+                        )
+                      : Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: cameraButtons,
                         ),
-                        ('reset', Icons.fullscreen, 'Reset Earth view'),
-                      ])
-                        SizedBox(
-                          height: 33,
-                          child: IconButton(
-                            tooltip: item.$3,
-                            padding: EdgeInsets.zero,
-                            onPressed: () =>
-                                globeCommand('metis-earth', item.$1),
-                            icon: Icon(
-                              item.$2,
-                              size: 18,
-                              color: const Color(0xff93acb9),
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
                 ),
               ),
             ),
             Positioned(
-              left: 24,
-              bottom: 37,
+              left: inset,
+              right: inset,
+              bottom: compactOverlay ? 32 : 37,
               child: IgnorePointer(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
+                    Wrap(
+                      spacing: 12,
+                      runSpacing: 4,
+                      crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
-                        Container(
-                          width: 16,
-                          height: 1,
-                          color: const Color(0xff8fbbc9),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 16,
+                              height: 1,
+                              color: const Color(0xff8fbbc9),
+                            ),
+                            const SizedBox(width: 7),
+                            txt(
+                              mission.isObserved
+                                  ? 'Configured orbit · recorded telemetry'
+                                  : 'Predicted orbit',
+                              size: 8,
+                              color: const Color(0xffa1b6c4),
+                            ),
+                          ],
                         ),
-                        const SizedBox(width: 7),
-                        txt(
-                          'Predicted orbit',
-                          size: 8,
-                          color: const Color(0xffa1b6c4),
-                        ),
-                        const SizedBox(width: 12),
                         txt('·  Symbols enlarged', size: 8, color: muted),
                       ],
                     ),
                     const SizedBox(height: 7),
                     txt(
-                      'Approximate visual lighting · WGS84 Earth',
+                      mission.isObserved
+                          ? 'Modelled position · not measured location or lighting'
+                          : 'Approximate visual lighting · WGS84 Earth',
                       size: 7,
                       color: muted,
                     ),
@@ -1438,31 +1576,50 @@ class _MissionPageState extends State<MissionPage> {
               ),
             ),
             Positioned(
-              right: 22,
-              bottom: desktop && roomy ? 37 : 74,
+              left: compactOverlay ? inset : null,
+              right: compactOverlay ? 164 : 22,
+              bottom: compactOverlay
+                  ? 82
+                  : desktop && roomy
+                  ? 37
+                  : 74,
               child: IgnorePointer(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 9,
-                    vertical: 7,
-                  ),
-                  decoration: box(
-                    color: const Color(0xe60e1b23),
-                    border: const Color(0xff29454c),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      dot(stale ? gold : mint, 4),
-                      const SizedBox(width: 6),
-                      txt(message, size: 8, color: const Color(0xffa0c9c2)),
-                      if (roomy) ...[
-                        const SizedBox(width: 10),
-                        txt('|', size: 8, color: muted),
-                        const SizedBox(width: 8),
-                        txt('${reading(lag)} s behind', size: 7, color: muted),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  widthFactor: 1,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 9,
+                      vertical: 7,
+                    ),
+                    decoration: box(
+                      color: const Color(0xe60e1b23),
+                      border: const Color(0xff29454c),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        dot(stale ? gold : mint, 4),
+                        const SizedBox(width: 6),
+                        Flexible(
+                          child: txt(
+                            message,
+                            size: 8,
+                            color: const Color(0xffa0c9c2),
+                          ),
+                        ),
+                        if (roomy && !compactOverlay) ...[
+                          const SizedBox(width: 10),
+                          txt('|', size: 8, color: muted),
+                          const SizedBox(width: 8),
+                          txt(
+                            '${reading(lag)} s behind',
+                            size: 7,
+                            color: muted,
+                          ),
+                        ],
                       ],
-                    ],
+                    ),
                   ),
                 ),
               ),
@@ -1476,6 +1633,7 @@ class _MissionPageState extends State<MissionPage> {
   Widget telemetry(JsonMap? descriptor, JsonMap? frame) => OverviewInspector(
     descriptor: descriptor,
     frame: frame,
+    observed: mission.isObserved,
     onTelemetry: () => navigate(true),
   );
 
@@ -1490,7 +1648,13 @@ class _MissionPageState extends State<MissionPage> {
         )
         .toList();
     final soc = chart == 'eps.battery_soc';
-    final value = samples.isEmpty ? null : scalar(samples.last, chart);
+    final voltage = chart == 'eps.bus_voltage_v';
+    final unit = soc
+        ? '%'
+        : voltage
+        ? 'V'
+        : 'W';
+    final value = scalar(mission.playback.frameAt(selected, seconds), chart);
     return Container(
       height: 142,
       padding: const EdgeInsets.fromLTRB(24, 14, 24, 16),
@@ -1516,7 +1680,10 @@ class _MissionPageState extends State<MissionPage> {
                 child: Row(
                   children: [
                     for (final item in [
-                      ('Battery SOC', 'eps.battery_soc'),
+                      if (mission.isObserved)
+                        ('Bus voltage', 'eps.bus_voltage_v')
+                      else
+                        ('Battery SOC', 'eps.battery_soc'),
                       ('Solar power', 'eps.solar_power_w'),
                     ])
                       TextButton(
@@ -1554,7 +1721,7 @@ class _MissionPageState extends State<MissionPage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       txt(
-                        '${reading(value == null ? null : value * (soc ? 100 : 1))} ${soc ? '%' : 'W'}',
+                        '${reading(value == null ? null : value * (soc ? 100 : 1))} $unit',
                         size: 22,
                         color: soc ? mint : gold,
                         spacing: 1.7,
@@ -1563,6 +1730,8 @@ class _MissionPageState extends State<MissionPage> {
                       txt(
                         soc
                             ? 'Measured state of charge'
+                            : voltage
+                            ? 'Recorded bus voltage'
                             : 'Measured generation',
                         size: 10,
                         color: muted,
@@ -1580,6 +1749,12 @@ class _MissionPageState extends State<MissionPage> {
                             painter: HistoryPainter(
                               samples.map((f) => scalar(f, chart)).toList(),
                               soc,
+                              times: samples
+                                  .map((f) => frameSeconds(f, status!))
+                                  .toList(),
+                              sequences: samples
+                                  .map((f) => f['sequence'] as int)
+                                  .toList(),
                             ),
                             size: Size.infinite,
                           ),
@@ -1647,11 +1822,11 @@ class _MissionPageState extends State<MissionPage> {
         txt('T+ ${reading(seconds)} s', size: 7, color: muted),
         const Spacer(),
         txt(
-          'Effective ${reading(status?['effective_speed'] as num?)}×  ·  1 Hz telemetry',
+          'Effective ${reading(status?['effective_speed'] as num?)}×  ·  ${mission.isObserved ? 'Source timestamps' : '1 Hz telemetry'}',
           size: 7,
           color: muted,
         ),
-        if (desktop) ...[
+        if (desktop && !mission.isObserved) ...[
           const Spacer(),
           txt(
             'Scene ${reading(globeDiagnostics()['fps'] as num?, 0)} FPS',
@@ -1747,9 +1922,16 @@ String clockTime(String? utc) => utc == null
 
 /// Plots only committed samples, with a quiet grid and no gap interpolation.
 class HistoryPainter extends CustomPainter {
-  HistoryPainter(this.values, this.soc);
+  HistoryPainter(
+    this.values,
+    this.soc, {
+    this.times = const [],
+    this.sequences = const [],
+  });
   final List<double?> values;
   final bool soc;
+  final List<double> times;
+  final List<int> sequences;
   @override
   void paint(Canvas canvas, Size size) {
     final grid = Paint()
@@ -1777,8 +1959,15 @@ class HistoryPainter extends CustomPainter {
         started = false;
         continue;
       }
-      final x = i / (values.length - 1) * size.width,
-          y = size.height * (1 - value / maximum);
+      if (i > 0 &&
+          ((times.isNotEmpty && times[i] - times[i - 1] > 1.5) ||
+              (sequences.isNotEmpty && sequences[i] != sequences[i - 1] + 1))) {
+        started = false;
+      }
+      final fraction = times.isEmpty || times.last == times.first
+          ? i / (values.length - 1)
+          : (times[i] - times.first) / (times.last - times.first);
+      final x = fraction * size.width, y = size.height * (1 - value / maximum);
       if (started) {
         path.lineTo(x, y);
       } else {

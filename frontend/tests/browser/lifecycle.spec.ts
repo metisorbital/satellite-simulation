@@ -5,6 +5,7 @@ async function pausedMission(page: Page): Promise<void> {
   const status = statusAt(40, 'paused');
   await page.route('**/v1/viewer/session', route =>
     route.fulfill({ json: { operator: demoOperator, csrf_token: 'test-csrf', allowed_actions: ['start', 'pause', 'resume', 'set_speed', 'stop'], run: status } }));
+  await page.route('**/v1/datasets', route => route.fulfill({ json: { items: [] } }));
   await page.route('**/v1/runs/test-run/snapshot?history=41', route =>
     route.fulfill({ json: { status, frames: framesBetween(0, 40) } }));
   await page.route('**/v1/runs/test-run/trajectory?*', route => route.fulfill({
@@ -33,6 +34,7 @@ test('late control acknowledgement cannot restore the replaced mission', async (
   await page.route('**/v1/viewer/session', route => route.fulfill({
     json: { operator: demoOperator, csrf_token: reconnecting ? 'replacement-csrf' : 'test-csrf', allowed_actions: ['start', 'pause', 'resume', 'set_speed', 'stop'], run: reconnecting ? replacement : original },
   }));
+  await page.route('**/v1/datasets', route => route.fulfill({ json: { items: [] } }));
   await page.route('**/v1/runs/test-run/snapshot?history=41', route => {
     oldSnapshots++;
     return route.fulfill({ json: { status: original, frames: framesBetween(0, 40) } });

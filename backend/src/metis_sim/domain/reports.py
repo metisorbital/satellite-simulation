@@ -70,12 +70,12 @@ class TelemetryReport(PublicModel):
     schema_version: Literal["telemetry-report.v1"] = "telemetry-report.v1"
     run_id: str
     run_status: str
-    source_kind: Literal["synthetic"] = "synthetic"
-    time_domain: Literal["simulation_utc"] = "simulation_utc"
+    source_kind: Literal["synthetic", "observed"] = "synthetic"
+    time_domain: Literal["simulation_utc", "mission_utc"] = "simulation_utc"
     committed_tick: int
     from_sequence: int
     through_sequence: int
-    nominal_cadence_s: Literal[1] = 1
+    nominal_cadence_s: float | None = 1
     model_provenance: PublicModelProvenance
     streams: list[StreamSummary]
     limitations: list[str] = Field(

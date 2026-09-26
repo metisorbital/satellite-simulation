@@ -15,6 +15,7 @@ watch = ["backend/src/metis_sim/adapters/tables.py"]
 nav = [
   { "Overview" = "index.md" },
   { "Run a Local Demo" = "getting-started.md" },
+  { "Replay Recorded Data" = "recorded-data.md" },
   { "Database Tables" = "reference/database.md" },
   { "Shift Log" = "reference/shift-log.md" },
   { "Consume the API" = "api.md" },

@@ -29,6 +29,14 @@ class Mission extends ChangeNotifier {
   final Stopwatch clock = Stopwatch()..start();
   JsonMap? trajectory;
   List<JsonMap>? editableSatellites;
+  List<JsonMap> datasets = const [];
+  bool datasetsLoading = false;
+  String? datasetsError;
+  bool get isObserved => status?['data_source'] == 'satellitecots';
+  String get dataSource => status?['data_source'] as String? ?? 'physics';
+  JsonMap? get dataset => datasets
+      .where((item) => item['dataset_id'] == status?['dataset_id'])
+      .firstOrNull;
   final Map<String, JsonMap> catalogs = {};
   final Set<String> _pendingCatalogs = {};
   final Map<String, String> _catalogErrors = {};
@@ -139,9 +147,37 @@ class Mission extends ChangeNotifier {
     }
     _scheduleDemoRefresh(next);
     notifyListeners();
-    if (next['committed_tick'] >= _nextTrajectory &&
-        next['committed_tick'] < next['duration_s']) {
+    final committed = next['committed_tick'] as int;
+    final observed = next['source_kind'] == 'observed';
+    final position = observed
+        ? max(committed, next['playback_start_s'] as int? ?? 0)
+        : committed;
+    if (position >= _nextTrajectory &&
+        (position < next['duration_s'] || observed && trajectory == null)) {
       _loadTrajectory(_generation, next);
+    }
+  }
+
+  /// Discover imported observed datasets available in this database.
+  Future<void> loadDatasets() async {
+    if (_closed || datasetsLoading) return;
+    final generation = _generation;
+    datasetsLoading = true;
+    datasetsError = null;
+    notifyListeners();
+    try {
+      final response = DatasetList.fromJson(await _request('/v1/datasets'));
+      if (_closed || generation != _generation) return;
+      datasets = response.items.map((item) => item.toJson()).toList();
+    } catch (exception) {
+      if (!_closed && generation == _generation) {
+        datasetsError = 'Observed datasets unavailable: $exception';
+      }
+    } finally {
+      if (!_closed && generation == _generation) {
+        datasetsLoading = false;
+        notifyListeners();
+      }
     }
   }
 
@@ -261,40 +297,64 @@ class Mission extends ChangeNotifier {
         : selectedEnd.difference(epoch).inMicroseconds / 1000000;
     if (selectedEnd != null && (endSeconds < 0 || endSeconds > committed)) {
       _pinnedHistory = const [];
-      historyError = 'Choose a time range within committed simulation history.';
+      historyError = 'Choose a time range within committed run history.';
       notifyListeners();
       return;
     }
-    // Telemetry has one endpoint per whole simulated second. A fractional
-    // selection includes only endpoints inside its exact UTC boundaries.
-    final lastSequence = endSeconds.floor();
-    final firstSequence = max(
-      0,
-      (endSeconds - selectedSeconds - (selectedEnd == null ? 40 : 0)).ceil(),
+    final observed = run['source_kind'] == 'observed';
+    final startSeconds = max(
+      0.0,
+      endSeconds - selectedSeconds - (selectedEnd == null ? 40 : 0),
     );
+    // Observed sample indices are dense even when source UTC has gaps.
+    final lastSequence = observed
+        ? run['committed_sequence'] as int? ?? -1
+        : endSeconds.floor();
+    final firstSequence = observed ? 0 : startSeconds.ceil();
     bool active() => _current(generation, id) && request == _historyRequest;
     final pinnedFrames = <int, JsonMap>{};
     historyLoading = true;
     notifyListeners();
     try {
-      for (var first = firstSequence; first <= lastSequence; first += 2000) {
-        final last = min(lastSequence, first + 1999);
+      var first = firstSequence;
+      while (first <= lastSequence) {
+        final last = observed ? lastSequence : min(lastSequence, first + 1999);
+        final query = Uri(
+          queryParameters: {
+            'stream_id': satellite['stream_id'] as String,
+            'from_sequence': '$first',
+            'through_sequence': '$last',
+            'limit': '2000',
+            if (observed) ...{
+              'from_observed_at': epoch
+                  .add(Duration(microseconds: (startSeconds * 1000000).ceil()))
+                  .toUtc()
+                  .toIso8601String(),
+              'through_observed_at': epoch
+                  .add(Duration(microseconds: (endSeconds * 1000000).floor()))
+                  .toUtc()
+                  .toIso8601String(),
+            },
+          },
+        ).query;
         final page = await _request(
-          '/v1/telemetry?stream_id=$stream&from_sequence=$first&through_sequence=$last&limit=2000',
+          observed
+              ? '/v1/telemetry?$query'
+              : '/v1/telemetry?stream_id=$stream&from_sequence=$first&through_sequence=$last&limit=2000',
         );
         if (!active()) return;
         final items = (page['items'] as List)
             .map((item) => Map<String, dynamic>.from(item as Map))
             .toList();
-        if (page['has_more'] == true ||
+        if ((!observed && page['has_more'] == true) ||
             items.any(
               (frame) =>
                   frame['stream_id'] != satellite['stream_id'] ||
                   frame['sequence'] is! int ||
                   (frame['sequence'] as int) < first ||
                   (frame['sequence'] as int) > last ||
-                  frameSeconds(frame, run) < first ||
-                  frameSeconds(frame, run) > last,
+                  frameSeconds(frame, run) < startSeconds ||
+                  frameSeconds(frame, run) > endSeconds,
             )) {
           throw const FormatException(
             'History response does not match the selected window.',
@@ -307,6 +367,15 @@ class Mission extends ChangeNotifier {
           for (final frame in items) {
             pinnedFrames[frame['sequence'] as int] = frame;
           }
+        }
+        if (observed) {
+          if (page['has_more'] != true) break;
+          if (items.isEmpty || (items.last['sequence'] as int) < first) {
+            throw const FormatException('History pagination did not advance.');
+          }
+          first = (items.last['sequence'] as int) + 1;
+        } else {
+          first = last + 1;
         }
       }
       if (active() && selectedEnd != null) {
@@ -354,8 +423,12 @@ class Mission extends ChangeNotifier {
   }
 
   Future<void> _loadTrajectory(int generation, JsonMap run) async {
-    final from = max(0, run['committed_tick'] as int);
-    _nextTrajectory = (from ~/ 1800 + 1) * 1800;
+    final position = max(
+      0,
+      max(run['committed_tick'] as int, run['playback_start_s'] as int? ?? 0),
+    );
+    final from = max(0, position - (isObserved ? 40 : 0));
+    _nextTrajectory = (position ~/ 1800 + 1) * 1800;
     try {
       final path = Trajectory.fromJson(
         await _request(
@@ -384,6 +457,7 @@ class Mission extends ChangeNotifier {
     historyLoading = false;
     historyError = null;
     _pendingCatalogs.clear();
+    datasetsLoading = false;
     _reconnect?.cancel();
     _demoRefresh?.cancel();
     _demoRefresh = null;
@@ -417,6 +491,7 @@ class Mission extends ChangeNotifier {
       final id = status!['run_id'] as String;
       await _snapshot(generation, id);
       if (!_current(generation, id)) return;
+      unawaited(loadDatasets());
       try {
         final configuration = await _request('/v1/viewer/configuration');
         if (_current(generation, id)) {
@@ -589,6 +664,66 @@ class Mission extends ChangeNotifier {
       return !_closed;
     } catch (exception) {
       if (_closed || generation != _generation) return false;
+      error = '$exception';
+      busy = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// Create an unstarted run for the selected producer without mixing sources.
+  Future<void> selectSource(String source, {String? datasetId}) async {
+    if (_closed || busy || !canReplaceRun) return;
+    if (source == dataSource &&
+        (source == 'physics' || datasetId == status?['dataset_id'])) {
+      return;
+    }
+    final generation = _generation;
+    busy = true;
+    error = null;
+    notifyListeners();
+    try {
+      await _request(
+        '/v1/viewer/source',
+        body: {'data_source': source, 'dataset_id': ?datasetId},
+      );
+      if (_closed || generation != _generation) return;
+      busy = false;
+      await connect();
+    } catch (exception) {
+      if (_closed || generation != _generation) return;
+      error = '$exception';
+      busy = false;
+      notifyListeners();
+    }
+  }
+
+  /// Prepare a new recorded playback; starting it remains an explicit action.
+  Future<bool> seekObserved(int elapsedSeconds) async {
+    if (_closed || busy || !canControl || !isObserved) return false;
+    final duration = status!['duration_s'] as int;
+    if (elapsedSeconds < 0 || elapsedSeconds > duration) return false;
+    final generation = _generation;
+    busy = true;
+    error = null;
+    notifyListeners();
+    try {
+      final bootstrap = await _client.seek(elapsedSeconds, csrfToken: _token);
+      if (_closed || generation != _generation) return false;
+      await connect(initial: bootstrap);
+      return !_closed &&
+          _generation == generation + 1 &&
+          error == null &&
+          !connecting &&
+          isObserved &&
+          status?['run_id'] == (bootstrap['run'] as Map)['run_id'];
+    } catch (exception) {
+      if (_closed || generation != _generation) return false;
+      if (exception is ViewerRequestException && exception.statusCode == 401) {
+        suspend();
+        onSessionExpired?.call();
+        return false;
+      }
       error = '$exception';
       busy = false;
       notifyListeners();

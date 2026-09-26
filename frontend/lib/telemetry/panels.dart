@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../scene/playback.dart';
 
 const telemetrySurface = Color(0xff101923);
@@ -29,6 +30,7 @@ const telemetryTabs = <String>[
   'Payload',
   'ADCS',
   'Space weather',
+  'Recorded channels',
 ];
 
 const powerPanel = TelemetryPanel('Power balance', [
@@ -171,7 +173,46 @@ const telemetryPanels = <String, List<TelemetryPanel>>{
     TelemetryPanel('Integral solar proton flux', ['space_weather.proton_flux']),
     TelemetryPanel('Solar X-ray flux', ['space_weather.x_ray_flux']),
   ],
+  'Recorded channels': [],
 };
+
+/// Add source channels without duplicating canonical subsystem dashboards.
+List<TelemetryPanel> recordedPanels(Map<String, JsonMap> definitions) {
+  final existing = telemetryPanels.values
+      .expand((panels) => panels)
+      .expand((panel) => panel.channels)
+      .toSet();
+  final groups = <String, List<String>>{};
+  const systems = {
+    'eps': 'EPS',
+    'payload': 'Payload',
+    'comm': 'Communications',
+    'fc': 'Flight computer',
+  };
+  const quantities = {'V': 'voltage', 'A': 'current', 'degC': 'temperature'};
+  for (final entry in definitions.entries) {
+    final definition = entry.value;
+    if (existing.contains(entry.key) ||
+        definition['availability'] != 'observed' ||
+        definition['value_type'] != 'scalar') {
+      continue;
+    }
+    final system = entry.key.split('.').first;
+    final unit = definition['unit'] as String;
+    final group = '${systems[system] ?? system} · ${quantities[unit] ?? unit}';
+    groups.putIfAbsent(group, () => []).add(entry.key);
+  }
+  return [
+    for (final group in groups.entries)
+      for (var index = 0; index < group.value.length; index += 4)
+        TelemetryPanel(
+          group.value.length <= 4
+              ? group.key
+              : '${group.key} · ${index ~/ 4 + 1}',
+          group.value.skip(index).take(4).toList(),
+        ),
+  ];
+}
 
 const channelLabels = <String, String>{
   'eps.solar_power_w': 'Solar generation',
@@ -189,6 +230,28 @@ const channelLabels = <String, String>{
   'eps.bus_voltage_v': 'Load bus',
   'eps.solar_current_a': 'Solar current',
   'eps.bus_current_a': 'Bus current',
+  "eps.mppt_1_input_voltage_v": "MPPT 1 input voltage",
+  "eps.mppt_1_input_current_a": "MPPT 1 input current",
+  "eps.mppt_1_output_current_a": "MPPT 1 output current",
+  "eps.mppt_2_input_voltage_v": "MPPT 2 input voltage",
+  "eps.mppt_2_input_current_a": "MPPT 2 input current",
+  "eps.mppt_2_output_current_a": "MPPT 2 output current",
+  "eps.battery_1_voltage_v": "Battery 1 voltage",
+  "eps.battery_1_current_a": "Battery 1 signed source current",
+  "eps.battery_2_voltage_v": "Battery 2 voltage",
+  "eps.battery_2_current_a": "Battery 2 signed source current",
+  "comm.uv_voltage_v": "U/V communications rail voltage",
+  "comm.uv_current_a": "U/V communications current",
+  "fc.pobc_current_a": "Payload onboard computer current",
+  "comm.transmitter_a_current_a": "Baseband A current",
+  "comm.transmitter_b_current_a": "Baseband B current",
+  "payload.atlas_a_current_a": "Atlas 200 DK A current",
+  "payload.atlas_b_current_a": "Atlas 200 DK B current",
+  "payload.pi_a_current_a": "Raspberry Pi 4B A current",
+  "payload.pi_b_current_a": "Raspberry Pi 4B B current",
+  "payload.atlas_a_temperature_c": "Atlas A surface temperature",
+  "payload.atlas_b_temperature_c": "Atlas B surface temperature",
+  "payload.pi_a_temperature_c": "Raspberry Pi A surface temperature",
   'eps.battery_temperature_c': 'Battery',
   'fc.mcu_temperature_c': 'Avionics',
   'payload.electronics_temperature_c': 'Payload',

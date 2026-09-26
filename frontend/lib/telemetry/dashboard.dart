@@ -1,5 +1,7 @@
 import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
+
 import '../api/mission.dart';
 import '../scene/playback.dart';
 import 'chart.dart';
@@ -207,16 +209,15 @@ class _TelemetryDashboardState extends State<TelemetryDashboard> {
   }
 
   Future<void> _editPanels() async {
-    if (await editTelemetryLayout(
-          context,
-          _layout,
-          _tab,
-          telemetryPanels[_tab]!,
-        ) &&
+    if (await editTelemetryLayout(context, _layout, _tab, _panelsForTab) &&
         mounted) {
       setState(() {});
     }
   }
+
+  List<TelemetryPanel> get _panelsForTab => _tab == 'Recorded channels'
+      ? recordedPanels(_definitions)
+      : telemetryPanels[_tab]!;
 
   Widget _panelMenu(TelemetryPanel panel) => PopupMenuButton<String>(
     tooltip: 'Panel layout: ${panel.title}',
@@ -299,7 +300,10 @@ class _TelemetryDashboardState extends State<TelemetryDashboard> {
         : math.max(1, end.difference(start).inSeconds);
     final frames = _framesInRange(received, start, end);
     final current = _fixedEnd == null ? liveCurrent : frames.lastOrNull;
-    final sourceKind = (current ?? liveCurrent)?['source_kind'];
+    final sourceKind =
+        (current ?? liveCurrent)?['source_kind'] ?? status?['source_kind'];
+    final observed = sourceKind == 'observed';
+    final cadence = (status?['nominal_cadence_s'] as num?)?.toDouble() ?? 1;
     final sourceLabel = sourceKind == 'observed'
         ? 'OBSERVED'
         : sourceKind == 'synthetic'
@@ -314,7 +318,7 @@ class _TelemetryDashboardState extends State<TelemetryDashboard> {
     final definitions = _catalogDefinitions(catalog);
     final query = _search.text.trim().toLowerCase();
     final panels = _layout
-        .visiblePanels(_tab, telemetryPanels[_tab]!)
+        .visiblePanels(_tab, _panelsForTab)
         .where(
           (panel) =>
               query.isEmpty ||
@@ -337,6 +341,15 @@ class _TelemetryDashboardState extends State<TelemetryDashboard> {
         : sampleTime(
             frames.last,
           ).difference(sampleTime(frames.first)).inSeconds;
+    var timeGaps = 0;
+    for (var index = 1; index < frames.length; index++) {
+      if (sampleTime(
+            frames[index],
+          ).difference(sampleTime(frames[index - 1])).inMilliseconds >
+          cadence * 1500) {
+        timeGaps++;
+      }
+    }
     final stale = mission.playback.isStale(mission.now);
     final runState = status?['status'] as String? ?? 'waiting';
     final connection = !mission.playback.connected
@@ -388,6 +401,8 @@ class _TelemetryDashboardState extends State<TelemetryDashboard> {
                   definitions: definitions,
                   frames: frames,
                   current: current,
+                  observed: observed,
+                  nominalCadenceSeconds: cadence,
                   windowSeconds: chartWindow,
                   end: end,
                   expanded: true,
@@ -607,9 +622,10 @@ class _TelemetryDashboardState extends State<TelemetryDashboard> {
         Text(
           frames.isEmpty
               ? 'No samples in the selected time range.'
-              : '${frames.length} received samples · ${coverage}s of ${chartWindow}s displayed · '
+              : '${frames.length} received samples · ${coverage}s source span in ${chartWindow}s window · '
                     '${utcTime(sampleTime(frames.first))}–${utcTime(sampleTime(frames.last))} UTC'
-                    '${gaps > 0 ? ' · $gaps sequence gaps' : ''}',
+                    '${gaps > 0 ? ' · $gaps sequence gaps' : ''}'
+                    '${timeGaps > 0 ? ' · $timeGaps source time gaps' : ''}',
           style: const TextStyle(fontSize: 10, color: telemetryMuted),
         ),
         if (mission.historyLoading)
@@ -657,26 +673,30 @@ class _TelemetryDashboardState extends State<TelemetryDashboard> {
           TelemetryNotice(
             icon: Icons.search_off,
             text: query.isEmpty
-                ? 'No panels are visible. Use Edit panels to restore them.'
+                ? _tab == 'Recorded channels' && !observed
+                      ? 'Select real data in Overview to show additional recorded channels. Physics dashboards remain in their subsystem tabs.'
+                      : 'No panels are visible. Use Edit panels to restore them.'
                 : 'No panels match “${_search.text}” in $_tab. Clear the filter or choose another subsystem.',
           )
         else ...[
           if (_tab == 'Space weather')
-            const Padding(
-              padding: EdgeInsets.only(bottom: 14),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 14),
               child: TelemetryNotice(
                 icon: Icons.cloud_off_outlined,
-                text:
-                    'External space weather is not modeled. These source-dashboard families are explicitly unavailable; the body magnetic field uses a separate ideal dipole model.',
+                text: observed
+                    ? 'The source dataset contains no space-weather measurements.'
+                    : 'External space weather is not modeled. These source-dashboard families are explicitly unavailable; the body magnetic field uses a separate ideal dipole model.',
               ),
             ),
           if (_tab == 'ADCS')
-            const Padding(
-              padding: EdgeInsets.only(bottom: 14),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 14),
               child: TelemetryNotice(
                 icon: Icons.explore_outlined,
-                text:
-                    'Ideal prescribed LVLH attitude. Zero pointing error is a model assumption; actuator dynamics and star-tracker measurements are not solved.',
+                text: observed
+                    ? 'The source dataset contains no attitude, pointing, or actuator measurements.'
+                    : 'Ideal prescribed LVLH attitude. Zero pointing error is a model assumption; actuator dynamics and star-tracker measurements are not solved.',
               ),
             ),
           LayoutBuilder(
@@ -705,6 +725,8 @@ class _TelemetryDashboardState extends State<TelemetryDashboard> {
                         definitions: definitions,
                         frames: frames,
                         current: current,
+                        observed: observed,
+                        nominalCadenceSeconds: cadence,
                         windowSeconds: chartWindow,
                         end: end,
                         onExpand: () => _expand(panel),
@@ -723,7 +745,7 @@ class _TelemetryDashboardState extends State<TelemetryDashboard> {
           Padding(
             padding: const EdgeInsets.only(bottom: 12),
             child: Text(
-              'Catalog ${version ?? 'unknown'} · Endpoint mode: ${current['mode']} · Interval mode: ${current['interval_mode'] ?? 'unknown'}',
+              'Catalog ${version ?? 'unknown'} · Endpoint mode: ${current['mode'] ?? 'unknown'} · Interval mode: ${current['interval_mode'] ?? 'unknown'}',
               style: const TextStyle(color: telemetryMuted, fontSize: 11),
             ),
           ),
@@ -732,11 +754,14 @@ class _TelemetryDashboardState extends State<TelemetryDashboard> {
             definitions: definitions,
             frame: current,
             query: query,
+            observed: observed,
           ),
         const SizedBox(height: 16),
         TelemetryNotice(
           icon: Icons.science_outlined,
-          text: version == 'spacecraft.v1'
+          text: observed
+              ? 'Observed BUPT-1 spacecraft data replayed from the database. UTC gaps remain blank. Merged rows nominally cover one second; MPPT values update every three seconds and battery/temperature values every four seconds. The catalog identifies unit conversions and source-derived power. Unsupported channels remain unavailable.'
+              : version == 'spacecraft.v1'
               ? 'Synthetic physical-model telemetry, not a replay of the reference CSVs. Electrical rails, three thermal nodes, powered acquisition, and ideal attitude are approximations; no real-spacecraft calibration or inferred health score is shown.'
               : 'Synthetic physical-model telemetry. This catalog supplies orbit, environment, and ideal energy-store measurements. Spacecraft subsystem panels require a spacecraft.v1 run.',
         ),

@@ -117,7 +117,7 @@ def create_app(
         title="Metis Satellite Simulation",
         version="0.1.0",
         lifespan=lifespan,
-        description="Synthetic orbit-to-power measurements. One writer; public telemetry and separate private evaluation.",
+        description="Physics simulation and recorded satellite telemetry replay. One writer; public measurements and separate private evaluation.",
     )
     for key, value in dict(
         settings=settings,

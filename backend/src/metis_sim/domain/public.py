@@ -54,8 +54,8 @@ class PublicSpacecraft(PublicModel):
         Human-readable label and viewer marker color.
     stream_id : str
         Durable public telemetry stream identity.
-    capacity_wh, panel_area_m2 : float
-        Disclosed battery capacity and panel area.
+    capacity_wh, panel_area_m2 : float or None
+        Disclosed battery capacity and panel area, absent when not measured or documented.
     public_limits : list of PublicLimit
         Configured limits safe to disclose to consumers.
     """
@@ -64,8 +64,8 @@ class PublicSpacecraft(PublicModel):
     name: str
     color: str
     stream_id: str
-    capacity_wh: float
-    panel_area_m2: float
+    capacity_wh: float | None
+    panel_area_m2: float | None
     public_limits: list[PublicLimit] = Field(default_factory=list)
 
 
@@ -114,6 +114,12 @@ class PublicModelProvenance(TypedDict, total=False):
     housekeeping_model_limits: str
     attitude_model: str
     attitude_model_limits: str
+    dataset_repository: str
+    dataset_revision: str
+    dataset_sha256: str
+    timestamp_interpretation: str
+    sampling_limits: str
+    data_mapping_version: str
 
 
 class PublicRunStatus(PublicModel):
@@ -130,8 +136,11 @@ class PublicRunStatus(PublicModel):
     duration_s : int
         Configured simulated duration.
     committed_tick : int
-        Latest durably committed simulated second, or ``-1`` before the
-        first commit.
+        Latest durably committed elapsed source second, or ``-1`` before the
+        first commit. Observed replay advances this clock through source gaps.
+    committed_sequence : int or None
+        Last committed observation index for recorded sources. For physics
+        runs it is omitted and the sequence equals ``committed_tick``.
     status_revision : int
         Monotonic status revision used to order same-tick responses.
     committed_at : datetime or None
@@ -144,7 +153,17 @@ class PublicRunStatus(PublicModel):
     satellites : list of PublicSpacecraft
         Public spacecraft descriptors and stream identities.
     source_kind : str
-        Provenance label; P0 runs are ``synthetic``.
+        Provenance label, ``synthetic`` or ``observed``.
+    data_source : str
+        Selected physics or recorded dataset adapter.
+    dataset_id, dataset_title : str or None
+        Imported archive identity and title, absent for physics runs.
+    time_domain : str
+        Meaning of source timestamps, simulation or mission UTC.
+    nominal_cadence_s : float or None
+        Documented observation cadence; gaps are not filled to meet it.
+    playback_start_s : int
+        First source-time position selected for this independent playback.
     model_provenance : PublicModelProvenance
         Allowlisted model and Earth-orientation metadata.
     frame_count : int
@@ -163,16 +182,58 @@ class PublicRunStatus(PublicModel):
     epoch_utc: datetime
     duration_s: int
     committed_tick: int = -1
+    committed_sequence: int | None = None
     status_revision: int = 0
     committed_at: datetime | None = None
     requested_speed: int = Field(ge=1, strict=True)
     effective_speed: float = 0
     wall_lag_s: float = 0
     satellites: list[PublicSpacecraft]
-    source_kind: Literal["synthetic"] = "synthetic"
+    source_kind: Literal["synthetic", "observed"] = "synthetic"
+    data_source: Literal["physics", "satellitecots"] = "physics"
+    dataset_id: str | None = None
+    dataset_title: str | None = None
+    time_domain: Literal["simulation_utc", "mission_utc"] = "simulation_utc"
+    nominal_cadence_s: float | None = None
+    playback_start_s: int = 0
     model_provenance: PublicModelProvenance
     frame_count: int = 0
     diagnostic: str | None = None
+
+
+class PublicDataset(PublicModel):
+    """An available archive's public metadata, excluding future measurements.
+
+    Attributes
+    ----------
+    dataset_id, title, satellite_id, catalog_version : str
+        Stable imported archive and spacecraft identifiers.
+    observed_start, observed_end : datetime
+        Original timestamp span normalized using the documented interpretation.
+    duration_s, sample_count : int
+        Elapsed archive span and number of real observations.
+    """
+
+    dataset_id: str
+    title: str
+    satellite_id: str
+    catalog_version: str
+    observed_start: datetime
+    observed_end: datetime
+    duration_s: int
+    sample_count: int
+
+
+class DatasetList(PublicModel):
+    """Discover imported archives without exposing their future channel values.
+
+    Attributes
+    ----------
+    items : list of PublicDataset
+        Archives available in this deployment's database.
+    """
+
+    items: list[PublicDataset]
 
 
 class Snapshot(PublicModel):
@@ -192,7 +253,7 @@ class Snapshot(PublicModel):
 
 
 class OrbitPoint(PublicModel):
-    """One authoritative Earth-fixed orbit state without predicted health.
+    """One Earth-fixed display state whose origin is declared by its trajectory.
 
     Attributes
     ----------
@@ -235,11 +296,14 @@ class Trajectory(PublicModel):
     run_id : str
         Run whose prepared engine produced the samples.
     kind : str
-        Explicit ``predicted_orbit`` discriminator.
+        ``predicted_orbit`` from a physics run, or ``configured_orbit`` from
+        independently configured display elements accompanying recorded telemetry.
     frame : str
         Coordinate frame, fixed to ``ITRS`` in P0.
     satellites : list of SatelliteTrajectory
         Per-spacecraft orbit samples.
+    description : str or None
+        Explicit orbit-source assumptions and model limits when provided.
 
     Notes
     -----
@@ -247,9 +311,10 @@ class Trajectory(PublicModel):
     """
 
     run_id: str
-    kind: Literal["predicted_orbit"] = "predicted_orbit"
+    kind: Literal["predicted_orbit", "configured_orbit"] = "predicted_orbit"
     frame: Literal["ITRS"] = "ITRS"
     satellites: list[SatelliteTrajectory]
+    description: str | None = None
 
 
 class SequenceRange(PublicModel):

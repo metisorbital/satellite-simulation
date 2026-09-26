@@ -82,74 +82,84 @@ class MissionSidebar extends StatelessWidget {
         border: Border(right: BorderSide(color: _line)),
       ),
       child: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _Brand(compact: compact),
-            if (!compact)
-              const Padding(
-                padding: EdgeInsets.fromLTRB(16, 2, 16, 10),
-                child: Text(
-                  'MISSION OPERATIONS',
-                  style: TextStyle(
-                    color: _muted,
-                    fontSize: 9,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 1.4,
-                  ),
+        child: LayoutBuilder(
+          builder: (context, constraints) => SingleChildScrollView(
+            primary: false,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minHeight: constraints.maxHeight),
+              child: IntrinsicHeight(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _Brand(compact: compact),
+                    if (!compact)
+                      const Padding(
+                        padding: EdgeInsets.fromLTRB(16, 2, 16, 10),
+                        child: Text(
+                          'MISSION OPERATIONS',
+                          style: TextStyle(
+                            color: _muted,
+                            fontSize: 9,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 1.4,
+                          ),
+                        ),
+                      )
+                    else
+                      const SizedBox(height: 10),
+                    _NavigationItem(
+                      icon: Icons.grid_view_rounded,
+                      label: 'Overview',
+                      selected: !telemetrySelected,
+                      compact: compact,
+                      onPressed: onOverview,
+                    ),
+                    _NavigationItem(
+                      icon: Icons.show_chart_rounded,
+                      label: 'Telemetry',
+                      selected: telemetrySelected,
+                      compact: compact,
+                      onPressed: onTelemetry,
+                    ),
+                    _NavigationItem(
+                      icon: Icons.menu_book_outlined,
+                      label: 'Shift log',
+                      selected: false,
+                      compact: compact,
+                      onPressed: onShiftLog,
+                    ),
+                    const Spacer(),
+                    _RunStatus(
+                      busy: busy,
+                      connected: connected,
+                      runLabel: runLabel,
+                      compact: compact,
+                    ),
+                    const SizedBox(height: 8),
+                    _BottomAction(
+                      icon: Icons.settings_outlined,
+                      label: 'Settings',
+                      compact: compact,
+                      onPressed: onSettings,
+                    ),
+                    _BottomAction(
+                      icon: Icons.info_outline_rounded,
+                      label: 'Help & info',
+                      compact: compact,
+                      onPressed: onInfo,
+                    ),
+                    const SizedBox(height: 8),
+                    _OperatorMenu(
+                      compact: compact,
+                      operatorName: operatorName,
+                      operatorLogin: operatorLogin,
+                      onLogout: onLogout,
+                    ),
+                  ],
                 ),
-              )
-            else
-              const SizedBox(height: 10),
-            _NavigationItem(
-              icon: Icons.grid_view_rounded,
-              label: 'Overview',
-              selected: !telemetrySelected,
-              compact: compact,
-              onPressed: onOverview,
+              ),
             ),
-            _NavigationItem(
-              icon: Icons.show_chart_rounded,
-              label: 'Telemetry',
-              selected: telemetrySelected,
-              compact: compact,
-              onPressed: onTelemetry,
-            ),
-            _NavigationItem(
-              icon: Icons.menu_book_outlined,
-              label: 'Shift log',
-              selected: false,
-              compact: compact,
-              onPressed: onShiftLog,
-            ),
-            const Spacer(),
-            _RunStatus(
-              busy: busy,
-              connected: connected,
-              runLabel: runLabel,
-              compact: compact,
-            ),
-            const SizedBox(height: 8),
-            _BottomAction(
-              icon: Icons.settings_outlined,
-              label: 'Settings',
-              compact: compact,
-              onPressed: onSettings,
-            ),
-            _BottomAction(
-              icon: Icons.info_outline_rounded,
-              label: 'Help & info',
-              compact: compact,
-              onPressed: onInfo,
-            ),
-            const SizedBox(height: 8),
-            _OperatorMenu(
-              compact: compact,
-              operatorName: operatorName,
-              operatorLogin: operatorLogin,
-              onLogout: onLogout,
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -169,6 +179,7 @@ class MissionHeader extends StatelessWidget {
     required this.connectionLabel,
     required this.utc,
     required this.connected,
+    this.observed = false,
     this.compact = false,
   });
 
@@ -186,6 +197,9 @@ class MissionHeader extends StatelessWidget {
 
   /// Whether the stream status should use the connected treatment.
   final bool connected;
+
+  /// Whether the active producer replays observed spacecraft measurements.
+  final bool observed;
 
   /// Whether to hide the text breadcrumb for an icon-only shell.
   final bool compact;
@@ -249,7 +263,10 @@ class MissionHeader extends StatelessWidget {
               ),
             ),
           if (!compact) ...[
-            const _HeaderLabel(text: 'SYNTHETIC DATA', color: _gold),
+            _HeaderLabel(
+              text: observed ? 'OBSERVED REPLAY' : 'SYNTHETIC DATA',
+              color: observed ? _mint : _gold,
+            ),
             const SizedBox(width: 18),
             _HeaderStatus(
               icon: Icons.circle,

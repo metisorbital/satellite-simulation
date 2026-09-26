@@ -30,7 +30,7 @@ class ChannelDefinition:
         Nominal sample cadence in simulated seconds.
     description : str
         Public explanation of the channel's meaning and limits.
-    availability : {"modeled", "unavailable"}
+    availability : {"modeled", "observed", "unavailable"}
         Whether a physical model supplies this channel; unavailable channels
         must carry null/missing readings.
     """
@@ -44,7 +44,7 @@ class ChannelDefinition:
     coordinate_frame: str | None
     cadence_s: int
     description: str
-    availability: Literal["modeled", "unavailable"] = "modeled"
+    availability: Literal["modeled", "observed", "unavailable"] = "modeled"
 
 
 def _channel(
@@ -195,10 +195,18 @@ CHANNELS_BY_ID = {channel.channel_id: channel for channel in CHANNELS}
 
 # Imported after the base type is declared to keep catalog entries independent
 # of simulation/configuration code.
+from metis_sim.domain.satellitecots_catalog import (  # noqa: E402
+    SATELLITECOTS_CATALOG_VERSION,
+    satellitecots_channels,
+)
 from metis_sim.domain.spacecraft_catalog import spacecraft_channels  # noqa: E402
 
 SPACECRAFT_CHANNELS = CHANNELS + spacecraft_channels()
-CATALOGS = {"power-leo.v1": CHANNELS, "spacecraft.v1": SPACECRAFT_CHANNELS}
+CATALOGS = {
+    "power-leo.v1": CHANNELS,
+    "spacecraft.v1": SPACECRAFT_CHANNELS,
+    SATELLITECOTS_CATALOG_VERSION: satellitecots_channels(),
+}
 CHANNELS_BY_CATALOG = {
     version: {channel.channel_id: channel for channel in channels}
     for version, channels in CATALOGS.items()

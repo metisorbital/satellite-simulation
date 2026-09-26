@@ -1,6 +1,8 @@
 import 'dart:math' as math;
+
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
+
 import '../scene/playback.dart';
 import 'panels.dart';
 
@@ -19,6 +21,8 @@ class TelemetryChart extends StatefulWidget {
     this.onRangeSelected,
     this.onResetRange,
     this.headerActions,
+    this.observed = false,
+    this.nominalCadenceSeconds = 1,
   });
   final TelemetryPanel panel;
   final Map<String, JsonMap> definitions;
@@ -31,6 +35,8 @@ class TelemetryChart extends StatefulWidget {
   final void Function(DateTime start, DateTime end)? onRangeSelected;
   final VoidCallback? onResetRange;
   final Widget? headerActions;
+  final bool observed;
+  final double nominalCadenceSeconds;
 
   @override
   State<TelemetryChart> createState() => _TelemetryChartState();
@@ -70,6 +76,8 @@ class _TelemetryChartState extends State<TelemetryChart> {
     if (!identical(oldWidget.frames, widget.frames) ||
         oldWidget.end != widget.end ||
         oldWidget.windowSeconds != widget.windowSeconds ||
+        oldWidget.observed != widget.observed ||
+        oldWidget.nominalCadenceSeconds != widget.nominalCadenceSeconds ||
         oldWidget.panel != widget.panel ||
         !identical(oldWidget.definitions, widget.definitions)) {
       _rebuildGeometry();
@@ -82,6 +90,7 @@ class _TelemetryChartState extends State<TelemetryChart> {
       widget.frames,
       widget.end,
       widget.windowSeconds,
+      widget.observed ? widget.nominalCadenceSeconds : null,
     );
     _invalidateChartData();
   }
@@ -158,7 +167,9 @@ class _TelemetryChartState extends State<TelemetryChart> {
             (target - _geometry.times[index]).abs()) {
       index--;
     }
-    final cadence = _geometry.series.isEmpty
+    final cadence = widget.observed
+        ? widget.nominalCadenceSeconds
+        : _geometry.series.isEmpty
         ? 1.0
         : (_geometry.series.first.definition['cadence_s'] as num).toDouble();
     if ((_geometry.times[index] - target).abs() > cadence * 1500) return null;
@@ -236,6 +247,7 @@ class _TelemetryChartState extends State<TelemetryChart> {
               child: _Unavailable(
                 channels: unsupported,
                 definitions: widget.definitions,
+                observed: widget.observed,
               ),
             )
           else ...[
@@ -522,7 +534,7 @@ class _TelemetryChartState extends State<TelemetryChart> {
                 style: const TextStyle(fontSize: 10, color: telemetryMuted),
               ),
           ],
-          if (widget.panel.note != null)
+          if (widget.panel.note != null && !widget.observed)
             Padding(
               padding: const EdgeInsets.only(top: 7),
               child: Text(
@@ -680,6 +692,7 @@ class _ChartGeometry {
     List<JsonMap> source,
     DateTime? end,
     int seconds,
+    double? observedCadenceSeconds,
   ) {
     for (final item in series) {
       values[item] = _SeriesGeometry();
@@ -708,7 +721,10 @@ class _ChartGeometry {
       var run = <FlSpot>[];
       JsonMap? previous;
       int? previousTime;
-      final cadenceMs = (item.definition['cadence_s'] as num).toDouble() * 1500;
+      final cadenceMs =
+          (observedCadenceSeconds ??
+              (item.definition['cadence_s'] as num).toDouble()) *
+          1500;
       void flush() {
         if (run.isEmpty) return;
         if (data.spots.isNotEmpty) data.spots.add(FlSpot.nullSpot);
@@ -813,9 +829,14 @@ class _DiamondPainter extends FlDotPainter {
 }
 
 class _Unavailable extends StatelessWidget {
-  const _Unavailable({required this.channels, required this.definitions});
+  const _Unavailable({
+    required this.channels,
+    required this.definitions,
+    required this.observed,
+  });
   final List<String> channels;
   final Map<String, JsonMap> definitions;
+  final bool observed;
 
   @override
   Widget build(BuildContext context) => Column(
@@ -824,16 +845,16 @@ class _Unavailable extends StatelessWidget {
     children: [
       const Icon(Icons.sensors_off_outlined, size: 23, color: telemetryMuted),
       const SizedBox(height: 12),
-      const Text(
-        'Not modeled',
-        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+      Text(
+        observed ? 'Not recorded' : 'Not modeled',
+        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
       ),
       const SizedBox(height: 9),
       for (final id in channels)
         Padding(
           padding: const EdgeInsets.only(bottom: 7),
           child: Text(
-            '${channelLabel(id)} · ${definitions[id]?['description'] ?? 'Not included in this spacecraft catalog.'}',
+            '${channelLabel(id)} · ${definitions[id]?['description'] ?? (observed ? 'Not provided by the recorded dataset.' : 'Not included in this spacecraft catalog.')}',
             maxLines: channels.length > 1 ? 2 : 4,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
