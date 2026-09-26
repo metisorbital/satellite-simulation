@@ -97,16 +97,27 @@ class _ObservedTimelineState extends State<ObservedTimeline> {
                 icon: const Icon(Icons.first_page, size: 18),
               ),
               Expanded(
-                child: Slider(
-                  value: target.toDouble(),
-                  max: duration.toDouble(),
-                  label: timestamp(target),
-                  semanticFormatterCallback: (value) =>
-                      timestamp(value.round()),
-                  onChangeStart: enabled
-                      ? (value) => choose(value.round())
-                      : null,
-                  onChanged: enabled ? (value) => choose(value.round()) : null,
+                // Material Slider keeps an empty value-indicator overlay alive.
+                // Bound its semantics to the slider so it cannot cover Cesium.
+                // Match the native slider's 48px interaction height.
+                child: SizedBox(
+                  height: 48,
+                  child: Overlay.wrap(
+                    clipBehavior: Clip.none,
+                    child: Slider(
+                      value: target.toDouble(),
+                      max: duration.toDouble(),
+                      label: timestamp(target),
+                      semanticFormatterCallback: (value) =>
+                          timestamp(value.round()),
+                      onChangeStart: enabled
+                          ? (value) => choose(value.round())
+                          : null,
+                      onChanged: enabled
+                          ? (value) => choose(value.round())
+                          : null,
+                    ),
+                  ),
                 ),
               ),
               IconButton(
