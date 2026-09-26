@@ -843,6 +843,7 @@ class SimulationService:
                             observed_at=s.observed_at,
                             position_itrs_m=s.position_itrf_m,
                             velocity_itrs_m_s=s.velocity_itrf_m_s,
+                            sun_position_itrs_m=s.sun_position_itrf_m,
                         )
                         for s in samples
                     ],

@@ -762,7 +762,7 @@
     },
     "OrbitPoint": {
       "additionalProperties": false,
-      "description": "One Earth-fixed display state whose origin is declared by its trajectory.\n\nAttributes\n----------\nelapsed_s : int\n    Simulated elapsed time from the run epoch.\nobserved_at : datetime\n    UTC timestamp represented by the state.\nposition_itrs_m : tuple of float\n    Earth-fixed position in metres.\nvelocity_itrs_m_s : tuple of float\n    Earth-fixed velocity in metres per second.",
+      "description": "One Earth-fixed display state whose origin is declared by its trajectory.\n\nAttributes\n----------\nelapsed_s : int\n    Simulated elapsed time from the run epoch.\nobserved_at : datetime\n    UTC timestamp represented by the state.\nposition_itrs_m : tuple of float\n    Earth-fixed position in metres.\nvelocity_itrs_m_s : tuple of float\n    Earth-fixed velocity in metres per second.\nsun_position_itrs_m : tuple of float\n    Astropy geocentric Sun position in metres at ``observed_at``, in\n    the same Earth-fixed frame. Presentation ephemeris, not telemetry.",
       "properties": {
         "elapsed_s": {
           "title": "Elapsed S",
@@ -791,6 +791,24 @@
           "title": "Position Itrs M",
           "type": "array"
         },
+        "sun_position_itrs_m": {
+          "additionalItems": false,
+          "items": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "maxItems": 3,
+          "minItems": 3,
+          "title": "Sun Position Itrs M",
+          "type": "array"
+        },
         "velocity_itrs_m_s": {
           "additionalItems": false,
           "items": [
@@ -814,7 +832,8 @@
         "elapsed_s",
         "observed_at",
         "position_itrs_m",
-        "velocity_itrs_m_s"
+        "velocity_itrs_m_s",
+        "sun_position_itrs_m"
       ],
       "title": "OrbitPoint",
       "type": "object"

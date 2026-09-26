@@ -60,6 +60,7 @@ class Mission extends ChangeNotifier {
   String? _terminalRunId;
   int _demoRefreshAttempts = 0;
   int _generation = 0, _backoff = 1000, _nextTrajectory = 0;
+  int _trajectoryRequest = 0;
   Timer? _reconnect;
   Timer? _demoRefresh;
   WebSocketChannel? _socket;
@@ -132,6 +133,7 @@ class Mission extends ChangeNotifier {
 
   void _ingest(JsonMap next, List<dynamic> incoming) {
     final previousRun = status?['run_id'];
+    final wasRunning = status?['status'] == 'running';
     playback.ingest(
       next,
       incoming.map((f) => Map<String, dynamic>.from(f as Map)).toList(),
@@ -155,8 +157,11 @@ class Mission extends ChangeNotifier {
     final position = observed
         ? max(committed, next['playback_start_s'] as int? ?? 0)
         : committed;
-    if (position >= _nextTrajectory &&
-        (position < next['duration_s'] || observed && trajectory == null)) {
+    // Pause/completion snaps the display to committed time, even at high speed.
+    final snappedToCommitted = wasRunning && next['status'] != 'running';
+    if (snappedToCommitted ||
+        position >= _nextTrajectory &&
+            (position < next['duration_s'] || trajectory == null)) {
       _loadTrajectory(_generation, next);
     }
   }
@@ -426,11 +431,14 @@ class Mission extends ChangeNotifier {
   }
 
   Future<void> _loadTrajectory(int generation, JsonMap run) async {
+    final request = ++_trajectoryRequest;
     final position = max(
       0,
       max(run['committed_tick'] as int, run['playback_start_s'] as int? ?? 0),
     );
-    final from = max(0, position - (isObserved ? 40 : 0));
+    // Start before the displayed clock, including fast recorded-data replay lag.
+    final displayed = playback.time(now)?.floor() ?? position;
+    final from = max(0, min(position, displayed) - 40);
     _nextTrajectory = (position ~/ 1800 + 1) * 1800;
     try {
       final path = Trajectory.fromJson(
@@ -439,12 +447,15 @@ class Mission extends ChangeNotifier {
         ),
       ).toJson();
       if (_current(generation, run['run_id'] as String) &&
+          request == _trajectoryRequest &&
           path['run_id'] == run['run_id']) {
         trajectory = path;
         notifyListeners();
       }
     } catch (exception) {
-      if (_current(generation, run['run_id'] as String) && trajectory == null) {
+      if (_current(generation, run['run_id'] as String) &&
+          request == _trajectoryRequest &&
+          trajectory == null) {
         _nextTrajectory = 0;
         error = 'Orbit preview unavailable: $exception';
         notifyListeners();
