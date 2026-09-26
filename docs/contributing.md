@@ -80,6 +80,11 @@ The [specification](specification.md), [physics model](physics-model.md), and [c
 
 ## Build API Documentation from Docstrings
 
+The [database reference](reference/database.md) also renders directly from SQLAlchemy
+metadata during these builds. Edit `backend/src/metis_sim/adapters/tables.py` and
+its migrations when changing storage; the diagram and column reference update automatically.
+
+
 Install the locked development dependencies with `uv sync --frozen`.
 The normal documentation commands generate the Python reference directly from source:
 

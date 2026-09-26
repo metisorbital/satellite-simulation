@@ -11,6 +11,8 @@ Database ownership, immutable records, repositories, and public cursor reads. Th
 
 Signatures, attributes, methods, and NumPy-style sections below are rendered directly
 from Python source whenever Zensical builds this page.
+See [database tables and relationships](database.md) for the generated schema diagram,
+columns, keys, and indexes.
 See the [object guide](../python-api.md) for how these modules connect.
 
 ::: metis_sim.adapters.database

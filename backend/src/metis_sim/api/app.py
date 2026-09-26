@@ -7,7 +7,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from uuid import uuid4
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, WebSocket
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -250,5 +250,18 @@ def create_app(
     app.include_router(visual_router)
     install_openapi(app)
     if settings.frontend_path.is_dir():
+        # A root StaticFiles mount also matches WebSocket scopes. Reject unknown
+        # socket paths before they reach its HTTP-only handler.
+        @app.websocket("/{path:path}")
+        async def reject_unknown_socket(websocket: WebSocket) -> None:
+            """Reject a WebSocket request that did not match an API route.
+
+            Parameters
+            ----------
+            websocket : WebSocket
+                Unaccepted connection targeting an unsupported socket path.
+            """
+            await websocket.close(code=1008)
+
         app.mount("/", StaticFiles(directory=settings.frontend_path, html=True), name="viewer")
     return app

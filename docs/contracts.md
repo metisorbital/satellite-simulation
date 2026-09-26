@@ -376,17 +376,19 @@ Use **plain PostgreSQL** for the initial service: structured metadata plus one J
 Keep frequently filtered identity/time fields in typed columns.
 PostgreSQL supports unique/foreign-key constraints and JSONB storage/indexing; this decision uses those mechanisms to avoid a separate metadata database. [PostgreSQL constraints](https://www.postgresql.org/docs/current/ddl-constraints.html), [JSON types](https://www.postgresql.org/docs/current/datatype-json.html)
 
-| Table / schema | Required keys and fields |
-|---|---|
-| private `configuration_revisions` | `configuration_id` PK, schema version, canonical hash, resolved JSONB, created wall time |
-| private `runs` | `run_id` PK, configuration FK, status, epoch, seed, pinned manifest JSONB, last committed tick, wall lifecycle times |
-| public `streams` | `stream_id` PK, source ID, satellite ID, nullable simulation run mapping, provenance, catalog version, first/last sequence |
-| public `telemetry_frames` | `(source_id, stream_id, sequence)` PK; observed_at, emitted_at, run_id nullable, committed_at, payload JSONB |
-| public `operational_events` | `(source_id, stream_id, event_sequence)` PK; satellite/stream reference, observed_at, type, public payload JSONB |
-| private `truth_records` | Run/satellite/private sequence key, observed_at, fault/outcome payload JSONB |
-| private `idempotency_records` | Role/route/key uniqueness, request hash, original response |
+The [database tables and relationships reference](reference/database.md) generates
+the current columns, keys, constraints, indexes, and relationship diagram directly
+from SQLAlchemy metadata. Use it for the implemented relational structure rather
+than treating JSON payload properties as separate SQL columns.
 
-Add indexes `(stream_id, sequence)` and `(stream_id, observed_at)`; add a run/time index for snapshots when measured query plans justify it.
+Private storage holds immutable configuration revisions, run lifecycle/provenance,
+scenario truth, and durable idempotency responses. Public storage holds streams,
+telemetry frames, and operational events. The current simulator requires every
+stream, frame, event, and truth record to reference a run; support for observed-source
+API payloads does not make those database references nullable. Configuration,
+manifest, status, and payload JSON carry their respective versioned data contracts.
+
+Stream/sequence, stream/time, run/time, and run/sequence indexes support replay and snapshots.
 Do not add blanket JSONB GIN indexes for channels without an actual query need.
 Repository methods expose append frames, read after cursor, read snapshot, save revision, and transition run; domain objects do not construct SQL.
 Use SQLAlchemy with Psycopg and Alembic migrations.

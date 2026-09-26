@@ -8,6 +8,8 @@ Deterministic synthetic orbit-to-power telemetry for a prepared run, with an Ear
 
 ## Start here
 
+- [Database tables and relationships](reference/database.md) — generated schema diagram, columns, keys, and indexes.
+
 - [Getting started](getting-started.md) — prerequisites, local demo setup, and the authentication boundary.
 - [Physics-backed spacecraft telemetry](reference/spacecraft-telemetry.md) — one-second electrical, thermal, attitude and payload measurements, reports, and ML exports.
 - [Sample telemetry field reference](reference/sample-telemetry.md) — the supplied satellite data inventory and its relationship to simulated measurements.
