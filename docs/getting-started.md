@@ -60,6 +60,56 @@ uv run metis-sim migrate
 PostgreSQL is the application database.
 SQLite is limited to isolated tests and is not a substitute for the local application database.
 
+## Use the Remote Render Database
+
+Copy `.env.example` to `.env` in the root of the checkout you run:
+
+```bash
+cp .env.example .env
+```
+
+Set the password in `.env`:
+
+```dotenv
+METIS_USE_REMOTE=1
+METIS_REMOTE_DB_PASSWORD='your-render-password'
+```
+
+`METIS_USE_REMOTE` controls `Settings.use_remote` and accepts `1`/`true` or
+`0`/`false` (case-insensitive). It defaults to false when unset.
+With remote mode enabled, the connection uses these hardcoded values in
+`backend/src/metis_sim/settings.py`:
+
+| Setting | Value |
+| --- | --- |
+| Hostname | `dpg-daqcab7f3r2c73arc260-a.frankfurt-postgres.render.com` |
+| Port | `5432` |
+| Database | `metis_29je` |
+| Username | `metis` |
+| TLS | `sslmode=require` |
+
+Only the remote password comes from the environment. Supply the raw password;
+the application handles URL escaping. Dotenv interpolation is disabled, so
+passwords containing `${...}` remain literal. An empty or missing password fails
+configuration immediately without falling back to a local database.
+Existing process environment variables take precedence over `.env`.
+
+The hostname is Render's external PostgreSQL endpoint, suitable for connections
+from your Mac. Render must allow your client IP for external connections.
+See [Render connection requirements](https://render.com/docs/postgresql-creating-connecting).
+
+Runtime settings and migrations read `.env` from the current working directory.
+Run commands from this checkout's root. Remote mode takes precedence over
+`METIS_DATABASE_URL`, including migrations. With `METIS_USE_REMOTE=0`, the existing
+`METIS_DATABASE_URL` override and default local database remain available.
+
+Skip `docker compose up ... db` when using remote mode. The existing `init`,
+`migrate`, and `demo` commands still apply; migrations change the selected remote
+schema and the demo writes simulation data there. Use a suitable database and
+source ID when another simulator is already running against it.
+The `.env` file is ignored by Git and excluded from Docker images. For a deployed
+container, set these variables in its environment instead.
+
 ## Start the Browser Demo
 
 Start the service with a fresh prepared template:

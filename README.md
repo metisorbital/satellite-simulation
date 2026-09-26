@@ -26,6 +26,8 @@ uv run metis-sim init
 uv run metis-sim migrate
 ```
 
+To use Render PostgreSQL instead, follow [remote database setup](docs/getting-started.md#use-the-remote-render-database) and set the password in `.env`.
+
 Start the app in this terminal and leave it running:
 
 ```bash

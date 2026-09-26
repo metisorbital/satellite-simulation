@@ -4,6 +4,9 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from dotenv import load_dotenv
+from sqlalchemy.engine import URL
+
 
 @dataclass(frozen=True)
 class Settings:
@@ -13,6 +16,8 @@ class Settings:
     ----------
     database_url : str
         SQLAlchemy PostgreSQL connection URL.
+    use_remote : bool
+        Select the fixed Render database when loading environment settings.
     session_secret : str
         Secret signing sessions and durable opaque cursors.
     operator_token, consumer_token, evaluator_token : str
@@ -26,6 +31,7 @@ class Settings:
     """
 
     database_url: str = "postgresql+psycopg://metis:metis-local@127.0.0.1:55432/metis"
+    use_remote: bool = False
     source_id: str = "metis-simulator-local"
     session_secret: str = ""
     operator_token: str = ""
@@ -50,8 +56,38 @@ class Settings:
 
     @classmethod
     def from_env(cls) -> "Settings":
-        """Load explicit deployment settings from environment variables."""
+        """Load deployment settings from the environment and working-directory .env.
+
+        Returns
+        -------
+        Settings
+            Configuration with an explicitly selected database connection URL.
+
+        Raises
+        ------
+        ValueError
+            If the remote selector is invalid or remote credentials are absent.
+        """
+        load_dotenv(Path(".env"), override=False, interpolate=False)
         default = cls()
+        remote_value = os.getenv("METIS_USE_REMOTE", "0").lower()
+        if remote_value not in {"0", "1", "false", "true"}:
+            raise ValueError("METIS_USE_REMOTE must be 1, true, 0, or false")
+        use_remote = remote_value in {"1", "true"}
+        database_url = os.getenv("METIS_DATABASE_URL", default.database_url)
+        if use_remote:
+            password = os.getenv("METIS_REMOTE_DB_PASSWORD", "")
+            if not password:
+                raise ValueError("METIS_USE_REMOTE requires METIS_REMOTE_DB_PASSWORD")
+            database_url = URL.create(
+                "postgresql+psycopg",
+                username="metis",
+                password=password,
+                host="dpg-daqcab7f3r2c73arc260-a.frankfurt-postgres.render.com",
+                port=5432,
+                database="metis_29je",
+                query={"sslmode": "require"},
+            ).render_as_string(hide_password=False)
         source_id = os.getenv("METIS_SOURCE_ID", default.source_id)
         if os.getenv("METIS_SOURCE_ID_PER_COMMIT", "0") == "1":
             commit = os.getenv("RENDER_GIT_COMMIT", "")
@@ -61,7 +97,8 @@ class Settings:
                 raise ValueError("METIS_SOURCE_ID_PER_COMMIT requires RENDER_GIT_COMMIT")
             source_id = f"{source_id[:51]}-{commit[:12]}"
         return cls(
-            database_url=os.getenv("METIS_DATABASE_URL", default.database_url),
+            database_url=database_url,
+            use_remote=use_remote,
             source_id=source_id,
             session_secret=os.getenv("METIS_SESSION_SECRET", ""),
             operator_token=os.getenv("METIS_OPERATOR_TOKEN", ""),
