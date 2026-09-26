@@ -16,7 +16,8 @@ No new automated test files were added.
 ## Database and API Evidence
 
 - Applied migrations to a fresh PostgreSQL database and three historical `0003`
-  states: ownership column only, catalog column only, and both columns.
+  states: ownership column only, catalog column only, and both columns; also
+  upgraded the reconciled main-branch `0004` schema.
   All reached `0005`, preserved existing run rows, and retained unknown historical
   operator IDs under explicitly labeled legacy profiles.
 - Inspected all ten application tables: column names/nullability, primary keys,
@@ -57,12 +58,25 @@ flutter test
 flutter build web --release --no-web-resources-cdn
 ```
 
-The full Python run passed **205 checks with one Dart-SDK-related skip** in
-230.85 seconds. Re-running the Dart contract module with Flutter's SDK on `PATH`
-passed all five checks, including the previously skipped check.
+The final full Python run passed **206 checks** in 141.34 seconds with the Dart SDK
+on `PATH` and PostgreSQL gates enabled.
 Ruff, formatting, mypy (55 source files), deterministic contract generation, and
 the strict documentation build passed.
 The two existing JavaScript checks and all 18 Flutter checks passed.
+Flutter analysis and the release web build also passed.
+
+## Browser Verification
+
+The final build was served with a fresh migrated PostgreSQL database on an isolated
+loopback port. Named operator login, simulation start, automatic action logging,
+manual note creation, summary saving, and submission all succeeded.
+A database join confirmed both entries in the submitted shift referenced its
+registered operator. Closing with unsaved text showed **Keep editing** and
+**Discard and close**; explicit logout returned to the login screen.
+
+A separate transaction probe confirmed that a missing author rolls back both the
+run update and idempotency acknowledgement. An automatic lease-cleanup stop changed
+the run state without adding an entry attributed to a human.
 
 ## Boundaries
 

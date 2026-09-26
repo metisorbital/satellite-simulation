@@ -19,7 +19,9 @@ def upgrade() -> None:
     both paths converge without rewriting existing records.
     """
     inspector = sa.inspect(op.get_bind())
-    stream_columns = {column["name"] for column in inspector.get_columns("streams", schema="public")}
+    stream_columns = {
+        column["name"] for column in inspector.get_columns("streams", schema="public")
+    }
     if "catalog_version" not in stream_columns:
         op.add_column(
             "streams",
