@@ -260,10 +260,11 @@ Acceptance fixtures issue this restricted principal through the auth adapter and
 
 ### Mock Operator Sessions
 
-The Flutter demo begins at a login gate. Packaged `data/mock_operators.json` contains
+The Flutter demo opens as `operator1` by default. Packaged `data/mock_operators.json` contains
 fixed `user_id`, `login`, and `display_name` records for three demo operators.
-`POST /v1/viewer/login` accepts a listed login and any nonempty password; it performs
-no password verification and never stores the password. Issuance is restricted to
+The sidebar selects `operator1`, `operator2`, or `operator3`. Internally,
+`POST /v1/viewer/login` accepts a listed login and any nonempty demo placeholder;
+it performs no password verification and never stores the placeholder. Issuance is restricted to
 the existing loopback demo boundary or an explicitly enabled interactive HTTPS demo.
 Each login creates a separate run with a server-selected `private.runs.user_id`.
 Editing or resetting copies this ownership into the replacement run transactionally.
@@ -271,11 +272,12 @@ Existing non-user runs retain a null `user_id`.
 
 `ViewerBootstrap.operator` exposes the current demo profile only in the viewer
 session response. The identity does not enter public telemetry or run-status payloads.
-`GET /v1/viewer/session` restores the signed session's operator and scoped run;
-without a mock operator session it returns `401` and does not issue an anonymous grant.
+`GET /v1/viewer/session` restores a signed operator session and scoped run. It
+returns `401` without one; the Flutter client then selects `operator1` through
+the existing demo issuance route. This does not issue broader operator privileges.
 `POST /v1/viewer/logout` requires the valid session's Origin and CSRF token, stops
 only its active demo run, and deletes the cookie. The Flutter client clears old
-samples and cancels streams before another operator enters.
+samples and cancels streams before selecting another operator.
 The private manifest records the signed session's expiry. A later login stops
 expired operator-owned active runs before allocating a new run, so an abandoned
 paused session cannot occupy the single-writer slot indefinitely.

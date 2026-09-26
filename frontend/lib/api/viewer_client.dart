@@ -15,7 +15,7 @@ class ViewerRequestException implements Exception {
   String toString() => message;
 }
 
-/// Same-origin JSON transport. Demo passwords are sent only in the login body.
+/// Same-origin JSON transport for scoped demo sessions and mission requests.
 class ViewerClient {
   ViewerClient({http.Client? client, Uri? baseUri})
     : _client = client ?? http.Client(),

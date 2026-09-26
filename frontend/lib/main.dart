@@ -51,11 +51,12 @@ class MetisApp extends StatelessWidget {
           ),
         ),
     home: OperatorGate(
-      missionBuilder: (context, bootstrap, logout, expired) => MissionPage(
-        bootstrap: bootstrap,
-        onLogout: logout,
-        onSessionExpired: expired,
-      ),
+      missionBuilder: (context, bootstrap, switchOperator, expired) =>
+          MissionPage(
+            bootstrap: bootstrap,
+            onSwitchOperator: switchOperator,
+            onSessionExpired: expired,
+          ),
     ),
   );
 }
@@ -77,11 +78,11 @@ class MissionPage extends StatefulWidget {
   const MissionPage({
     super.key,
     required this.bootstrap,
-    required this.onLogout,
+    required this.onSwitchOperator,
     required this.onSessionExpired,
   });
   final JsonMap bootstrap;
-  final Future<void> Function(String csrfToken) onLogout;
+  final Future<void> Function(String login, String csrfToken) onSwitchOperator;
   final VoidCallback onSessionExpired;
   @override
   State<MissionPage> createState() => _MissionPageState();
@@ -714,13 +715,13 @@ class _MissionPageState extends State<MissionPage> {
     telemetryFocused = false;
   });
 
-  void logout() {
+  void switchOperator(String login) {
     if (mission.busy) return;
     final token = mission.csrfToken.isNotEmpty
         ? mission.csrfToken
         : widget.bootstrap['csrf_token'] as String;
     mission.suspend();
-    widget.onLogout(token);
+    widget.onSwitchOperator(login, token);
   }
 
   void showShiftLog() {
@@ -954,7 +955,7 @@ class _MissionPageState extends State<MissionPage> {
                     onTelemetry: () => navigate(true),
                     onSettings: showSettings,
                     onInfo: showInfo,
-                    onLogout: logout,
+                    onSwitchOperator: switchOperator,
                     onShiftLog: mission.canUseShiftLog && status != null
                         ? showShiftLog
                         : null,
