@@ -144,6 +144,7 @@ async def control(run_id: str, request: Request) -> dict:
         command.action,
         command.speed,
         mutation_token(request, principal, body),
+        user_id=principal.user_id,
     )
 
 
@@ -407,7 +408,10 @@ async def viewer_logout(request: Request, response: Response) -> dict:
         context.auth.csrf(request, principal)
         if principal.user_id is not None:
             await run_in_threadpool(
-                context.service.stop_viewer_run, principal.run_id, principal.user_id
+                context.service.stop_viewer_run,
+                principal.run_id,
+                principal.user_id,
+                actor_user_id=principal.user_id,
             )
     response.delete_cookie(
         COOKIE,

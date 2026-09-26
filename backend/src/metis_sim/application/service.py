@@ -618,8 +618,10 @@ class SimulationService:
                 viewer_expires_at=viewer_expires_at,
             )
 
-    def stop_viewer_run(self, run_id: str, user_id: str) -> None:
-        """Stop only the logging-out operator's active run at a durable boundary.
+    def stop_viewer_run(
+        self, run_id: str, user_id: str, *, actor_user_id: str | None = None
+    ) -> None:
+        """Stop an owned run for explicit logout or automatic lease expiration.
 
         Parameters
         ----------
@@ -627,6 +629,8 @@ class SimulationService:
             Run scoped by the authenticated viewer session.
         user_id : str
             Mock identity that must match the private run owner.
+        actor_user_id : str or None
+            Verified human initiating logout. Omit for automatic lease expiry.
 
         Notes
         -----
@@ -641,7 +645,7 @@ class SimulationService:
                 if error.code == "run_not_found":
                     return
                 raise
-            if run["user_id"] != user_id:
+            if run["user_id"] != user_id or actor_user_id not in {None, user_id}:
                 raise ServiceError("forbidden", "Viewer session belongs to another operator.", 403)
             if run["status"] not in {"running", "paused"}:
                 return
@@ -650,7 +654,12 @@ class SimulationService:
                     run_id,
                     "stop",
                     None,
-                    ("viewer:logout", run_id, canonical_hash({"action": "stop"})),
+                    (
+                        "viewer:logout" if actor_user_id is not None else "viewer:expire",
+                        run_id,
+                        canonical_hash({"action": "stop"}),
+                    ),
+                    user_id=actor_user_id,
                 )
             except ServiceError as error:
                 if (

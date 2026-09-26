@@ -47,6 +47,8 @@ class PendingCommand:
         Identity of the durable acknowledgement.
     deadline : float
         Expiry in seconds on the owning runner's monotonic clock.
+    user_id : str or None
+        Authenticated actor, absent for anonymous or autonomous commands.
     """
 
     run_id: str
@@ -54,6 +56,7 @@ class PendingCommand:
     speed: int | None
     token: Idempotent
     deadline: float
+    user_id: str | None = None
     lock: threading.Lock = field(default_factory=threading.Lock)
     phase: str = "queued"
     result: Future[dict[str, Any]] = field(default_factory=Future)
@@ -109,7 +112,13 @@ class Runner:
         self.thread.start()
 
     def command(
-        self, run_id: str, action: str, speed: int | None, token: Idempotent
+        self,
+        run_id: str,
+        action: str,
+        speed: int | None,
+        token: Idempotent,
+        *,
+        user_id: str | None = None,
     ) -> dict[str, Any]:
         """Apply a control at a durable boundary or cancel it before application.
 
@@ -123,6 +132,8 @@ class Runner:
             Requested 1, 5, or 20 multiplier for set_speed; otherwise None.
         token : Idempotent
             Scope, key, and request hash used to replay an acknowledgement.
+        user_id : str, optional
+            Authenticated operator responsible for this command.
 
         Returns
         -------
@@ -147,7 +158,7 @@ class Runner:
             raise ServiceError(
                 "control_not_applied", "Persistence is unavailable; command was not applied.", 503
             )
-        command = PendingCommand(run_id, action, speed, token, self._monotonic() + 5)
+        command = PendingCommand(run_id, action, speed, token, self._monotonic() + 5, user_id)
         try:
             self.commands.put_nowait(command)
         except queue.Full as error:
@@ -262,14 +273,14 @@ class Runner:
         elif action == "stop":
             if state not in {"running", "paused"}:
                 raise ServiceError("invalid_transition", "Stop requires a running or paused run.")
-            return self._terminal(status, "stopped", command.token)
+            return self._terminal(status, "stopped", command.token, command=command)
         elif action == "set_speed":
             if command.speed not in {1, 5, 20}:
                 raise ServiceError("invalid_speed", "Speed must be 1, 5, or 20.", 422)
             status["requested_speed"] = command.speed
         else:
             raise ServiceError("invalid_action", "Unsupported control action.", 422)
-        result = self._commit(status, [], [], [], command.token)
+        result = self._commit(status, [], [], [], command.token, command=command)
         if status["status"] in {"running", "paused"}:
             self.active_id = command.run_id
         if status["status"] == "running" and (
@@ -336,10 +347,15 @@ class Runner:
         truth: list,
         token: Idempotent | None = None,
         processing_ms: float | None = None,
+        *,
+        command: PendingCommand | None = None,
     ) -> dict[str, Any]:
         started = self._monotonic()
+        attribution: dict[str, Any] = {}
+        if command is not None and command.user_id is not None:
+            attribution = dict(user_id=command.user_id, action=command.action, speed=command.speed)
         result = self._retry_persistence(
-            lambda: self.repository.commit(status, frames, events, truth, token),
+            lambda: self.repository.commit(status, frames, events, truth, token, **attribution),
             status["run_id"],
             len(frames),
         )
@@ -404,14 +420,19 @@ class Runner:
         )
 
     def _terminal(
-        self, status: dict[str, Any], state: str, token: Idempotent | None = None
+        self,
+        status: dict[str, Any],
+        state: str,
+        token: Idempotent | None = None,
+        *,
+        command: PendingCommand | None = None,
     ) -> dict[str, Any]:
         reason = "duration_reached" if state == "completed" else state
         records = self._retry_persistence(
             lambda: self.repository.final_truth(status["run_id"], reason), status["run_id"]
         )
         status.update(status=state, effective_speed=0)
-        result = self._commit(status, [], [], records, token)
+        result = self._commit(status, [], [], records, token, command=command)
         self.active_id = None
         return result
 

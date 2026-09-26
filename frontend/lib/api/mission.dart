@@ -1,10 +1,13 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
+
 import 'package:flutter/foundation.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
+
 import '../scene/playback.dart';
 import 'generated.dart';
+import 'shift_log_generated.dart';
 import 'viewer_client.dart';
 
 /// Owns session, committed snapshots, reconnects, and guarded run controls.
@@ -18,6 +21,10 @@ class Mission extends ChangeNotifier {
   String _lastToken = '';
   String? _operatorUserId;
   String get csrfToken => _lastToken;
+  String? get operatorUserId => _operatorUserId;
+  bool get canUseShiftLog =>
+      !_closed && _operatorUserId != null && _token.isNotEmpty;
+  final Map<String, String> _shiftRetryKeys = {};
   final CommittedPlayback playback = CommittedPlayback();
   final Stopwatch clock = Stopwatch()..start();
   JsonMap? trajectory;
@@ -85,10 +92,19 @@ class Mission extends ChangeNotifier {
     });
   }
 
-  Future<JsonMap> _request(String path, {JsonMap? body}) async {
+  Future<JsonMap> _request(
+    String path, {
+    JsonMap? body,
+    String? idempotencyKey,
+  }) async {
     final generation = _generation;
     try {
-      return await _client.request(path, body: body, csrfToken: _token);
+      return await _client.request(
+        path,
+        body: body,
+        csrfToken: _token,
+        idempotencyKey: idempotencyKey,
+      );
     } on ViewerRequestException catch (exception) {
       if (exception.statusCode == 401 &&
           !_closed &&
@@ -364,6 +380,38 @@ class Mission extends ChangeNotifier {
     }
   }
 
+  /// Read only the authenticated operator's persisted shift records.
+  Future<List<ShiftLog>> shiftLogs(String runId) async {
+    if (!canUseShiftLog) throw StateError('Sign in to read your shift log.');
+    final generation = _generation;
+    final userId = _operatorUserId;
+    final response = await _request('/v1/runs/$runId/shift-logs');
+    if (!_current(generation, runId) || _operatorUserId != userId) {
+      throw StateError('The session or run changed while loading shift logs.');
+    }
+    return ShiftLogList.fromJson(response).items;
+  }
+
+  /// Preserve the identity of an unchanged write when its outcome is uncertain.
+  Future<void> writeShiftLog(
+    String runId,
+    String resource,
+    JsonMap body,
+  ) async {
+    if (!canUseShiftLog || status?['run_id'] != runId) {
+      throw StateError('This run is no longer active in your session.');
+    }
+    final path = '/v1/runs/$runId/shift-logs/$resource';
+    final intent = '$path:${jsonEncode(body)}';
+    final key = _shiftRetryKeys.putIfAbsent(
+      intent,
+      () =>
+          '${DateTime.now().microsecondsSinceEpoch}-${Random.secure().nextInt(0x7fffffff)}',
+    );
+    await _request(path, body: body, idempotencyKey: key);
+    _shiftRetryKeys.remove(intent);
+  }
+
   Future<void> replaceSatellites(List<JsonMap> satellites) async {
     if (_closed || busy || !canEdit || !canReplaceRun) return;
     final generation = _generation;
@@ -425,6 +473,7 @@ class Mission extends ChangeNotifier {
     catalogs.clear();
     _pendingCatalogs.clear();
     _catalogErrors.clear();
+    notifyListeners();
   }
 
   @override

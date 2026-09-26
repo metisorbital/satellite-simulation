@@ -1,0 +1,308 @@
+{
+  "$defs": {
+    "AddShiftLogEntryRequest": {
+      "additionalProperties": false,
+      "description": "Accept a bounded narrative without client-controlled attribution.\n\nAttributes\n----------\nkind : str\n    Record category selected by the operator.\ntext : str\n    Nonblank narrative of at most 4,000 characters.",
+      "properties": {
+        "kind": {
+          "enum": [
+            "note",
+            "decision",
+            "action",
+            "unresolved_issue",
+            "event"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "text": {
+          "maxLength": 4000,
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "text"
+      ],
+      "title": "AddShiftLogEntryRequest",
+      "type": "object"
+    },
+    "ShiftLog": {
+      "additionalProperties": false,
+      "description": "An operator's editable draft or frozen submitted shift record.\n\nAttributes\n----------\nshift_id, run_id, user_id : UUID\n    Shift, simulation run, and owning operator identities.\nstatus : {\"draft\", \"submitted\"}\n    Whether entries and summary may still be changed.\nsummary : str\n    Operator-edited handover narrative.\ncreated_at, updated_at, submitted_at : datetime or None\n    Server-recorded UTC lifecycle times; submission is initially absent.\nentries : list of ShiftLogEntry\n    Chronologically ordered records attributed to their authors.",
+      "properties": {
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "entries": {
+          "items": {
+            "$ref": "#/$defs/ShiftLogEntry"
+          },
+          "title": "Entries",
+          "type": "array"
+        },
+        "run_id": {
+          "format": "uuid",
+          "title": "Run Id",
+          "type": "string"
+        },
+        "shift_id": {
+          "format": "uuid",
+          "title": "Shift Id",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "draft",
+            "submitted"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "submitted_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Submitted At"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        },
+        "updated_at": {
+          "format": "date-time",
+          "title": "Updated At",
+          "type": "string"
+        },
+        "user_id": {
+          "format": "uuid",
+          "title": "User Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "shift_id",
+        "run_id",
+        "user_id",
+        "status",
+        "summary",
+        "created_at",
+        "updated_at",
+        "submitted_at",
+        "entries"
+      ],
+      "title": "ShiftLog",
+      "type": "object"
+    },
+    "ShiftLogEntry": {
+      "additionalProperties": false,
+      "description": "An immutable entry attributed to exactly one registered operator.\n\nAttributes\n----------\nentry_id, shift_id, user_id : UUID\n    Entry identity, containing shift, and authenticated author.\nkind : str\n    Note, decision, action, unresolved issue, or observed event.\ntext : str\n    Operator narrative or server-authored control description.\ndetails : ShiftLogEntryDetails\n    Allowlisted command context; empty for manual entries.\ncreated_at : datetime\n    Server-recorded UTC entry time.",
+      "properties": {
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "details": {
+          "$ref": "#/$defs/ShiftLogEntryDetails"
+        },
+        "entry_id": {
+          "format": "uuid",
+          "title": "Entry Id",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "note",
+            "decision",
+            "action",
+            "unresolved_issue",
+            "event"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "shift_id": {
+          "format": "uuid",
+          "title": "Shift Id",
+          "type": "string"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "user_id": {
+          "format": "uuid",
+          "title": "User Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "entry_id",
+        "shift_id",
+        "user_id",
+        "kind",
+        "text",
+        "details",
+        "created_at"
+      ],
+      "title": "ShiftLogEntry",
+      "type": "object"
+    },
+    "ShiftLogEntryDetails": {
+      "additionalProperties": false,
+      "description": "Describe an automatically recorded successful simulator control.\n\nAttributes\n----------\naction : str or None\n    Authenticated simulator command; absent for manually entered records.\nspeed : int or None\n    Requested simulation speed for a speed change.\ncommitted_tick : int or None\n    Durable simulation boundary at command acknowledgement.\nstatus : str or None\n    Resulting run state at that boundary.",
+      "properties": {
+        "action": {
+          "anyOf": [
+            {
+              "enum": [
+                "start",
+                "pause",
+                "resume",
+                "stop",
+                "set_speed"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Action"
+        },
+        "committed_tick": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Committed Tick"
+        },
+        "speed": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Speed"
+        },
+        "status": {
+          "anyOf": [
+            {
+              "enum": [
+                "created",
+                "running",
+                "paused",
+                "completed",
+                "stopped",
+                "failed",
+                "aborted"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Status"
+        }
+      },
+      "required": [
+        "action",
+        "speed",
+        "committed_tick",
+        "status"
+      ],
+      "title": "ShiftLogEntryDetails",
+      "type": "object"
+    },
+    "ShiftLogList": {
+      "additionalProperties": false,
+      "description": "Return retained shifts belonging to the current run and operator.\n\nAttributes\n----------\nitems : list of ShiftLog\n    Authorized shift records with their entries.",
+      "properties": {
+        "items": {
+          "items": {
+            "$ref": "#/$defs/ShiftLog"
+          },
+          "title": "Items",
+          "type": "array"
+        }
+      },
+      "required": [
+        "items"
+      ],
+      "title": "ShiftLogList",
+      "type": "object"
+    },
+    "SubmitShiftLogRequest": {
+      "additionalProperties": false,
+      "description": "Accept an empty submission command without identity or state claims.\n\nNotes\n-----\nThe server freezes the draft identified by the authorized route.",
+      "properties": {},
+      "title": "SubmitShiftLogRequest",
+      "type": "object"
+    },
+    "UpdateShiftLogSummaryRequest": {
+      "additionalProperties": false,
+      "description": "Replace a draft's handover summary.\n\nAttributes\n----------\nsummary : str\n    Narrative of at most 12,000 characters; may be cleared.",
+      "properties": {
+        "summary": {
+          "maxLength": 12000,
+          "title": "Summary",
+          "type": "string"
+        }
+      },
+      "required": [
+        "summary"
+      ],
+      "title": "UpdateShiftLogSummaryRequest",
+      "type": "object"
+    }
+  },
+  "$id": "https://metisorbital.local/schemas/private-shift-log.v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/ShiftLogEntryDetails"
+    },
+    {
+      "$ref": "#/$defs/ShiftLogEntry"
+    },
+    {
+      "$ref": "#/$defs/ShiftLog"
+    },
+    {
+      "$ref": "#/$defs/ShiftLogList"
+    },
+    {
+      "$ref": "#/$defs/AddShiftLogEntryRequest"
+    },
+    {
+      "$ref": "#/$defs/UpdateShiftLogSummaryRequest"
+    },
+    {
+      "$ref": "#/$defs/SubmitShiftLogRequest"
+    }
+  ],
+  "title": "MetisPrivateShiftLogContracts"
+}

@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:math';
+
 import 'package:http/http.dart' as http;
+
 import '../scene/playback.dart';
 
 /// A failed viewer request with its HTTP status preserved for session expiry.
@@ -25,6 +27,7 @@ class ViewerClient {
     String path, {
     JsonMap? body,
     String? csrfToken,
+    String? idempotencyKey,
   }) async {
     final uri = _baseUri.resolve(path);
     final response =
@@ -36,6 +39,7 @@ class ViewerClient {
                       'Content-Type': 'application/json',
                       'X-CSRF-Token': ?csrfToken,
                       'Idempotency-Key':
+                          idempotencyKey ??
                           '${DateTime.now().microsecondsSinceEpoch}-${Random.secure().nextInt(0x7fffffff)}',
                     },
                     body: jsonEncode(body),

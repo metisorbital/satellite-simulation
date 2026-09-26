@@ -7,6 +7,11 @@ from pydantic import BaseModel
 from metis_sim.api.requests import CreateRunRequest, ViewerLoginRequest
 from metis_sim.domain.config import SimulationConfig
 from metis_sim.domain.public import ControlRequest
+from metis_sim.domain.shift_log import (
+    AddShiftLogEntryRequest,
+    SubmitShiftLogRequest,
+    UpdateShiftLogSummaryRequest,
+)
 
 
 def install_openapi(app: FastAPI) -> None:
@@ -26,6 +31,9 @@ def install_openapi(app: FastAPI) -> None:
             ("/v1/runs", CreateRunRequest),
             ("/v1/viewer/login", ViewerLoginRequest),
             ("/v1/runs/{run_id}/control", ControlRequest),
+            ("/v1/runs/{run_id}/shift-logs/entries", AddShiftLogEntryRequest),
+            ("/v1/runs/{run_id}/shift-logs/{shift_id}/summary", UpdateShiftLogSummaryRequest),
+            ("/v1/runs/{run_id}/shift-logs/{shift_id}/submit", SubmitShiftLogRequest),
         ]
         for path, model in bodies:
             schema = model.model_json_schema(ref_template="#/components/schemas/{model}")
@@ -56,8 +64,43 @@ def install_openapi(app: FastAPI) -> None:
             if path.startswith("/v1/") and path not in {"/v1/viewer/bootstrap", "/v1/viewer/login"}:
                 for operation in methods.values():
                     if isinstance(operation, dict):
-                        if path in {"/v1/viewer/session", "/v1/viewer/logout"}:
+                        if (
+                            path in {"/v1/viewer/session", "/v1/viewer/logout"}
+                            or "/shift-logs" in path
+                        ):
                             operation["security"] = [{"viewerSession": []}]
+                            if "/shift-logs" in path:
+                                operation["description"] += (
+                                    "\nRequires a named operator session owning this run; "
+                                    "shared bearer tokens and anonymous sessions are not accepted."
+                                )
+                                if operation.get("requestBody"):
+                                    operation.setdefault("parameters", []).extend(
+                                        [
+                                            {
+                                                "name": "Idempotency-Key",
+                                                "in": "header",
+                                                "required": True,
+                                                "schema": {
+                                                    "type": "string",
+                                                    "minLength": 1,
+                                                    "maxLength": 128,
+                                                },
+                                            },
+                                            {
+                                                "name": "X-CSRF-Token",
+                                                "in": "header",
+                                                "required": True,
+                                                "schema": {"type": "string"},
+                                            },
+                                            {
+                                                "name": "Origin",
+                                                "in": "header",
+                                                "required": True,
+                                                "schema": {"type": "string"},
+                                            },
+                                        ]
+                                    )
                             continue
                         operation["security"] = [{"bearer": []}]
                         if (

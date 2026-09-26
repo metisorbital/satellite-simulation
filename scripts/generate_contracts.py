@@ -26,6 +26,15 @@ from metis_sim.domain.public import (
     VisualMessage,
 )
 from metis_sim.domain.reports import TelemetryReport
+from metis_sim.domain.shift_log import (
+    AddShiftLogEntryRequest,
+    ShiftLog,
+    ShiftLogEntry,
+    ShiftLogEntryDetails,
+    ShiftLogList,
+    SubmitShiftLogRequest,
+    UpdateShiftLogSummaryRequest,
+)
 from metis_sim.domain.telemetry import ChannelReading, MeasurementFrame, OperationalEvent
 from pydantic import BaseModel
 from pydantic.json_schema import JsonSchemaMode
@@ -33,6 +42,16 @@ from pydantic.json_schema import JsonSchemaMode
 ROOT = Path(__file__).resolve().parents[1]
 SCHEMA_DIR = ROOT / "schemas"
 DART_OUTPUT = ROOT / "frontend/lib/api/generated.dart"
+SHIFT_LOG_DART_OUTPUT = ROOT / "frontend/lib/api/shift_log_generated.dart"
+SHIFT_LOG_MODELS: dict[str, tuple[type[BaseModel], JsonSchemaMode]] = {
+    "ShiftLogEntryDetails": (ShiftLogEntryDetails, "serialization"),
+    "ShiftLogEntry": (ShiftLogEntry, "serialization"),
+    "ShiftLog": (ShiftLog, "serialization"),
+    "ShiftLogList": (ShiftLogList, "serialization"),
+    "AddShiftLogEntryRequest": (AddShiftLogEntryRequest, "validation"),
+    "UpdateShiftLogSummaryRequest": (UpdateShiftLogSummaryRequest, "validation"),
+    "SubmitShiftLogRequest": (SubmitShiftLogRequest, "validation"),
+}
 MODELS: dict[str, tuple[type[BaseModel], JsonSchemaMode]] = {
     "SimulationConfig": (SimulationConfig, "validation"),
     "MeasurementFrame": (MeasurementFrame, "serialization"),
@@ -196,11 +215,13 @@ def render_dart(definitions: dict[str, Any]) -> str:
             raise ValueError(f"Expected named object schema for {name}")
         required = schema.get("required", [])
         summary = schema.get("description", name).split("\n", 1)[0]
-        lines.extend([f"/// {summary}", f"class {name} {{", f"  const {name}({{"])
+        lines.extend([f"/// {summary}", f"class {name} {{"])
+        lines.append(f"  const {name}({{" if properties else f"  const {name}();")
         for field in properties:
             prefix = "required " if field in required else ""
             lines.append(f"    {prefix}this.{field},")
-        lines.append("  });")
+        if properties:
+            lines.append("  });")
         lines.append("")
         for field, spec in properties.items():
             dart_type = _dart_type(spec)
@@ -263,6 +284,27 @@ def main() -> None:
 
     DART_OUTPUT.parent.mkdir(parents=True, exist_ok=True)
     DART_OUTPUT.write_text(render_dart(public_definitions()))
+
+    # Named-session records remain separate from consumer/viewer telemetry.
+    private_definitions: dict[str, Any] = {}
+    for name, (model, mode) in SHIFT_LOG_MODELS.items():
+        definition = model.model_json_schema(mode=mode, ref_template="#/$defs/{model}")
+        private_definitions.update(definition.pop("$defs", {}))
+        private_definitions[name] = definition
+    for name, (model, mode) in SHIFT_LOG_MODELS.items():
+        if mode == "serialization":
+            private_definitions[name]["required"] = list(model.model_fields)
+    _write_json(
+        SCHEMA_DIR / "private-shift-log.v1.schema.json",
+        {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "$id": "https://metisorbital.local/schemas/private-shift-log.v1.json",
+            "title": "MetisPrivateShiftLogContracts",
+            "$defs": private_definitions,
+            "oneOf": [{"$ref": f"#/$defs/{name}"} for name in SHIFT_LOG_MODELS],
+        },
+    )
+    SHIFT_LOG_DART_OUTPUT.write_text(render_dart(private_definitions))
 
 
 if __name__ == "__main__":
