@@ -10,6 +10,7 @@ Deterministic synthetic orbit-to-power telemetry for a prepared run, with an Ear
 
 - [Getting started](getting-started.md) — prerequisites, local demo setup, and the authentication boundary.
 - [Physics-backed spacecraft telemetry](reference/spacecraft-telemetry.md) — one-second electrical, thermal, attitude and payload measurements, reports, and ML exports.
+- [Sample telemetry field reference](reference/sample-telemetry.md) — the supplied satellite data inventory and its relationship to simulated measurements.
 - [API consumer guide](api.md) — authenticate, discover a stream, and resume durable telemetry reads.
 - [Python class reference](python-api.md) — understand the main objects and how their methods fit together.
 - [First-change guide](contributing.md) — find a module and run its focused checks.
@@ -27,6 +28,7 @@ The specification and its appendices are the source of truth. Research and revie
 ## Validation evidence
 
 - [Validation and review index](validation/README.md) — executed checks and module reviews.
+- [Spacecraft telemetry validation](validation/spacecraft-telemetry.md) — physical-model checks, database/export verification, and remaining gates.
 - [Numerical validation](validation/physics.md) — physics implementation results and limits.
 - [Browser validation](validation/browser.md) — viewer checks and measured browser performance.
 - [Capacity report](validation/throughput.md) — throughput results, timing limits, hardware, and measurement method.
