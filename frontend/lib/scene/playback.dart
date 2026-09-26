@@ -115,7 +115,7 @@ class CommittedPlayback {
       0,
       effective > 0
           ? effective
-          : (status?['requested_speed'] as num? ?? 1).toDouble(),
+          : (status?['requested_speed'] as num? ?? 90).toDouble(),
     );
   }
 
