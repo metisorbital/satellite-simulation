@@ -15,7 +15,8 @@ defines the delivered behavior and limits.
 
 Implementation and verification used a separate `codex/mission-workflows`
 worktree based on main `9ea14f9`, with the concurrent operator-switch update
-`2e9bb90` integrated before the final PR update. The original checkout and its
+`2e9bb90` and terminal-cleanup update `56b6933` integrated before the final PR
+update. The original checkout and its
 concurrent edits were preserved. No source files were removed, and no tests were
 written or changed.
 
@@ -66,6 +67,14 @@ checks also still target the removed login form. These are inherited from main;
 fails at analysis for this update. The tests are preserved under the instruction
 not to write tests. Full CI cannot be claimed green until these existing checks
 are adapted to main's operator-switch behavior.
+
+Main's subsequent bounded terminal-cleanup update was independently reviewed
+against case retention. It expires source telemetry without deleting cases,
+activities, copied evidence, or their run provenance. The abandoned-run cleanup
+continues to exclude runs with private cases.
+After integration, the existing acceptance-edge and viewer-editing suites passed
+all 9 checks against PostgreSQL in 21.96 seconds; Ruff, formatting, and mypy
+also passed for the affected repository module.
 
 ## Live PostgreSQL and HTTP Verification
 

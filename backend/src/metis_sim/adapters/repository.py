@@ -348,7 +348,18 @@ class Repository:
         return result
 
     def expire_terminal(self, days: int = 7) -> int:
-        """Expire only unretained terminal history by wall termination time."""
+        """Expire unretained terminal history in bounded write transactions.
+
+        Parameters
+        ----------
+        days : int, default 7
+            Minimum age since termination.
+
+        Returns
+        -------
+        int
+            Number of eligible runs whose streams were expired.
+        """
         with self.database.writer_transaction() as connection:
             ids = list(
                 connection.execute(
@@ -356,17 +367,59 @@ class Repository:
                         tables.runs.c.status.in_(TERMINAL),
                         tables.runs.c.retain.is_(False),
                         tables.runs.c.ended_at < utc_now() - timedelta(days=days),
+                        select(tables.streams.c.stream_id)
+                        .where(
+                            tables.streams.c.run_id == tables.runs.c.run_id,
+                            tables.streams.c.expired.is_(False),
+                        )
+                        .exists(),
                     )
                 ).scalars()
             )
-            if not ids:
-                return 0
-            for table in [tables.frames, tables.events, tables.truth]:
-                connection.execute(delete(table).where(table.c.run_id.in_(ids)))
-            connection.execute(
-                update(tables.streams).where(tables.streams.c.run_id.in_(ids)).values(expired=True)
-            )
-            return len(ids)
+        for run_id in ids:
+            with self.database.writer_transaction() as connection:
+                stream_keys = list(
+                    connection.execute(
+                        select(tables.streams.c.source_id, tables.streams.c.stream_id).where(
+                            tables.streams.c.run_id == run_id
+                        )
+                    )
+                )
+            for table, sequence in (
+                (tables.frames, tables.frames.c.sequence),
+                (tables.events, tables.events.c.event_sequence),
+            ):
+                for source_id, stream_id in stream_keys:
+                    while True:
+                        with self.database.writer_transaction() as connection:
+                            sequences = list(
+                                connection.execute(
+                                    select(sequence)
+                                    .where(
+                                        table.c.source_id == source_id,
+                                        table.c.stream_id == stream_id,
+                                    )
+                                    .limit(500)
+                                ).scalars()
+                            )
+                            if sequences:
+                                connection.execute(
+                                    delete(table).where(
+                                        table.c.source_id == source_id,
+                                        table.c.stream_id == stream_id,
+                                        sequence.in_(sequences),
+                                    )
+                                )
+                        if not sequences:
+                            break
+            with self.database.writer_transaction() as connection:
+                connection.execute(delete(tables.truth).where(tables.truth.c.run_id == run_id))
+                connection.execute(
+                    update(tables.streams)
+                    .where(tables.streams.c.run_id == run_id)
+                    .values(expired=True)
+                )
+        return len(ids)
 
     def prune_abandoned_viewer_runs(self, max_age_s: int) -> list[str]:
         """Delete expired never-started browser runs and their private revisions.
