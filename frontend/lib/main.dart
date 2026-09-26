@@ -10,6 +10,7 @@ import 'api/mission.dart';
 import 'auth/operator_gate.dart';
 import 'data_source_selector.dart';
 import 'mission_shell.dart';
+import 'mission_planning.dart';
 import 'observed_timeline.dart';
 import 'overview_inspector.dart';
 import 'payload_schedule.dart';
@@ -17,6 +18,7 @@ import 'scene/globe.dart';
 import 'scene/playback.dart';
 import 'telemetry/dashboard.dart';
 import 'shift_log/shift_log_dialog.dart';
+import 'workflows/case_workspace.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -94,7 +96,12 @@ class _MissionPageState extends State<MissionPage> {
   final historyFocus = FocusNode(debugLabel: "Measurement history");
   final overviewScroll = ScrollController();
   String selected = '', chart = 'eps.battery_soc';
-  bool telemetryVisible = false;
+  MissionView view = MissionView.overview;
+  bool get telemetryVisible => view == MissionView.telemetry;
+  bool get overviewVisible => view == MissionView.overview;
+  final _caseWorkspaceKey = GlobalKey<CaseWorkspaceState>();
+  final _shiftPageKey = GlobalKey<ShiftLogPageState>();
+  bool _navigating = false;
   bool telemetryFocused = false;
   final Set<String> hiddenSatellites = {};
   int lastDashboardSecond = -1;
@@ -107,7 +114,7 @@ class _MissionPageState extends State<MissionPage> {
     mission.connect(initial: widget.bootstrap);
     ticker = Ticker((_) {
       final second = mission.clock.elapsed.inSeconds;
-      if (!telemetryVisible || second != lastDashboardSecond) {
+      if (overviewVisible || second != lastDashboardSecond) {
         lastDashboardSecond = second;
         refresh();
       }
@@ -197,6 +204,7 @@ class _MissionPageState extends State<MissionPage> {
   );
 
   Future<void> showConstellationEditor() async {
+    if (!await _canLeave() || !mounted) return;
     final source = mission.editableSatellites;
     if (source == null) return;
     final draft = (jsonDecode(jsonEncode(source)) as List)
@@ -709,13 +717,45 @@ class _MissionPageState extends State<MissionPage> {
         Map<String, dynamic>.from(raw as Map),
   ];
 
-  void navigate(bool telemetry) => setState(() {
-    telemetryVisible = telemetry;
-    telemetryFocused = false;
-  });
+  void navigate(bool telemetry) =>
+      navigateTo(telemetry ? MissionView.telemetry : MissionView.overview);
 
-  void logout() {
+  Future<bool> _canLeave() async {
+    if (view.isCase &&
+        !await (_caseWorkspaceKey.currentState?.canLeave() ??
+            Future.value(true))) {
+      return false;
+    }
+    return await (_shiftPageKey.currentState?.canLeave() ?? Future.value(true));
+  }
+
+  Future<void> navigateTo(
+    MissionView destination, {
+    String? satelliteId,
+  }) async {
+    if (_navigating || (view == destination && satelliteId == null)) return;
+    _navigating = true;
+    try {
+      if (!await _canLeave() || !mounted) return;
+      setState(() {
+        if (satelliteId != null &&
+            (mission.status?['satellites'] as List? ?? []).any(
+              (satellite) => satellite['satellite_id'] == satelliteId,
+            )) {
+          hiddenSatellites.remove(satelliteId);
+          selected = satelliteId;
+        }
+        view = destination;
+        telemetryFocused = false;
+      });
+    } finally {
+      _navigating = false;
+    }
+  }
+
+  Future<void> logout() async {
     if (mission.busy) return;
+    if (!await _canLeave() || !mounted) return;
     final token = mission.csrfToken.isNotEmpty
         ? mission.csrfToken
         : widget.bootstrap['csrf_token'] as String;
@@ -723,20 +763,7 @@ class _MissionPageState extends State<MissionPage> {
     widget.onLogout(token);
   }
 
-  void showShiftLog() {
-    final runId = mission.status?['run_id'] as String?;
-    if (!mission.canUseShiftLog || runId == null) return;
-    showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => ShiftLogDialog(
-        mission: mission,
-        runId: runId,
-        operatorName:
-            (widget.bootstrap['operator'] as Map)['display_name'] as String,
-      ),
-    );
-  }
+  void showShiftLog() => navigateTo(MissionView.shiftLog);
 
   Future<void> showCustomSpeed() async {
     final form = GlobalKey<FormState>();
@@ -940,8 +967,7 @@ class _MissionPageState extends State<MissionPage> {
         builder: (context, constraints) {
           final desktop = constraints.maxWidth >= 1150;
           final compact = constraints.maxWidth < 900;
-          final shortOverview =
-              !telemetryVisible && constraints.maxHeight < 600;
+          final shortOverview = overviewVisible && constraints.maxHeight < 600;
           final body = Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -949,15 +975,13 @@ class _MissionPageState extends State<MissionPage> {
                 SizedBox(
                   width: compact ? 64 : 220,
                   child: MissionSidebar(
-                    telemetrySelected: telemetryVisible,
-                    onOverview: () => navigate(false),
-                    onTelemetry: () => navigate(true),
+                    view: view,
+                    onNavigate: navigateTo,
                     onSettings: showSettings,
                     onInfo: showInfo,
                     onLogout: logout,
-                    onShiftLog: mission.canUseShiftLog && status != null
-                        ? showShiftLog
-                        : null,
+                    operatorRecordsEnabled:
+                        mission.canUseShiftLog && status != null,
                     operatorName: operator['display_name'] as String,
                     operatorLogin: operator['login'] as String,
                     busy: mission.busy,
@@ -971,7 +995,7 @@ class _MissionPageState extends State<MissionPage> {
                   children: [
                     if (!focused)
                       MissionHeader(
-                        telemetrySelected: telemetryVisible,
+                        viewTitle: view.title,
                         runState: status?['status'] as String? ?? 'Connecting',
                         connectionLabel: !mission.playback.connected
                             ? 'Disconnected'
@@ -985,12 +1009,39 @@ class _MissionPageState extends State<MissionPage> {
                         observed: mission.isObserved,
                         compact: compact,
                       ),
-                    if (!telemetryVisible && !shortOverview)
+                    if (overviewVisible && !shortOverview)
                       toolbar(status, compact: constraints.maxHeight < 820),
                     if (mission.error != null && !shortOverview)
                       connectionIssue(),
                     Expanded(
-                      child: telemetryVisible
+                      child: view.isCase
+                          ? CaseWorkspace(
+                              key: _caseWorkspaceKey,
+                              mission: mission,
+                              section: view.name,
+                              selectedSatellite: selected,
+                              onSelected: (id) => setState(() => selected = id),
+                              onTelemetry: (satelliteId) => navigateTo(
+                                MissionView.telemetry,
+                                satelliteId: satelliteId,
+                              ),
+                              onShiftLog: showShiftLog,
+                            )
+                          : view == MissionView.planning
+                          ? MissionPlanningPage(
+                              mission: mission,
+                              onEdit: showConstellationEditor,
+                              onOverview: () => navigate(false),
+                            )
+                          : view == MissionView.shiftLog && status != null
+                          ? ShiftLogPage(
+                              key: _shiftPageKey,
+                              mission: mission,
+                              runId: status['run_id'] as String,
+                              operatorName: operator['display_name'] as String,
+                              onClose: () => navigate(false),
+                            )
+                          : telemetryVisible
                           ? TelemetryDashboard(
                               mission: mission,
                               selected: selected,
@@ -1025,7 +1076,7 @@ class _MissionPageState extends State<MissionPage> {
                               ],
                             ),
                     ),
-                    if (!telemetryVisible && !shortOverview)
+                    if (overviewVisible && !shortOverview)
                       footer(status, desktop),
                   ],
                 ),

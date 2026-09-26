@@ -18,6 +18,7 @@ nav = [
   { "Replay Recorded Data" = "recorded-data.md" },
   { "Database Tables" = "reference/database.md" },
   { "Shift Log" = "reference/shift-log.md" },
+  { "Operator Cases" = "reference/operator-cases.md" },
   { "Consume the API" = "api.md" },
   { "Satellite Telemetry" = [
     { "Models and ML Export" = "reference/spacecraft-telemetry.md" },

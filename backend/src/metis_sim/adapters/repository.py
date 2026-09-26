@@ -406,6 +406,9 @@ class Repository:
                         ~select(tables.shift_logs.c.shift_id)
                         .where(tables.shift_logs.c.run_id == tables.runs.c.run_id)
                         .exists(),
+                        ~select(tables.operator_cases.c.case_id)
+                        .where(tables.operator_cases.c.run_id == tables.runs.c.run_id)
+                        .exists(),
                     )
                     .limit(100)
                 ).mappings()

@@ -7,6 +7,7 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 
 import '../scene/playback.dart';
 import 'generated.dart';
+import 'cases_generated.dart' as cases_api;
 import 'shift_log_generated.dart';
 import 'viewer_client.dart';
 
@@ -25,6 +26,7 @@ class Mission extends ChangeNotifier {
   bool get canUseShiftLog =>
       !_closed && _operatorUserId != null && _token.isNotEmpty;
   final Map<String, String> _shiftRetryKeys = {};
+  final Map<String, String> _caseRetryKeys = {};
   final CommittedPlayback playback = CommittedPlayback();
   final Stopwatch clock = Stopwatch()..start();
   JsonMap? trajectory;
@@ -611,6 +613,73 @@ class Mission extends ChangeNotifier {
         notifyListeners();
       }
     }
+  }
+
+  /// Read bounded retained case summaries for this named operator.
+  Future<cases_api.CaseList> cases() async {
+    final response = await _caseRequest('/v1/viewer/cases');
+    return cases_api.CaseList.fromJson(response);
+  }
+
+  /// Read the full immutable evidence and activity record for one listed case.
+  Future<cases_api.CaseRecord> readCase(String caseId) async {
+    final response = await _caseRequest(
+      '/v1/viewer/cases/${Uri.encodeComponent(caseId)}',
+    );
+    return cases_api.CaseRecord.fromJson(response);
+  }
+
+  /// Open an operator concern with evidence captured by the mission service.
+  Future<cases_api.CaseRecord> createCase(JsonMap body) async {
+    final runId = status?['run_id'] as String?;
+    if (runId == null) throw StateError('Wait for the mission to connect.');
+    final response = await _caseRequest('/v1/runs/$runId/cases', body: body);
+    return cases_api.CaseRecord.fromJson(response);
+  }
+
+  /// Save an attributed workflow action without sending a spacecraft command.
+  Future<cases_api.CaseRecord> updateCase(
+    String caseId,
+    String action,
+    JsonMap body,
+  ) async {
+    if (!const {
+      'assessment',
+      'recommendation',
+      'decision',
+      'outcome',
+      'evidence',
+    }.contains(action)) {
+      throw ArgumentError.value(action, 'action');
+    }
+    final response = await _caseRequest(
+      '/v1/viewer/cases/${Uri.encodeComponent(caseId)}/$action',
+      body: body,
+    );
+    return cases_api.CaseRecord.fromJson(response);
+  }
+
+  Future<JsonMap> _caseRequest(String path, {JsonMap? body}) async {
+    final runId = status?['run_id'] as String?;
+    if (!canUseShiftLog || runId == null) {
+      throw StateError('Sign in to open operator workflows.');
+    }
+    final generation = _generation;
+    final userId = _operatorUserId;
+    final intent = '$userId:$path:${jsonEncode(body)}';
+    final key = body == null
+        ? null
+        : _caseRetryKeys.putIfAbsent(
+            intent,
+            () =>
+                '${DateTime.now().microsecondsSinceEpoch}-${Random.secure().nextInt(0x7fffffff)}',
+          );
+    final response = await _request(path, body: body, idempotencyKey: key);
+    if (!_current(generation, runId) || _operatorUserId != userId) {
+      throw StateError('The session changed while loading operator records.');
+    }
+    if (body != null) _caseRetryKeys.remove(intent);
+    return response;
   }
 
   /// Read only the authenticated operator's persisted shift records.

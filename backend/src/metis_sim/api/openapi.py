@@ -11,6 +11,14 @@ from metis_sim.api.requests import (
     ViewerSeekRequest,
     ViewerSourceRequest,
 )
+from metis_sim.domain.cases import (
+    AssessmentCaseRequest,
+    CaptureCaseEvidenceRequest,
+    CreateCaseRequest,
+    DecisionCaseRequest,
+    OutcomeCaseRequest,
+    RecommendationCaseRequest,
+)
 from metis_sim.domain.config import SimulationConfig
 from metis_sim.domain.public import ControlRequest
 from metis_sim.domain.shift_log import (
@@ -43,6 +51,12 @@ def install_openapi(app: FastAPI) -> None:
             ("/v1/runs/{run_id}/shift-logs/entries", AddShiftLogEntryRequest),
             ("/v1/runs/{run_id}/shift-logs/{shift_id}/summary", UpdateShiftLogSummaryRequest),
             ("/v1/runs/{run_id}/shift-logs/{shift_id}/submit", SubmitShiftLogRequest),
+            ("/v1/runs/{run_id}/cases", CreateCaseRequest),
+            ("/v1/viewer/cases/{case_id}/assessment", AssessmentCaseRequest),
+            ("/v1/viewer/cases/{case_id}/recommendation", RecommendationCaseRequest),
+            ("/v1/viewer/cases/{case_id}/decision", DecisionCaseRequest),
+            ("/v1/viewer/cases/{case_id}/outcome", OutcomeCaseRequest),
+            ("/v1/viewer/cases/{case_id}/evidence", CaptureCaseEvidenceRequest),
         ]
         for path, model in bodies:
             schema = model.model_json_schema(ref_template="#/components/schemas/{model}")
@@ -73,14 +87,16 @@ def install_openapi(app: FastAPI) -> None:
             if path.startswith("/v1/") and path not in {"/v1/viewer/bootstrap", "/v1/viewer/login"}:
                 for operation in methods.values():
                     if isinstance(operation, dict):
+                        named_session_only = "/shift-logs" in path or "/cases" in path
                         if (
                             path in {"/v1/viewer/session", "/v1/viewer/logout"}
-                            or "/shift-logs" in path
+                            or named_session_only
                         ):
                             operation["security"] = [{"viewerSession": []}]
-                            if "/shift-logs" in path:
+                            if named_session_only:
+                                record_name = "Shift Log" if "/shift-logs" in path else "case"
                                 operation["description"] += (
-                                    "\nRequires a named operator session owning this run; "
+                                    f"\nRequires a named operator session authorized for this {record_name}; "
                                     "shared bearer tokens and anonymous sessions are not accepted."
                                 )
                                 if operation.get("requestBody"):

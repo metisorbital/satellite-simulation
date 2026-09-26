@@ -174,6 +174,60 @@ shift_log_entries = Table(
     schema="private",
 )
 
+# Cases retain their own immutable public evidence snapshot. The run foreign key
+# records provenance but terminal-history expiration removes only telemetry,
+# events, and truth rows, so it cannot erase or block private case history.
+operator_cases = Table(
+    "operator_cases",
+    metadata,
+    Column("case_id", String(36), primary_key=True),
+    Column("run_id", ForeignKey("private.runs.run_id"), nullable=False),
+    Column("user_id", ForeignKey("private.users.user_id"), nullable=False),
+    Column("satellite_id", String(64), nullable=False),
+    Column("title", Text, nullable=False),
+    Column("summary", Text, nullable=False),
+    Column("priority", String(16), nullable=False),
+    Column("status", String(16), nullable=False),
+    Column("assessment", Text, nullable=False),
+    Column("missing_information", Text, nullable=False),
+    Column("recommendation", Text, nullable=False),
+    Column("expected_effect", Text, nullable=False),
+    Column("tradeoffs", Text, nullable=False),
+    Column("decision", String(16), nullable=False),
+    Column("decision_reason", Text, nullable=False),
+    Column("outcome", String(24), nullable=False),
+    Column("outcome_notes", Text, nullable=False),
+    Column("revision", Integer, nullable=False),
+    Column("evidence", document),
+    Column("created_at", DateTime(timezone=True), nullable=False),
+    Column("updated_at", DateTime(timezone=True), nullable=False),
+    CheckConstraint("priority IN ('monitor','review','urgent')"),
+    CheckConstraint("status IN ('open','closed')"),
+    CheckConstraint("decision IN ('pending','approved','rejected','revised')"),
+    CheckConstraint("outcome IN ('awaiting_observation','supported','corrected','inconclusive')"),
+    CheckConstraint("revision >= 1"),
+    schema="private",
+)
+Index("operator_cases_user_updated", operator_cases.c.user_id, operator_cases.c.updated_at)
+Index("operator_cases_run_satellite", operator_cases.c.run_id, operator_cases.c.satellite_id)
+
+case_activities = Table(
+    "case_activities",
+    metadata,
+    Column("activity_id", String(36), primary_key=True),
+    Column("case_id", ForeignKey("private.operator_cases.case_id"), nullable=False),
+    Column("user_id", ForeignKey("private.users.user_id"), nullable=False),
+    Column("kind", String(32), nullable=False),
+    Column("text", Text, nullable=False),
+    Column("evidence", document),
+    Column("created_at", DateTime(timezone=True), nullable=False),
+    CheckConstraint(
+        "kind IN ('created','assessment','recommendation','decision','outcome','evidence')"
+    ),
+    schema="private",
+)
+Index("case_activities_case_created", case_activities.c.case_id, case_activities.c.created_at)
+
 # Source corpora outlive run retention. Bounded compressed CSV chunks preserve
 # original lexical values without multiplying storage for millions of rows.
 observed_datasets = Table(

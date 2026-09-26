@@ -54,6 +54,14 @@ Constellation editing and spacecraft visibility belong to Settings.
 Hiding spacecraft changes presentation only, including their orbit paths;
 the backend keeps simulating every configured spacecraft.
 
+The sidebar also opens Early warnings, Investigations, Mission planning, Case
+history, and the full-page Shift Log. Private records require a named operator.
+Warnings use committed measurement quality and present operating state;
+investigations preserve public evidence and operator-authored recommendations,
+decisions, and outcomes. Planning reads the configured operation windows and
+reuses the constellation editor. See [Operator cases](reference/operator-cases.md)
+for the complete workflow and its limits.
+
 Use dark navy surfaces, fine panel borders, readable typography, and restrained
 mint, blue, and gold accents. Color reinforces labels; it must never be the only
 way to identify a spacecraft, a control state, or an illumination condition.
@@ -95,6 +103,8 @@ predict recurrence or replace backend schedule validation.
 |---|---|
 | `frontend/lib/` | Flutter widgets, API client, mission state, committed-time playback |
 | `frontend/lib/api/generated.dart` | Public wire types generated from Python models |
+| `frontend/lib/workflows/` | Private case forms, committed-signal review, and history |
+| `frontend/lib/shift_log/` | Shared durable handover state and page/dialog presentations |
 | `frontend/web/` | Browser entry point, local assets, and Cesium rendering bridge |
 | `frontend/test/` | Dart behavior and widget tests |
 | `frontend/tests/browser/` | Browser integration checks |

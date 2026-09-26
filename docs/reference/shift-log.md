@@ -17,8 +17,11 @@ or establish that an approved recommendation was correct.
 ## Record and Submit a Shift
 
 1. Sign in as a named demo operator and open **Shift Log** in the mission viewer.
+   The full-page workspace places the retained timeline beside the entry and
+   handover composers, stacking them on narrow screens.
 2. Add a note, decision, reported action, unresolved issue, or event.
-   Successful simulator controls also create entries automatically.
+   Successful simulator controls and [case workflow changes](operator-cases.md)
+   also create entries automatically.
 3. Review the entries and edit the draft's handover summary.
 4. Submit the shift when the handover is ready.
    Submitted records remain unchanged; the next entry or simulator control opens a new draft.
@@ -26,6 +29,7 @@ or establish that an approved recommendation was correct.
 Entries preserve the author and server-recorded time.
 Corrections should be added as new entries so the original record remains available.
 The summary is editable until submission.
+Navigation checks for unsaved text and unconfirmed writes.
 The current demo scopes records to the signed-in operator and run;
 team-wide shift assignment and cross-operator handover access are not implemented.
 

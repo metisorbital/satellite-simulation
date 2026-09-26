@@ -11,6 +11,20 @@ from pathlib import Path
 from typing import Any
 
 from metis_sim.api.requests import ViewerSeekRequest, ViewerSourceRequest
+from metis_sim.domain.cases import (
+    AssessmentCaseRequest,
+    CaptureCaseEvidenceRequest,
+    CaseActivity,
+    CaseEvidence,
+    CaseEvidenceReading,
+    CaseList,
+    CaseRecord,
+    CaseSummary,
+    CreateCaseRequest,
+    DecisionCaseRequest,
+    OutcomeCaseRequest,
+    RecommendationCaseRequest,
+)
 from metis_sim.domain.config import SimulationConfig
 from metis_sim.domain.public import (
     ControlRequest,
@@ -46,6 +60,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SCHEMA_DIR = ROOT / "schemas"
 DART_OUTPUT = ROOT / "frontend/lib/api/generated.dart"
 SHIFT_LOG_DART_OUTPUT = ROOT / "frontend/lib/api/shift_log_generated.dart"
+CASES_DART_OUTPUT = ROOT / "frontend/lib/api/cases_generated.dart"
 SHIFT_LOG_MODELS: dict[str, tuple[type[BaseModel], JsonSchemaMode]] = {
     "ShiftLogEntryDetails": (ShiftLogEntryDetails, "serialization"),
     "ShiftLogEntry": (ShiftLogEntry, "serialization"),
@@ -54,6 +69,20 @@ SHIFT_LOG_MODELS: dict[str, tuple[type[BaseModel], JsonSchemaMode]] = {
     "AddShiftLogEntryRequest": (AddShiftLogEntryRequest, "validation"),
     "UpdateShiftLogSummaryRequest": (UpdateShiftLogSummaryRequest, "validation"),
     "SubmitShiftLogRequest": (SubmitShiftLogRequest, "validation"),
+}
+CASE_MODELS: dict[str, tuple[type[BaseModel], JsonSchemaMode]] = {
+    "CaseEvidenceReading": (CaseEvidenceReading, "serialization"),
+    "CaseEvidence": (CaseEvidence, "serialization"),
+    "CaseActivity": (CaseActivity, "serialization"),
+    "CaseRecord": (CaseRecord, "serialization"),
+    "CaseSummary": (CaseSummary, "serialization"),
+    "CaseList": (CaseList, "serialization"),
+    "CreateCaseRequest": (CreateCaseRequest, "validation"),
+    "AssessmentCaseRequest": (AssessmentCaseRequest, "validation"),
+    "RecommendationCaseRequest": (RecommendationCaseRequest, "validation"),
+    "DecisionCaseRequest": (DecisionCaseRequest, "validation"),
+    "OutcomeCaseRequest": (OutcomeCaseRequest, "validation"),
+    "CaptureCaseEvidenceRequest": (CaptureCaseEvidenceRequest, "validation"),
 }
 MODELS: dict[str, tuple[type[BaseModel], JsonSchemaMode]] = {
     "SimulationConfig": (SimulationConfig, "validation"),
@@ -317,6 +346,26 @@ def main() -> None:
         },
     )
     SHIFT_LOG_DART_OUTPUT.write_text(render_dart(private_definitions))
+
+    case_definitions: dict[str, Any] = {}
+    for name, (model, mode) in CASE_MODELS.items():
+        definition = model.model_json_schema(mode=mode, ref_template="#/$defs/{model}")
+        case_definitions.update(definition.pop("$defs", {}))
+        case_definitions[name] = definition
+    for name, (model, mode) in CASE_MODELS.items():
+        if mode == "serialization":
+            case_definitions[name]["required"] = list(model.model_fields)
+    _write_json(
+        SCHEMA_DIR / "private-cases.v1.schema.json",
+        {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "$id": "https://metisorbital.local/schemas/private-cases.v1.json",
+            "title": "MetisPrivateCaseContracts",
+            "$defs": case_definitions,
+            "oneOf": [{"$ref": f"#/$defs/{name}"} for name in CASE_MODELS],
+        },
+    )
+    CASES_DART_OUTPUT.write_text(render_dart(case_definitions))
 
 
 if __name__ == "__main__":

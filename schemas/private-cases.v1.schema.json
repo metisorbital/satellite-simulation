@@ -1,0 +1,773 @@
+{
+  "$defs": {
+    "AssessmentCaseRequest": {
+      "additionalProperties": false,
+      "description": "Replace the assessment fields at an expected case revision.",
+      "properties": {
+        "assessment": {
+          "maxLength": 8000,
+          "title": "Assessment",
+          "type": "string"
+        },
+        "missing_information": {
+          "maxLength": 8000,
+          "title": "Missing Information",
+          "type": "string"
+        },
+        "revision": {
+          "minimum": 1,
+          "title": "Revision",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "revision",
+        "assessment",
+        "missing_information"
+      ],
+      "title": "AssessmentCaseRequest",
+      "type": "object"
+    },
+    "CaptureCaseEvidenceRequest": {
+      "additionalProperties": false,
+      "description": "Capture the current committed public sample for an expected revision.",
+      "properties": {
+        "revision": {
+          "minimum": 1,
+          "title": "Revision",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "revision"
+      ],
+      "title": "CaptureCaseEvidenceRequest",
+      "type": "object"
+    },
+    "CaseActivity": {
+      "additionalProperties": false,
+      "description": "Append-only audit activity attributed to the authenticated operator.\n\nAttributes\n----------\nactivity_id, case_id, user_id : UUID\n    Activity, containing case, and authenticated author identities.\nkind : str\n    Server-defined workflow action category.\ntext : str\n    Server-authored audit text; authored substantive content remains on the case.\ncreated_at : datetime\n    Server-recorded activity timestamp.\nevidence : CaseEvidence or None\n    Optional later committed public-frame snapshot.",
+      "properties": {
+        "activity_id": {
+          "format": "uuid",
+          "title": "Activity Id",
+          "type": "string"
+        },
+        "case_id": {
+          "format": "uuid",
+          "title": "Case Id",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "evidence": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CaseEvidence"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "kind": {
+          "enum": [
+            "created",
+            "assessment",
+            "recommendation",
+            "decision",
+            "outcome",
+            "evidence"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "user_id": {
+          "format": "uuid",
+          "title": "User Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "activity_id",
+        "case_id",
+        "user_id",
+        "kind",
+        "text",
+        "created_at",
+        "evidence"
+      ],
+      "title": "CaseActivity",
+      "type": "object"
+    },
+    "CaseEvidence": {
+      "additionalProperties": false,
+      "description": "Server-captured snapshot of exactly one committed public frame.\n\nAttributes\n----------\nsource_id, stream_id, satellite_id, payload_hash : str or UUID\n    Public producer, stream, and spacecraft provenance.\nsequence : int\n    Committed stream sequence used for the immutable capture.\nobserved_at, emitted_at, committed_at, captured_at : datetime\n    Public producer and storage provenance plus the capture time.\ncatalog_version : str\n    Versioned public catalog used to derive reading units.\nsource_kind, time_domain : str\n    Public origin and timestamp semantics from the measurement envelope.\nreadings : list of CaseEvidenceReading\n    Allowlisted committed channel readings only.",
+      "properties": {
+        "captured_at": {
+          "format": "date-time",
+          "title": "Captured At",
+          "type": "string"
+        },
+        "catalog_version": {
+          "enum": [
+            "power-leo.v1",
+            "spacecraft.v1",
+            "satellitecots.v1"
+          ],
+          "title": "Catalog Version",
+          "type": "string"
+        },
+        "committed_at": {
+          "format": "date-time",
+          "title": "Committed At",
+          "type": "string"
+        },
+        "emitted_at": {
+          "format": "date-time",
+          "title": "Emitted At",
+          "type": "string"
+        },
+        "observed_at": {
+          "format": "date-time",
+          "title": "Observed At",
+          "type": "string"
+        },
+        "payload_hash": {
+          "maxLength": 64,
+          "minLength": 64,
+          "title": "Payload Hash",
+          "type": "string"
+        },
+        "readings": {
+          "items": {
+            "$ref": "#/$defs/CaseEvidenceReading"
+          },
+          "maxItems": 128,
+          "title": "Readings",
+          "type": "array"
+        },
+        "satellite_id": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Satellite Id",
+          "type": "string"
+        },
+        "sequence": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "title": "Sequence",
+          "type": "integer"
+        },
+        "source_id": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Source Id",
+          "type": "string"
+        },
+        "source_kind": {
+          "enum": [
+            "synthetic",
+            "observed"
+          ],
+          "title": "Source Kind",
+          "type": "string"
+        },
+        "stream_id": {
+          "format": "uuid",
+          "title": "Stream Id",
+          "type": "string"
+        },
+        "time_domain": {
+          "enum": [
+            "simulation_utc",
+            "mission_utc"
+          ],
+          "title": "Time Domain",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_id",
+        "stream_id",
+        "satellite_id",
+        "payload_hash",
+        "sequence",
+        "observed_at",
+        "emitted_at",
+        "committed_at",
+        "captured_at",
+        "catalog_version",
+        "source_kind",
+        "time_domain",
+        "readings"
+      ],
+      "title": "CaseEvidence",
+      "type": "object"
+    },
+    "CaseEvidenceReading": {
+      "additionalProperties": false,
+      "description": "One typed reading rendered from an immutable public channel catalog.\n\nAttributes\n----------\nchannel_id : str\n    Public catalog channel identifier.\nvalue_text : str\n    Canonical textual representation of the committed public value.\nquality : {\"valid\", \"missing\", \"invalid\", \"saturated\"}\n    Public measurement-quality state at the committed sample.\nunit : str\n    Unit from the matching immutable channel catalog definition.",
+      "properties": {
+        "channel_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Channel Id",
+          "type": "string"
+        },
+        "quality": {
+          "enum": [
+            "valid",
+            "missing",
+            "invalid",
+            "saturated"
+          ],
+          "title": "Quality",
+          "type": "string"
+        },
+        "unit": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Unit",
+          "type": "string"
+        },
+        "value_text": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Value Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "channel_id",
+        "value_text",
+        "quality",
+        "unit"
+      ],
+      "title": "CaseEvidenceReading",
+      "type": "object"
+    },
+    "CaseList": {
+      "additionalProperties": false,
+      "description": "Bounded private case list for the authenticated named operator.\n\nAttributes\n----------\nitems : list of CaseSummary\n    At most 100 most-recently updated owned case records.\ntotal : int\n    Total owned case count before the response cap.\nhas_more : bool\n    Whether older owned cases exist beyond this response.",
+      "properties": {
+        "has_more": {
+          "title": "Has More",
+          "type": "boolean"
+        },
+        "items": {
+          "items": {
+            "$ref": "#/$defs/CaseSummary"
+          },
+          "maxItems": 100,
+          "title": "Items",
+          "type": "array"
+        },
+        "total": {
+          "minimum": 0,
+          "title": "Total",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "items",
+        "total",
+        "has_more"
+      ],
+      "title": "CaseList",
+      "type": "object"
+    },
+    "CaseRecord": {
+      "additionalProperties": false,
+      "description": "Private operator case with revision-controlled workflow state.\n\nAttributes\n----------\ncase_id, run_id, user_id : UUID\n    Case, logical originating run, and owner identities.\nsatellite_id : str\n    Spacecraft identity from the selected public stream.\ntitle, summary : str\n    Operator-authored investigation heading and context.\npriority, status : str\n    Operator urgency and case lifecycle state.\nassessment, missing_information, recommendation, expected_effect, tradeoffs : str\n    Operator-authored review material; no automatic diagnosis is generated.\ndecision, decision_reason : str\n    Human review state and explanation.\noutcome, outcome_notes : str\n    Observation result and optional narrative distinct from approval.\nrevision : int\n    Monotonic optimistic-concurrency version.\ncreated_at, updated_at : datetime\n    Server-recorded case lifecycle timestamps.\nevidence : CaseEvidence or None\n    Immutable initial public-frame snapshot, if one was captured at creation.\nactivities : list of CaseActivity\n    Bounded chronological audit history.\nactivity_count : int\n    Total append-only activity count, including entries outside this response.\nactivities_truncated : bool\n    Whether older activities exist beyond the returned bounded history.",
+      "properties": {
+        "activities": {
+          "items": {
+            "$ref": "#/$defs/CaseActivity"
+          },
+          "maxItems": 50,
+          "title": "Activities",
+          "type": "array"
+        },
+        "activities_truncated": {
+          "title": "Activities Truncated",
+          "type": "boolean"
+        },
+        "activity_count": {
+          "minimum": 0,
+          "title": "Activity Count",
+          "type": "integer"
+        },
+        "assessment": {
+          "title": "Assessment",
+          "type": "string"
+        },
+        "case_id": {
+          "format": "uuid",
+          "title": "Case Id",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "decision": {
+          "enum": [
+            "pending",
+            "approved",
+            "rejected",
+            "revised"
+          ],
+          "title": "Decision",
+          "type": "string"
+        },
+        "decision_reason": {
+          "title": "Decision Reason",
+          "type": "string"
+        },
+        "evidence": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CaseEvidence"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "expected_effect": {
+          "title": "Expected Effect",
+          "type": "string"
+        },
+        "missing_information": {
+          "title": "Missing Information",
+          "type": "string"
+        },
+        "outcome": {
+          "enum": [
+            "awaiting_observation",
+            "supported",
+            "corrected",
+            "inconclusive"
+          ],
+          "title": "Outcome",
+          "type": "string"
+        },
+        "outcome_notes": {
+          "title": "Outcome Notes",
+          "type": "string"
+        },
+        "priority": {
+          "enum": [
+            "monitor",
+            "review",
+            "urgent"
+          ],
+          "title": "Priority",
+          "type": "string"
+        },
+        "recommendation": {
+          "title": "Recommendation",
+          "type": "string"
+        },
+        "revision": {
+          "minimum": 1,
+          "title": "Revision",
+          "type": "integer"
+        },
+        "run_id": {
+          "format": "uuid",
+          "title": "Run Id",
+          "type": "string"
+        },
+        "satellite_id": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Satellite Id",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "open",
+            "closed"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "tradeoffs": {
+          "title": "Tradeoffs",
+          "type": "string"
+        },
+        "updated_at": {
+          "format": "date-time",
+          "title": "Updated At",
+          "type": "string"
+        },
+        "user_id": {
+          "format": "uuid",
+          "title": "User Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "case_id",
+        "run_id",
+        "user_id",
+        "satellite_id",
+        "title",
+        "summary",
+        "priority",
+        "status",
+        "assessment",
+        "missing_information",
+        "recommendation",
+        "expected_effect",
+        "tradeoffs",
+        "decision",
+        "decision_reason",
+        "outcome",
+        "outcome_notes",
+        "revision",
+        "created_at",
+        "updated_at",
+        "evidence",
+        "activities",
+        "activity_count",
+        "activities_truncated"
+      ],
+      "title": "CaseRecord",
+      "type": "object"
+    },
+    "CaseSummary": {
+      "additionalProperties": false,
+      "description": "Lightweight private case projection for bounded historical lists.\n\nAttributes\n----------\ncase_id, run_id, user_id : UUID\n    Case, logical originating run, and owning operator identities.\nsatellite_id : str\n    Spacecraft identity from the selected public stream.\ntitle, summary : str\n    Operator-authored investigation heading and context.\npriority, status, decision, outcome : str\n    Current operator-managed workflow state.\nrevision : int\n    Current optimistic-concurrency version.\ncreated_at, updated_at : datetime\n    Server-recorded lifecycle timestamps.",
+      "properties": {
+        "case_id": {
+          "format": "uuid",
+          "title": "Case Id",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "decision": {
+          "enum": [
+            "pending",
+            "approved",
+            "rejected",
+            "revised"
+          ],
+          "title": "Decision",
+          "type": "string"
+        },
+        "outcome": {
+          "enum": [
+            "awaiting_observation",
+            "supported",
+            "corrected",
+            "inconclusive"
+          ],
+          "title": "Outcome",
+          "type": "string"
+        },
+        "priority": {
+          "enum": [
+            "monitor",
+            "review",
+            "urgent"
+          ],
+          "title": "Priority",
+          "type": "string"
+        },
+        "revision": {
+          "minimum": 1,
+          "title": "Revision",
+          "type": "integer"
+        },
+        "run_id": {
+          "format": "uuid",
+          "title": "Run Id",
+          "type": "string"
+        },
+        "satellite_id": {
+          "title": "Satellite Id",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "open",
+            "closed"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "updated_at": {
+          "format": "date-time",
+          "title": "Updated At",
+          "type": "string"
+        },
+        "user_id": {
+          "format": "uuid",
+          "title": "User Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "case_id",
+        "run_id",
+        "user_id",
+        "satellite_id",
+        "title",
+        "summary",
+        "priority",
+        "status",
+        "decision",
+        "outcome",
+        "revision",
+        "created_at",
+        "updated_at"
+      ],
+      "title": "CaseSummary",
+      "type": "object"
+    },
+    "CreateCaseRequest": {
+      "additionalProperties": false,
+      "description": "Create an operator case for one satellite in the current owned run.\n\nAttributes\n----------\nsatellite_id : str\n    Public stream spacecraft identity.\ntitle, summary : str\n    Nonblank operator-authored investigation text.\npriority : {\"monitor\", \"review\", \"urgent\"}\n    Operator-selected triage level.\nsequence : int or None\n    Exact committed stream sequence to capture; omit for the current tail.",
+      "properties": {
+        "priority": {
+          "enum": [
+            "monitor",
+            "review",
+            "urgent"
+          ],
+          "title": "Priority",
+          "type": "string"
+        },
+        "satellite_id": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Satellite Id",
+          "type": "string"
+        },
+        "sequence": {
+          "anyOf": [
+            {
+              "maximum": 9007199254740991,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sequence"
+        },
+        "summary": {
+          "maxLength": 8000,
+          "minLength": 1,
+          "title": "Summary",
+          "type": "string"
+        },
+        "title": {
+          "maxLength": 240,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "satellite_id",
+        "title",
+        "summary",
+        "priority"
+      ],
+      "title": "CreateCaseRequest",
+      "type": "object"
+    },
+    "DecisionCaseRequest": {
+      "additionalProperties": false,
+      "description": "Record a human decision at an expected case revision.",
+      "properties": {
+        "decision": {
+          "enum": [
+            "approved",
+            "rejected",
+            "revised"
+          ],
+          "title": "Decision",
+          "type": "string"
+        },
+        "reason": {
+          "maxLength": 8000,
+          "title": "Reason",
+          "type": "string"
+        },
+        "revised_recommendation": {
+          "anyOf": [
+            {
+              "maxLength": 8000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Revised Recommendation"
+        },
+        "revision": {
+          "minimum": 1,
+          "title": "Revision",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "revision",
+        "decision",
+        "reason"
+      ],
+      "title": "DecisionCaseRequest",
+      "type": "object"
+    },
+    "OutcomeCaseRequest": {
+      "additionalProperties": false,
+      "description": "Record a later observation outcome, optionally closing the case.",
+      "properties": {
+        "close_case": {
+          "title": "Close Case",
+          "type": "boolean"
+        },
+        "outcome": {
+          "enum": [
+            "awaiting_observation",
+            "supported",
+            "corrected",
+            "inconclusive"
+          ],
+          "title": "Outcome",
+          "type": "string"
+        },
+        "outcome_notes": {
+          "maxLength": 8000,
+          "title": "Outcome Notes",
+          "type": "string"
+        },
+        "revision": {
+          "minimum": 1,
+          "title": "Revision",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "revision",
+        "outcome",
+        "outcome_notes",
+        "close_case"
+      ],
+      "title": "OutcomeCaseRequest",
+      "type": "object"
+    },
+    "RecommendationCaseRequest": {
+      "additionalProperties": false,
+      "description": "Replace an operator-authored recommendation at an expected revision.",
+      "properties": {
+        "expected_effect": {
+          "maxLength": 8000,
+          "title": "Expected Effect",
+          "type": "string"
+        },
+        "recommendation": {
+          "maxLength": 8000,
+          "title": "Recommendation",
+          "type": "string"
+        },
+        "revision": {
+          "minimum": 1,
+          "title": "Revision",
+          "type": "integer"
+        },
+        "tradeoffs": {
+          "maxLength": 8000,
+          "title": "Tradeoffs",
+          "type": "string"
+        }
+      },
+      "required": [
+        "revision",
+        "recommendation",
+        "expected_effect",
+        "tradeoffs"
+      ],
+      "title": "RecommendationCaseRequest",
+      "type": "object"
+    }
+  },
+  "$id": "https://metisorbital.local/schemas/private-cases.v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/CaseEvidenceReading"
+    },
+    {
+      "$ref": "#/$defs/CaseEvidence"
+    },
+    {
+      "$ref": "#/$defs/CaseActivity"
+    },
+    {
+      "$ref": "#/$defs/CaseRecord"
+    },
+    {
+      "$ref": "#/$defs/CaseSummary"
+    },
+    {
+      "$ref": "#/$defs/CaseList"
+    },
+    {
+      "$ref": "#/$defs/CreateCaseRequest"
+    },
+    {
+      "$ref": "#/$defs/AssessmentCaseRequest"
+    },
+    {
+      "$ref": "#/$defs/RecommendationCaseRequest"
+    },
+    {
+      "$ref": "#/$defs/DecisionCaseRequest"
+    },
+    {
+      "$ref": "#/$defs/OutcomeCaseRequest"
+    },
+    {
+      "$ref": "#/$defs/CaptureCaseEvidenceRequest"
+    }
+  ],
+  "title": "MetisPrivateCaseContracts"
+}

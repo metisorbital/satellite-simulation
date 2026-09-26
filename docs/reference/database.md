@@ -20,6 +20,11 @@ and **shift log entries** record notes, decisions, actions, events, and unresolv
 Each entry references one user; one user can author many entries.
 See [Operator Shift Log](shift-log.md) for the workflow and identity boundary.
 
+**Operator cases** retain a named operator's investigation, recommendation,
+decision, and observed outcome for an originating run. **Case activities** append
+the submitted narrative and immutable public evidence snapshots.
+See [Operator cases](operator-cases.md) for ownership, retention, and list bounds.
+
 A **configuration revision** stores submitted and resolved configuration.
 A **run** executes one revision and records its lifecycle and provenance.
 Each run has **streams** identifying its satellites' public measurements.

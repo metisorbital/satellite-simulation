@@ -8,6 +8,8 @@ Deterministic synthetic orbit-to-power telemetry for a prepared run, with an Ear
 
 ## Start here
 
+- [Operator investigations and cases](reference/operator-cases.md) — review committed signals, preserve evidence, and record recommendations and outcomes.
+
 - [Operator Shift Log](reference/shift-log.md) — record decisions, actions, notes, and submitted handovers with user attribution.
 
 - [Database tables and relationships](reference/database.md) — generated schema diagram, columns, keys, and indexes.

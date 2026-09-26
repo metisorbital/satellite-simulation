@@ -128,6 +128,33 @@ def append_control_action(
     )
 
 
+def append_operator_entry(
+    connection: Connection,
+    run_id: str,
+    user_id: str,
+    kind: str,
+    text: str,
+) -> None:
+    """Append a non-control private operator event in a caller-owned transaction.
+
+    Parameters
+    ----------
+    connection : Connection
+        Existing transaction that owns the substantive private workflow write.
+    run_id : str
+        Owned logical run to associate with the operator's current handover draft.
+    user_id : str
+        Authenticated named operator; never sourced from request JSON.
+    kind : {"note", "decision", "action", "unresolved_issue", "event"}
+        Existing Shift Log category. Case workflow uses ``event`` or ``decision``.
+    text : str
+        Server-composed audit narrative. Control-only details remain empty.
+    """
+    _validate_actor(connection, run_id, user_id)
+    shift_id = _draft(connection, run_id, user_id)
+    _entry(connection, shift_id, user_id, kind, text, {})
+
+
 class ShiftLogRepository:
     """Persist editable drafts and immutable submitted operator handovers.
 
