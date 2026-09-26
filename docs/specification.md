@@ -328,3 +328,14 @@ Prepared as version 1.0 on 2026-09-21 for engineering handoff and retained as th
 Research agents investigated physics and contracts independently, and a separate reviewer examined scope and integration ambiguity.
 The review record is [specification review](research/spec-review.md); domain reviews are linked there when complete.
 The simulator, database, telemetry, and viewer were delivered after this design handoff; [implementation validation](validation/README.md) records the executed checks and measured limits. A forecast model remains outside this simulator's scope.
+
+## 13. Subsequent Optional Spacecraft Telemetry Scope
+
+The `spacecraft.v1` extension adds physics-backed one-second telemetry, durable reporting, and public dataset export for later ML work, while retaining the historical P0 scope and default `power-leo.v1` behavior above.
+The supplied operational samples inform the [field inventory](reference/sample-telemetry.md), not runtime values, fitted parameters, replayed traces, or a claim to model all 210 source fields independently.
+An opted-in profile emits 41 modeled channels and 12 explicitly unavailable channels from declared regulated electrical rails, three thermal nodes, power-gated camera/storage state, ideal LVLH attitude, and a centered magnetic dipole.
+
+See [Spacecraft Telemetry Models and Export](reference/spacecraft-telemetry.md) for configuration, formulas, supported source-field families, missing quantities, API/report semantics, and an ML export handoff.
+The extension preserves commit-before-publication, one simulated clock, independent satellite state, deterministic generation, and separation of private scenario/outcome truth from consumer data.
+Its first health mechanism remains solar derating propagated through the power ledger and dependent physical states; future inference, real-mission validation, and a telemetry dashboard are not delivered by this source extension.
+Acceptance requires focused model/contract evidence and integration checks; neither the number of named channels nor successful export alone establishes physical fidelity or ML performance.

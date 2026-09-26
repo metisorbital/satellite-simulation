@@ -30,23 +30,27 @@ class ChannelDefinition:
         Nominal sample cadence in simulated seconds.
     description : str
         Public explanation of the channel's meaning and limits.
+    availability : {"modeled", "unavailable"}
+        Whether a physical model supplies this channel; unavailable channels
+        must carry null/missing readings.
     """
 
     channel_id: str
     unit: str
-    value_type: Literal["scalar", "vector[3]"]
+    value_type: Literal["scalar", "vector[3]", "vector[4]", "string"]
     origin: Literal["sensor", "derived"]
     sampling_semantics: Literal["endpoint", "interval_mean"]
     resolution: float | None
     coordinate_frame: str | None
     cadence_s: int
     description: str
+    availability: Literal["modeled", "unavailable"] = "modeled"
 
 
 def _channel(
     channel_id: str,
     unit: str,
-    value_type: Literal["scalar", "vector[3]"],
+    value_type: Literal["scalar", "vector[3]", "vector[4]", "string"],
     origin: Literal["sensor", "derived"],
     semantics: Literal["endpoint", "interval_mean"],
     description: str,
@@ -189,4 +193,15 @@ CHANNELS: tuple[ChannelDefinition, ...] = (
 CHANNELS_BY_ID = {channel.channel_id: channel for channel in CHANNELS}
 
 
-__all__ = ["CHANNELS", "CHANNELS_BY_ID", "ChannelDefinition"]
+# Imported after the base type is declared to keep catalog entries independent
+# of simulation/configuration code.
+from metis_sim.domain.spacecraft_catalog import spacecraft_channels  # noqa: E402
+
+SPACECRAFT_CHANNELS = CHANNELS + spacecraft_channels()
+CATALOGS = {"power-leo.v1": CHANNELS, "spacecraft.v1": SPACECRAFT_CHANNELS}
+CHANNELS_BY_CATALOG = {
+    version: {channel.channel_id: channel for channel in channels}
+    for version, channels in CATALOGS.items()
+}
+
+__all__ = ["CHANNELS", "CHANNELS_BY_ID", "CATALOGS", "CHANNELS_BY_CATALOG", "ChannelDefinition"]

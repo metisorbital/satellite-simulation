@@ -402,3 +402,22 @@ The observed fixture is a contract test, not evidence of a working real satellit
 To retire the simulator, retain its public measurement contract/catalog conventions, replace producer registration and protocol mapping at the ingestion boundary, and let ingestion own long-term operational storage.
 Downstream systems should not query private simulator tables or import its `SatelliteState`.
 The viewer is allowed to depend on simulator control APIs; the analytics consumer is not.
+
+## 10. Optional Spacecraft Telemetry Extension
+
+The subsequent `spacecraft.v1` catalog is an explicit profile opt-in through `sensors.catalog` plus `housekeeping`; it does not change the historical `power-leo.v1` P0 channel meanings or require existing profiles to add subsystems.
+It contains 41 modeled channels, including the original 15, and 12 unavailable entries emitted with null values and `missing` quality.
+The [spacecraft telemetry reference](reference/spacecraft-telemetry.md) specifies model limits and distinguishes this coverage from the supplied 210-field inventory.
+
+The `telemetry.v1` envelope keeps its source/stream/sequence identity and UTC/window semantics.
+Catalog-aware validation supports scalar, three-vector, four-vector, and declared string shapes; currently unavailable mission-code strings must remain missing.
+Attitude quaternions are Hamilton `[w,x,y,z]`, actively mapping body vectors into GCRS, with successive signs aligned by the satellite composer.
+Regulated electrical measurements and payload power/acquisition gates describe the completed interval; temperatures, counters, storage, and attitude describe its endpoint.
+Sequence zero advances none of those integrated states.
+
+Each stream persists its immutable catalog version; migration `0003` assigns `power-leo.v1` to existing streams.
+`GET /v1/catalog?version=spacecraft.v1` exposes the extension while an omitted version retains the legacy catalog.
+`GET /v1/runs/{run_id}/telemetry-report` accepts inclusive `from_sequence`/`through_sequence`, captures a committed boundary, and summarizes only retained public measurements with quality counts and coverage.
+Interval integrals use channel-unit seconds and exclude zero-duration or non-valid readings; componentwise quaternion statistics are not attitude averages.
+The standalone public [dataset exporter](../examples/export_run.py) preserves frame identities and the captured boundary without including evaluator truth.
+Outcome labels and private reproducibility metadata remain separately authorized, and related executions must remain grouped when forming ML splits.

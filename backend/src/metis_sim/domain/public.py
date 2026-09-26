@@ -105,6 +105,14 @@ class PublicModelProvenance(TypedDict, total=False):
     force_model_limits: str
     eps_model_limits: str
     accuracy_claim: str
+    housekeeping_model: str
+    electrical_model: str
+    thermal_model: str
+    payload_model: str
+    magnetic_model: str
+    housekeeping_model_limits: str
+    attitude_model: str
+    attitude_model_limits: str
 
 
 class PublicRunStatus(PublicModel):

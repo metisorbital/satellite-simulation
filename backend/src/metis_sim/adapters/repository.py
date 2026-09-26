@@ -92,8 +92,34 @@ class Repository:
         manifest: dict[str, Any],
         retain: bool,
         token: Idempotent,
+        *,
+        catalog_versions: dict[str, str] | None = None,
     ) -> dict[str, Any]:
-        """Allocate a new run and its independent streams in one transaction."""
+        """Allocate a new run and its independent streams in one transaction.
+
+        Parameters
+        ----------
+        configuration_id : str
+            Saved immutable configuration revision.
+        status, manifest : dict
+            Separate public run projection and private reproducibility record.
+        retain : bool
+            Exempt the run from ordinary history expiration.
+        token : Idempotent
+            Durable mutation identity.
+        catalog_versions : dict of str to str, optional
+            Complete satellite-to-catalog mapping from the validated profile.
+            Omission supports callers producing the legacy power catalog.
+
+        Returns
+        -------
+        dict
+            The committed public run projection.
+        """
+        if catalog_versions is not None and set(catalog_versions) != {
+            satellite["satellite_id"] for satellite in status["satellites"]
+        }:
+            raise ValueError("catalog_versions must cover exactly the run satellites")
         with self.database.writer_transaction() as connection:
             existing = prior_result(connection, *token)
             if existing is not None:
@@ -117,6 +143,9 @@ class Repository:
                         source_id=self.database.source_id,
                         satellite_id=s["satellite_id"],
                         run_id=status["run_id"],
+                        catalog_version=(catalog_versions or {}).get(
+                            s["satellite_id"], "power-leo.v1"
+                        ),
                         first_sequence=0,
                         last_sequence=-1,
                         expired=False,
