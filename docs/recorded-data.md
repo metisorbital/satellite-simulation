@@ -38,6 +38,14 @@ channels. The dataset timeline sits below the Earth; the existing telemetry
 history controls remain available. Switching back to **Physics simulation**
 restores the configured synthetic constellation and its existing displays.
 
+Use **Settings → Edit constellation** to adjust BUPT-1's modelled orbital
+elements. The initial configuration uses the published altitude range
+487.607–494.651 km and inclination 97.3710°. Its source and missing orientation
+assumptions appear with the orbit fields. Saving creates a fresh replay at the
+archive beginning. Subsequent seek and reset operations preserve those elements.
+The recorded spacecraft's identity and membership stay fixed; Atlas and Raspberry
+Pi channels describe payload devices on BUPT-1, not additional satellites.
+
 Every playback or seek creates a fresh run and stream. Existing recorded history
 stays immutable, and future source values are not published into an earlier
 stream. The last source record completes playback; it does not loop silently.

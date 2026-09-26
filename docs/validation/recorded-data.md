@@ -68,20 +68,53 @@ battery current remains signed (`-0.16 A` for battery one). Unsupported orbit,
 attitude, mode and state of charge remain unavailable. Derived source snapshots
 are explicitly distinct from simulator interval means.
 
+## Orbit and Browser Evidence
+
+The Earth Overview uses the operator's published BUPT-1 altitude range
+`487.607–494.651 km` and inclination `97.3710°`. Missing orientation angles,
+starting phase and the element epoch are disclosed assumptions. The backend
+returns these configured positions through a distinct trajectory kind, leaving
+observed telemetry and its missing fields unchanged. Orbit settings are editable
+in the existing constellation dialog; recorded identity and membership remain
+fixed to one spacecraft. Reset and seek preserve the configured orbit.
+
+An independent one-hour comparison of the analytic display orbit with the
+existing RK4 propagator with J2 disabled measured maximum differences of
+`1.16e-6 m` and `7.57e-9 m/s`. This validates numerical agreement, not historical
+position accuracy. A 99-point query near the end of the 124-day archive took
+0.234 seconds cold and 0.036 seconds warm without propagating intervening days.
+Invalid orbit bounds, source identity edits and trajectory budgets returned 422.
+
+The compiled viewer was exercised against the fully imported local database:
+
+- Start, pause and 20× playback used original source timestamps. The displayed
+  effective speed reached 20.1× while BUPT-1 moved around the retained Earth.
+- The Overview slider selected `2023-04-03T15:31:55Z`, prepared a fresh run and
+  waited for Start. First-sample selection returned to the archive beginning.
+- Starting at the final observation completed with one committed frame at
+  `2023-07-24T21:25:35Z`; the modelled globe position followed the same clock.
+- Existing telemetry sections remained available. Recorded voltage readings
+  appeared in their shared panels, additional source channels had their own
+  panels, and unsupported measurements showed as not recorded.
+- Saving the observed orbit through the merged constellation editor succeeded
+  without adding physics-only payload schedules to the observed request.
+- Switching back to physics restored the original three-spacecraft mission;
+  returning to recorded data prepared BUPT-1 at the first source record.
+
 ## Executed Gates
 
 On Apple M3 Pro / arm64, macOS 26.6.2, Python 3.12, Flutter 3.47.5:
 
 | Gate | Result |
 |---|---|
-| Existing Python suite with isolated real Postgres and Dart generation | 206 passed in 132.96 seconds; five expected warnings |
+| Existing Python suite with isolated real Postgres and Dart generation | 206 passed in 133.02 seconds; five expected warnings |
 | Ruff lint and format | Passed |
 | Mypy | 64 source files passed |
 | Existing Flutter tests | 18 passed |
 | Flutter analyzer | Passed |
-| Flutter release web build with bundled assets | Passed; existing Cupertino font warning |
+| Flutter release web build with bundled assets | Passed in 87.4 seconds after integrating main's payload scheduling; existing Cupertino font warning |
 | Existing Node interpolation and resync checks | 2 passed; interpolation maximum error unchanged at 6.52669257278191e-7 m |
-| Existing compiled-browser cases | 6 passed in 42.7 seconds after aligning stale selectors with existing UI |
+| Existing compiled-browser cases | 6 passed in approximately 96 seconds on the merged final build |
 | Strict documentation build | Passed |
 | Docker application build | Passed; final orbital presentation receives a subsequent build in CI |
 
