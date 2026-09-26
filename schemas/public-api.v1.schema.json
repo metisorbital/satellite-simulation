@@ -762,11 +762,47 @@
     },
     "OrbitPoint": {
       "additionalProperties": false,
-      "description": "One Earth-fixed display state whose origin is declared by its trajectory.\n\nAttributes\n----------\nelapsed_s : int\n    Simulated elapsed time from the run epoch.\nobserved_at : datetime\n    UTC timestamp represented by the state.\nposition_itrs_m : tuple of float\n    Earth-fixed position in metres.\nvelocity_itrs_m_s : tuple of float\n    Earth-fixed velocity in metres per second.\nsun_position_itrs_m : tuple of float\n    Astropy geocentric Sun position in metres at ``observed_at``, in\n    the same Earth-fixed frame. Presentation ephemeris, not telemetry.",
+      "description": "One Earth-fixed display state whose origin is declared by its trajectory.\n\nAttributes\n----------\nelapsed_s : int\n    Simulated elapsed time from the run epoch.\nobserved_at : datetime\n    UTC timestamp represented by the state.\nposition_itrs_m : tuple of float\n    Earth-fixed position in metres.\nvelocity_itrs_m_s : tuple of float\n    Earth-fixed velocity in metres per second.\nsun_position_itrs_m : tuple of float\n    Astropy geocentric Sun position in metres at ``observed_at``, in\n    the same Earth-fixed frame. Presentation ephemeris, not telemetry.\ngcrs_to_itrs_rotation : tuple of float\n    Nine row-major elements of the proper rotation mapping GCRS column\n    vectors to ITRS at ``observed_at``. Its transpose maps back to GCRS.",
       "properties": {
         "elapsed_s": {
           "title": "Elapsed S",
           "type": "integer"
+        },
+        "gcrs_to_itrs_rotation": {
+          "additionalItems": false,
+          "items": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "maxItems": 9,
+          "minItems": 9,
+          "title": "Gcrs To Itrs Rotation",
+          "type": "array"
         },
         "observed_at": {
           "format": "date-time",
@@ -833,7 +869,8 @@
         "observed_at",
         "position_itrs_m",
         "velocity_itrs_m_s",
-        "sun_position_itrs_m"
+        "sun_position_itrs_m",
+        "gcrs_to_itrs_rotation"
       ],
       "title": "OrbitPoint",
       "type": "object"

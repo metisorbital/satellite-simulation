@@ -250,6 +250,7 @@ class OrbitPoint {
     required this.position_itrs_m,
     required this.velocity_itrs_m_s,
     required this.sun_position_itrs_m,
+    required this.gcrs_to_itrs_rotation,
   });
 
   final int elapsed_s;
@@ -257,6 +258,7 @@ class OrbitPoint {
   final List<double> position_itrs_m;
   final List<double> velocity_itrs_m_s;
   final List<double> sun_position_itrs_m;
+  final List<double> gcrs_to_itrs_rotation;
 
   factory OrbitPoint.fromJson(Map<String, dynamic> json) => OrbitPoint(
     elapsed_s: json['elapsed_s'] as int,
@@ -264,6 +266,7 @@ class OrbitPoint {
     position_itrs_m: (json['position_itrs_m'] as List).map((item) => (item as num).toDouble()).toList(),
     velocity_itrs_m_s: (json['velocity_itrs_m_s'] as List).map((item) => (item as num).toDouble()).toList(),
     sun_position_itrs_m: (json['sun_position_itrs_m'] as List).map((item) => (item as num).toDouble()).toList(),
+    gcrs_to_itrs_rotation: (json['gcrs_to_itrs_rotation'] as List).map((item) => (item as num).toDouble()).toList(),
   );
 
   Map<String, dynamic> toJson() => {
@@ -272,6 +275,7 @@ class OrbitPoint {
     'position_itrs_m': position_itrs_m.map((item) => item).toList(),
     'velocity_itrs_m_s': velocity_itrs_m_s.map((item) => item).toList(),
     'sun_position_itrs_m': sun_position_itrs_m.map((item) => item).toList(),
+    'gcrs_to_itrs_rotation': gcrs_to_itrs_rotation.map((item) => item).toList(),
   };
 }
 

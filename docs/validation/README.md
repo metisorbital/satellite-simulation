@@ -15,6 +15,8 @@ The authoritative acceptance requirements remain the [specification](../specific
 
 ## Evidence by Boundary
 
+The September 27 [Earth rotation validation](earth-rotation.md) records inertial camera framing, orbit-path conversion, and unchanged eclipse physics.
+
 The September 26 [operator workflow validation](operator-workflows.md) records
 private cases, committed evidence capture, planning, handover, and preserved
 simulation controls.

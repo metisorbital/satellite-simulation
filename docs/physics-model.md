@@ -349,10 +349,15 @@ Cesium's `Clock` has separate current time, multiplier, and animation behavior; 
 Display “Simulation UTC,” requested speed, effective speed, run state, and stale/lag state in the viewer.
 The wall time belongs in diagnostic metadata, not the globe's date readout.
 
-P0 offers an Earth-fixed camera for surface context and an optional inertial camera mode for seeing Earth rotate under the orbit.
-In Earth-fixed mode the globe need not visibly spin; Earth rotation is already accounted for in the terrestrial coordinates.
-Never artificially spin Earth in an Earth-fixed scene while feeding Earth-fixed positions.
-Orbit trails and preview paths must use time-tagged backend samples, since a future ground-relative trajectory does not form a closed fixed ellipse.
+The default overview camera holds its pose in GCRS, so Earth visibly rotates beneath the orbit.
+Each trajectory point includes a row-major `gcrs_to_itrs_rotation` matrix from the backend's pinned Earth-orientation adapter at that point's UTC.
+The renderer interpolates these rotations as quaternions, without extrapolation, and applies the display-time rotation to the camera reference frame.
+Satellite positions remain `ReferenceFrame.FIXED`; never artificially spin Earth or rotate these positions a second time.
+Orbit preview points are first transformed from their individual ITRS epochs into GCRS, then the complete path is expressed in ITRS at display time.
+This shows the inertial orbit rather than a future ground-relative trace; physical J2 precession remains present.
+Follow-selected mode uses Cesium's satellite tracking; leaving follow restores the inertial overview without a camera jump.
+Missing orientation data is reported and hides the orbit preview instead of substituting an approximate Earth rotation.
+The backend ITRS Sun vector continues to control lighting on the same clock: the surface turns beneath the terminator, while eclipse and EPS calculations remain backend-authoritative.
 
 The scene must support mouse/touchpad zoom, rotate/pan, satellite selection, reset-to-Earth, and follow-selected satellite.
 Provide a keyboard-accessible satellite list and textual power/state panel, so the 3D canvas is not the sole interaction path.

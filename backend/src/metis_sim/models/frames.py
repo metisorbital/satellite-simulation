@@ -56,6 +56,7 @@ class FrameAdapter:
     """
 
     def __init__(self, epoch_utc: datetime, duration_s: int) -> None:
+        self._rotation_cache: tuple[tuple[float, ...], FloatArray] | None = None
         iers.conf.auto_download = False
         iers.conf.auto_max_age = None
         iers.conf.iers_degraded_accuracy = "error"
@@ -222,6 +223,56 @@ class FrameAdapter:
             transformed.cartesian.differentials["s"].d_xyz.to_value(u.m / u.s), 0, -1
         )
         return result
+
+    def gcrs_to_itrs_rotations(self, elapsed_s: FloatArray) -> FloatArray:
+        """Return the authoritative position rotation at each requested instant.
+
+        Parameters
+        ----------
+        elapsed_s : ndarray, shape (time,)
+            Elapsed SI seconds on the run's continuous TAI timeline.
+
+        Returns
+        -------
+        ndarray, shape (time, 3, 3)
+            Proper rotations mapping GCRS column vectors to ITRS. Each matrix
+            uses the same pinned Astropy context as ``transform_states``.
+
+        Notes
+        -----
+        Only requested presentation times are evaluated. The most recent batch is
+        shared across satellites; callers receive detached arrays.
+        """
+        key = tuple(float(t) for t in elapsed_s)
+        cached = self._rotation_cache
+        if cached is None or cached[0] != key:
+            cached = (key, self._gcrs_to_itrs_rotations(key))
+            self._rotation_cache = cached
+        return cached[1].copy()
+
+    def _gcrs_to_itrs_rotations(self, elapsed_s: tuple[float, ...]) -> FloatArray:
+        """Transform the Cartesian basis at a batch of presentation instants.
+
+        Parameters
+        ----------
+        elapsed_s : tuple of float
+            Elapsed SI seconds on the run's TAI timeline.
+
+        Returns
+        -------
+        ndarray, shape (time, 3, 3)
+            GCRS-to-ITRS matrices whose columns are transformed basis vectors.
+        """
+        times = self.times(np.asarray(elapsed_s, dtype=np.float64))[:, None]
+        basis = np.broadcast_to(np.eye(3), (len(elapsed_s), 3, 3))
+        representation = CartesianRepresentation(np.moveaxis(basis, -1, 0) * u.m)
+        with self._context():
+            transformed = GCRS(representation, obstime=times).transform_to(ITRS(obstime=times))
+        # Transformed basis vectors are columns of the position rotation.
+        return np.asarray(
+            np.moveaxis(transformed.cartesian.xyz.to_value(u.m), 0, -1).swapaxes(-1, -2),
+            dtype=np.float64,
+        )
 
     def sun_positions(self, elapsed_s: FloatArray) -> tuple[FloatArray, FloatArray]:
         """Compute builtin geometric Sun vectors once for each shared time.

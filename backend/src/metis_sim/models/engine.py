@@ -52,8 +52,9 @@ class SimulationEngine:
     Notes
     -----
     ``initialize`` performs bounded CPU work and must run outside the HTTP
-    event loop. ``sample`` and ``trajectory`` subsequently read cached arrays
-    only. No database, HTTP, wall-clock pacing, or unseeded randomness enters
+    event loop. ``sample`` and ``trajectory`` subsequently read cached physical
+    arrays; trajectory orientation is evaluated in bounded, cached batches.
+    No database, HTTP, wall-clock pacing, or unseeded randomness enters
     the physical model. Precomputed future health is never part of preview.
 
     Examples
@@ -457,8 +458,9 @@ class SimulationEngine:
         ticks = list(range(from_tick, to_tick + 1, step))
         if ticks[-1] != to_tick:
             ticks.append(to_tick)
+        rotations = self._frames.gcrs_to_itrs_rotations(np.asarray(ticks, dtype=np.float64))
         result = []
-        for tick in ticks:
+        for tick, rotation in zip(ticks, rotations, strict=True):
             latitude, longitude, altitude = (float(value) for value in self._geodetic[tick, index])
             result.append(
                 OrbitSample(
@@ -471,6 +473,7 @@ class SimulationEngine:
                     longitude_deg=longitude,
                     altitude_m=altitude,
                     sun_position_itrf_m=self._vector(self._sun_itrs[tick]),
+                    gcrs_to_itrs_rotation=tuple(rotation.ravel()),
                 )
             )
         return tuple(result)

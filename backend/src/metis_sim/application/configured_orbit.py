@@ -109,6 +109,7 @@ def configured_orbit_points(
     states_itrs = frames.transform_states(np.concatenate((positions, velocities), axis=1), elapsed)
     times = frames.datetimes(elapsed)
     _, sun_itrs = frames.sun_positions(elapsed)
+    rotations = frames.gcrs_to_itrs_rotations(elapsed)
     return [
         OrbitPoint(
             elapsed_s=int(tick),
@@ -116,6 +117,9 @@ def configured_orbit_points(
             position_itrs_m=tuple(state[:3]),
             velocity_itrs_m_s=tuple(state[3:]),
             sun_position_itrs_m=tuple(sun),
+            gcrs_to_itrs_rotation=tuple(rotation.ravel()),
         )
-        for tick, at, state, sun in zip(elapsed, times, states_itrs, sun_itrs, strict=True)
+        for tick, at, state, sun, rotation in zip(
+            elapsed, times, states_itrs, sun_itrs, rotations, strict=True
+        )
     ]

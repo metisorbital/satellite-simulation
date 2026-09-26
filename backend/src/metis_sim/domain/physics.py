@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 Vector3 = tuple[float, float, float]
+Rotation9 = tuple[float, float, float, float, float, float, float, float, float]
 ChannelValue = float | Vector3 | tuple[float, float, float, float] | None
 
 
@@ -50,6 +51,8 @@ class OrbitSample:
         ITRS position and its rotating-frame time derivative.
     sun_position_itrf_m : tuple of float
         Geocentric Sun position in the same terrestrial frame.
+    gcrs_to_itrs_rotation : tuple of float
+        Row-major position rotation at ``observed_at``, containing nine elements.
     """
 
     satellite_id: str
@@ -61,6 +64,7 @@ class OrbitSample:
     longitude_deg: float
     altitude_m: float
     sun_position_itrf_m: Vector3
+    gcrs_to_itrs_rotation: Rotation9
 
 
 @dataclass(frozen=True, slots=True)

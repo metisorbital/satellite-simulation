@@ -6,6 +6,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, with_config
 
+from metis_sim.domain.physics import Rotation9
 from metis_sim.domain.telemetry import MeasurementFrame
 
 RunState = Literal["created", "running", "paused", "completed", "stopped", "failed", "aborted"]
@@ -268,6 +269,9 @@ class OrbitPoint(PublicModel):
     sun_position_itrs_m : tuple of float
         Astropy geocentric Sun position in metres at ``observed_at``, in
         the same Earth-fixed frame. Presentation ephemeris, not telemetry.
+    gcrs_to_itrs_rotation : tuple of float
+        Nine row-major elements of the proper rotation mapping GCRS column
+        vectors to ITRS at ``observed_at``. Its transpose maps back to GCRS.
     """
 
     elapsed_s: int
@@ -275,6 +279,7 @@ class OrbitPoint(PublicModel):
     position_itrs_m: tuple[float, float, float]
     velocity_itrs_m_s: tuple[float, float, float]
     sun_position_itrs_m: tuple[float, float, float]
+    gcrs_to_itrs_rotation: Rotation9
 
 
 class SatelliteTrajectory(PublicModel):

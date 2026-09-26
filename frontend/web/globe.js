@@ -13,12 +13,40 @@ window.metisGlobe = (() => {
     const horizontal = Math.atan(Math.tan(vertical) * frustum.aspectRatio);
     const radius = viewer.scene.globe.ellipsoid.maximumRadius;
     const altitude = Math.max(13700000, radius * 1.25 / Math.sin(Math.min(vertical, horizontal)) - radius);
-    viewer.camera.setView({ destination: C.Cartesian3.fromDegrees(120, 18, altitude) });
+    if (scene.inertialActive) {
+      C.Cartesian3.normalize(viewer.camera.position, viewer.camera.position);
+      C.Cartesian3.multiplyByScalar(viewer.camera.position, altitude + radius, viewer.camera.position);
+    } else {
+      viewer.camera.setView({ destination: C.Cartesian3.fromDegrees(120, 18, altitude) });
+    }
+  }
+  function updateOrientation(scene) {
+    const viewer = scene.viewer;
+    const quaternion = scene.orientation?.getValue(viewer.clock.currentTime);
+    scene.rotation = quaternion ? C.Matrix3.fromQuaternion(quaternion) : null;
+    scene.orientationError = scene.rotation ? null : 'Earth rotation unavailable at this time.';
+    if (!scene.rotation || scene.follow) return;
+    const camera = viewer.camera;
+    const transform = C.Matrix4.fromRotationTranslation(scene.rotation);
+    // lookAtTransform preserves the world pose. After entering inertial mode,
+    // preserve the local (GCRS) pose instead, including the user's pan/zoom.
+    const position = C.Cartesian3.clone(camera.position);
+    const direction = C.Cartesian3.clone(camera.direction);
+    const up = C.Cartesian3.clone(camera.up);
+    camera.lookAtTransform(transform);
+    if (scene.inertialActive) {
+      C.Cartesian3.clone(position, camera.position);
+      C.Cartesian3.clone(direction, camera.direction);
+      C.Cartesian3.clone(up, camera.up);
+      C.Cartesian3.cross(direction, up, camera.right);
+    }
+    scene.inertialActive = true;
   }
   function updateClock(scene, epoch, seconds) {
     const viewer = scene.viewer;
     viewer.clock.currentTime = C.JulianDate.addSeconds(
       C.JulianDate.fromIso8601(epoch), seconds, new C.JulianDate());
+    updateOrientation(scene);
     const sun = scene.sun?.getValue(viewer.clock.currentTime);
     const available = sun && C.Cartesian3.magnitudeSquared(sun) > 0;
     viewer.scene.globe.enableLighting = Boolean(available);
@@ -33,7 +61,7 @@ window.metisGlobe = (() => {
   }
   return {
     create(element, onSelect) {
-      const scene = { viewer: null, run: null, selected: '', hidden: new Set(), paths: '', follow: false, autoFrame: true, resizeObserver: null, cameraInput: null, sun: null, light: null, lightingError: null, error: null, fps: null, count: 0, began: performance.now() };
+      const scene = { viewer: null, run: null, selected: '', hidden: new Set(), paths: '', follow: false, autoFrame: true, resizeObserver: null, cameraInput: null, sun: null, orientation: null, rotation: null, inertialActive: false, orientationError: null, light: null, lightingError: null, error: null, fps: null, count: 0, began: performance.now() };
       scenes.set(element.id, scene);
       try {
         C.CreditDisplay.cesiumCredit = new C.Credit('<a href="https://cesium.com/cesiumjs/" target="_blank" rel="noreferrer">CesiumJS</a>', true);
@@ -120,6 +148,8 @@ window.metisGlobe = (() => {
         viewer.trackedEntity = undefined;
         viewer.entities.removeAll();
         scene.run = status.run_id; scene.paths = ''; scene.follow = false; scene.sun = null;
+        scene.orientation = null; scene.rotation = null; scene.inertialActive = false;
+        viewer.camera.lookAtTransform(C.Matrix4.IDENTITY);
       }
       viewer.clock.shouldAnimate = false;
       viewer.clock.multiplier = 0;
@@ -146,7 +176,13 @@ window.metisGlobe = (() => {
         scene.paths = pathKey;
         // All satellites share the same geocentric Sun, sampled by Astropy.
         scene.sun = new C.SampledProperty(C.Cartesian3);
+        scene.orientation = new C.SampledProperty(C.Quaternion);
         for (const sample of trajectory.satellites[0]?.samples ?? []) {
+          const rotation = sample.gcrs_to_itrs_rotation;
+          if (Array.isArray(rotation) && rotation.length === 9 && rotation.every(Number.isFinite)) {
+            scene.orientation.addSample(C.JulianDate.fromIso8601(sample.observed_at),
+              C.Quaternion.fromRotationMatrix(C.Matrix3.fromRowMajorArray(rotation)));
+          }
           const vector = sample.sun_position_itrs_m;
           if (Array.isArray(vector) && vector.length === 3 && vector.every(Number.isFinite)) {
             scene.sun.addSample(C.JulianDate.fromIso8601(sample.observed_at), C.Cartesian3.fromArray(vector));
@@ -166,8 +202,21 @@ window.metisGlobe = (() => {
                 [C.Cartesian3.fromArray(sample.velocity_itrs_m_s)]);
             }
           }
+          // Each terrestrial sample has its own epoch. Undo that rotation once,
+          // then express the complete inertial path in the display-time ITRS frame.
+          const inertialPoints = path.samples.map(sample => {
+            const values = sample.gcrs_to_itrs_rotation;
+            if (!Array.isArray(values) || values.length !== 9 || !values.every(Number.isFinite)) return null;
+            const inverse = C.Matrix3.transpose(C.Matrix3.fromRowMajorArray(values), new C.Matrix3());
+            return C.Matrix3.multiplyByVector(inverse, C.Cartesian3.fromArray(sample.position_itrs_m), new C.Cartesian3());
+          });
+          const points = inertialPoints.map(() => new C.Cartesian3());
+          const validPath = inertialPoints.every(point => point !== null);
           const orbit = viewer.entities.add({ id: `orbit-${path.satellite_id}`, polyline: {
-            positions: path.samples.map(s => C.Cartesian3.fromArray(s.position_itrs_m)), arcType: C.ArcType.NONE,
+            positions: new C.CallbackProperty(() => {
+              if (!scene.rotation || !validPath) return [];
+              return inertialPoints.map((point, index) => C.Matrix3.multiplyByVector(scene.rotation, point, points[index]));
+            }, false), arcType: C.ArcType.NONE,
             width: path.satellite_id === selected ? 2 : 1,
             material: C.Color.fromCssColorString(descriptor.color).withAlpha(path.satellite_id === selected ? .65 : .2) } });
           orbit.show = !scene.hidden.has(path.satellite_id);
@@ -178,6 +227,7 @@ window.metisGlobe = (() => {
         if (scene.hidden.has(selected)) {
           scene.follow = false;
           viewer.trackedEntity = undefined;
+          scene.inertialActive = false;
         } else {
           viewer.trackedEntity = viewer.entities.getById(selected);
         }
@@ -192,17 +242,23 @@ window.metisGlobe = (() => {
       if (!viewer) return;
       if (action === 'reset') {
         scene.follow = false; viewer.trackedEntity = undefined;
+        viewer.camera.lookAtTransform(C.Matrix4.IDENTITY);
+        scene.inertialActive = false;
         scene.autoFrame = true;
         frameEarth(scene);
+        updateOrientation(scene);
       } else if (action === 'follow') {
         scene.autoFrame = false;
         if (scene.follow) {
           scene.follow = false;
           viewer.trackedEntity = undefined;
+          scene.inertialActive = false;
+          updateOrientation(scene);
         } else if (scene.hidden.has(scene.selected)) {
           viewer.trackedEntity = undefined;
         } else {
           scene.follow = true;
+          scene.inertialActive = false;
           viewer.trackedEntity = viewer.entities.getById(scene.selected);
         }
       }
@@ -215,7 +271,7 @@ window.metisGlobe = (() => {
     },
     diagnostics(id) {
       const scene = scenes.get(id);
-      return JSON.stringify({ error: scene?.error ?? scene?.lightingError ?? null, fps: scene?.fps ?? null });
+      return JSON.stringify({ error: scene?.error ?? scene?.lightingError ?? scene?.orientationError ?? null, fps: scene?.fps ?? null });
     },
     destroy(id) {
       const scene = scenes.get(id);
