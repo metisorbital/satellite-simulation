@@ -53,11 +53,12 @@ class MetisApp extends StatelessWidget {
           ),
         ),
     home: OperatorGate(
-      missionBuilder: (context, bootstrap, logout, expired) => MissionPage(
-        bootstrap: bootstrap,
-        onLogout: logout,
-        onSessionExpired: expired,
-      ),
+      missionBuilder: (context, bootstrap, switchOperator, expired) =>
+          MissionPage(
+            bootstrap: bootstrap,
+            onSwitchOperator: switchOperator,
+            onSessionExpired: expired,
+          ),
     ),
   );
 }
@@ -79,11 +80,11 @@ class MissionPage extends StatefulWidget {
   const MissionPage({
     super.key,
     required this.bootstrap,
-    required this.onLogout,
+    required this.onSwitchOperator,
     required this.onSessionExpired,
   });
   final JsonMap bootstrap;
-  final Future<void> Function(String csrfToken) onLogout;
+  final Future<void> Function(String login, String csrfToken) onSwitchOperator;
   final VoidCallback onSessionExpired;
   @override
   State<MissionPage> createState() => _MissionPageState();
@@ -753,14 +754,23 @@ class _MissionPageState extends State<MissionPage> {
     }
   }
 
-  Future<void> logout() async {
-    if (mission.busy) return;
-    if (!await _canLeave() || !mounted) return;
-    final token = mission.csrfToken.isNotEmpty
-        ? mission.csrfToken
-        : widget.bootstrap['csrf_token'] as String;
-    mission.suspend();
-    widget.onLogout(token);
+  Future<void> switchOperator(String login) async {
+    if (mission.busy ||
+        _navigating ||
+        login == (widget.bootstrap['operator'] as Map)['login']) {
+      return;
+    }
+    _navigating = true;
+    try {
+      if (!await _canLeave() || !mounted) return;
+      final token = mission.csrfToken.isNotEmpty
+          ? mission.csrfToken
+          : widget.bootstrap['csrf_token'] as String;
+      mission.suspend();
+      await widget.onSwitchOperator(login, token);
+    } finally {
+      _navigating = false;
+    }
   }
 
   void showShiftLog() => navigateTo(MissionView.shiftLog);
@@ -979,7 +989,7 @@ class _MissionPageState extends State<MissionPage> {
                     onNavigate: navigateTo,
                     onSettings: showSettings,
                     onInfo: showInfo,
-                    onLogout: logout,
+                    onSwitchOperator: switchOperator,
                     operatorRecordsEnabled:
                         mission.canUseShiftLog && status != null,
                     operatorName: operator['display_name'] as String,
@@ -1026,6 +1036,8 @@ class _MissionPageState extends State<MissionPage> {
                                 satelliteId: satelliteId,
                               ),
                               onShiftLog: showShiftLog,
+                              onInvestigation: () =>
+                                  navigateTo(MissionView.investigations),
                             )
                           : view == MissionView.planning
                           ? MissionPlanningPage(

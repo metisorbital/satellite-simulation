@@ -112,8 +112,8 @@ That endpoint issues the HttpOnly cookie and returns the session-bound CSRF toke
 Use it only after the run is prepared and from an approved operator workflow that forwards the issued cookie to the authorized browser; never expose the operator bearer token to the browser.
 
 For a public hosted demonstration, set `METIS_PUBLIC_DEMO=1`, `METIS_LOCAL_DEMO=0`, `METIS_COOKIE_SECURE=1`, `METIS_ORIGINS` to the exact HTTPS site origin, and `METIS_DEMO_CONFIG=configs/public-demo.yaml`.
-Set `METIS_INTERACTIVE_PUBLIC_DEMO=1` to enable the Flutter mock operator login and give each login its own bounded editable mission and simulation controls.
-Without that flag, the legacy shared public bootstrap remains read-only and mock operator login is unavailable.
+Set `METIS_INTERACTIVE_PUBLIC_DEMO=1` to enable Flutter demo operator sessions and give each selected operator its own bounded editable mission and simulation controls. The first visit selects `operator1`; the sidebar can switch operators.
+Without that flag, the legacy shared public bootstrap remains read-only and interactive demo operator sessions are unavailable.
 On Render, set `METIS_SOURCE_ID_PER_COMMIT=1` so each zero-downtime deployment owns a distinct writer source while the previous instance drains. Render provides `RENDER_GIT_COMMIT` at runtime. A restart of the same commit still requires stopping the previous writer before the replacement can become ready.
 With `METIS_INTERACTIVE_PUBLIC_DEMO=0`, the application starts one short, shared run, issues read-only browser sessions, and replaces a completed run when a visitor reconnects. In interactive mode, browser sessions are scoped to their own missions and may use the exposed editing and run controls; operator credentials and private evaluation data remain server-side.
 The service advances one run at a time. If another visitor's run is active, Start returns a busy error until that run stops or finishes. Editing and Reset require stopping the current run first; each creates a new immutable run with fresh streams.

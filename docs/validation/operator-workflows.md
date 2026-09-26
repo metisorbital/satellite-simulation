@@ -14,8 +14,10 @@ and full-page Shift Log. The [workflow guide](../reference/operator-cases.md)
 defines the delivered behavior and limits.
 
 Implementation and verification used a separate `codex/mission-workflows`
-worktree based on main `9ea14f9`. The original checkout and its concurrent edits
-were preserved. No source files were removed, and no new tests were written.
+worktree based on main `9ea14f9`, with the concurrent operator-switch update
+`2e9bb90` integrated before the final PR update. The original checkout and its
+concurrent edits were preserved. No source files were removed, and no tests were
+written or changed.
 
 ## Executed Checks
 
@@ -33,10 +35,10 @@ regression suite and from existing application data.
 | `uv run ruff format --check backend/src backend/migrations tests scripts examples` | 101 files already formatted |
 | `uv run mypy backend/src scripts/generate_contracts.py` | No issues in 67 source files |
 | Generate contracts and compare bytes before/after | All JSON schemas and generated Dart contracts reproduced without drift |
-| `dart format --output=none --set-exit-if-changed lib test` and `flutter analyze` | Passed |
-| `flutter test` | 18 passed |
+| `dart format --output=none --set-exit-if-changed lib test` and `flutter analyze` before integrating `2e9bb90` | Passed |
+| `flutter test` before integrating `2e9bb90` | 18 passed |
 | `npm --prefix frontend test` | 2 passed, including committed-position interpolation |
-| `npm --prefix frontend run test:e2e` | 6 existing compiled-browser tests passed in 2.3 min |
+| `npm --prefix frontend run test:e2e` before integrating `2e9bb90` | 6 existing compiled-browser tests passed in 2.3 min |
 | `flutter build web --release --no-web-resources-cdn` | Release build succeeded with local renderer/assets |
 | `uv run zensical build --strict` | Passed |
 | `git diff --check` | Passed |
@@ -45,6 +47,25 @@ The Flutter build retains its existing optional Cupertino font-family warning;
 the application uses Material icons and the resulting screens rendered correctly.
 Python warnings came from test-adapter deprecations and deliberately unsupported
 future-epoch numerical fixtures.
+
+### Concurrent Main Integration
+
+Main's `2e9bb90` replaces the login form with an automatically opened default
+operator and sidebar switching. The integrated switch checks unsaved case and
+Shift Log edits before ending the session, and rejects duplicate/current-operator
+switch requests. Application-only analysis (`flutter analyze lib`) passed and
+the existing playback suite passed all 10 checks after integration. The release
+web build passed again, and all four existing mission/editor/lifecycle browser
+checks passed in 1.1 minutes. The strict documentation build also passed.
+
+Full `flutter analyze` now reports six errors in the unchanged
+`test/operator_session_test.dart`: it still calls removed `login`/`logout`
+methods and the former builder callback. The two existing operator browser
+checks also still target the removed login form. These are inherited from main;
+[main's own Simulation gates run](https://github.com/metisorbital/satellite-simulation/actions/runs/36261660449)
+fails at analysis for this update. The tests are preserved under the instruction
+not to write tests. Full CI cannot be claimed green until these existing checks
+are adapted to main's operator-switch behavior.
 
 ## Live PostgreSQL and HTTP Verification
 
@@ -93,6 +114,19 @@ submitted it; the page showed one submitted, read-only record. Its navigation
 guard also preserved unsaved summary text. Planning showed the actual declared
 payload window and the configured mode between windows.
 Desktop and 390 × 844 layouts were visually inspected.
+
+After integrating main's sidebar switching, an unsaved assessment prevented an
+operator switch; keeping the edit retained the original workspace. Switching
+after cancelling that temporary draft opened operator2 without operator1's
+cases. Switching back retained operator1's original case and immutable evidence
+under its historical run. A fresh simulation still started, streamed committed
+measurements, and paused. The grouped-warning layout remained readable at
+390 × 844.
+
+The final navigation pass verified that current warnings keep their telemetry
+shortcut available when older cases exist, selecting a warning's case opens its
+investigation, and creating a warning case opens the newly persisted record.
+The final compiled browser reported no JavaScript errors.
 
 ## Independent Review and Limits
 

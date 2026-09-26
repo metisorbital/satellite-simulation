@@ -114,15 +114,17 @@ interpolate committed position samples for display; it must not propagate an
 orbit or extrapolate public telemetry beyond committed time. Predicted orbit
 paths remain explicitly separate from measured state.
 
-The login gate restores an existing operator session with `GET /v1/viewer/session`.
-Without a session it presents login and password fields before creating the mission view.
-`POST /v1/viewer/login` selects a JSON-backed demo identity and obtains an HttpOnly
-run-scoped cookie. Use `operator1`, `operator2`, or `operator3` and any nonempty
-password; passwords are neither verified nor stored.
+On opening the viewer, `GET /v1/viewer/session` restores the operator session.
+If there is no session, the client selects `operator1` within the enabled
+interactive demo and creates its run.
+The sidebar switches among the three JSON-backed demo identities, `operator1`,
+`operator2`, and `operator3`. Internally, `POST /v1/viewer/login` selects an
+identity and obtains an HttpOnly run-scoped cookie. Its required nonempty demo
+placeholder is neither verified nor stored.
 Control requests carry the returned CSRF token and an idempotency key. Mission
 replacement must clear prior samples and reject late responses for the old run.
-Logout stops the operator's active demo run, clears the cookie, disposes mission
-streams and state, and returns to login. Another login creates a separate run.
+Switching stops the current operator's active demo run, clears the cookie,
+disposes mission streams and state, and creates a separate run for the selected operator.
 The signed session restores the same operator and run on browser reload until expiry.
 See [the contracts](contracts.md) for freshness, reconnect, and privacy rules.
 

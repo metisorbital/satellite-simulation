@@ -41,7 +41,7 @@ class MissionSidebar extends StatelessWidget {
     required this.onNavigate,
     required this.onSettings,
     required this.onInfo,
-    required this.onLogout,
+    required this.onSwitchOperator,
     required this.operatorRecordsEnabled,
     required this.operatorName,
     required this.operatorLogin,
@@ -60,8 +60,8 @@ class MissionSidebar extends StatelessWidget {
   /// Invoked when the mission model and credits control is selected.
   final VoidCallback onInfo;
 
-  /// Invoked by the operator popup's demo logout action.
-  final VoidCallback onLogout;
+  /// Invoked when the operator selects another packaged demo identity.
+  final ValueChanged<String> onSwitchOperator;
 
   /// Private records require a named operator session.
   final bool operatorRecordsEnabled;
@@ -155,7 +155,7 @@ class MissionSidebar extends StatelessWidget {
                       compact: compact,
                       operatorName: operatorName,
                       operatorLogin: operatorLogin,
-                      onLogout: onLogout,
+                      onSwitchOperator: onSwitchOperator,
                     ),
                   ],
                 ),
@@ -572,13 +572,13 @@ class _OperatorMenu extends StatelessWidget {
     required this.compact,
     required this.operatorName,
     required this.operatorLogin,
-    required this.onLogout,
+    required this.onSwitchOperator,
   });
 
   final bool compact;
   final String operatorName;
   final String operatorLogin;
-  final VoidCallback onLogout;
+  final ValueChanged<String> onSwitchOperator;
 
   @override
   Widget build(BuildContext context) {
@@ -586,30 +586,34 @@ class _OperatorMenu extends StatelessWidget {
     final label = operatorName.trim().isEmpty
         ? 'Operator menu'
         : 'Operator $operatorName, $operatorLogin';
-    final menu = PopupMenuButton<_OperatorAction>(
+    final menu = PopupMenuButton<String>(
       tooltip: label,
-      onSelected: (action) {
-        if (action == _OperatorAction.logout) onLogout();
-      },
+      onSelected: onSwitchOperator,
       itemBuilder: (context) => [
-        PopupMenuItem<_OperatorAction>(
+        PopupMenuItem<String>(
           enabled: false,
           height: 34,
           child: Text(
-            'Demo logout ends this run.',
+            'Switching operators ends this run.',
             style: TextStyle(color: _muted, fontSize: 11),
           ),
         ),
-        const PopupMenuItem<_OperatorAction>(
-          value: _OperatorAction.logout,
-          child: Row(
-            children: [
-              Icon(Icons.logout_rounded, size: 17),
-              SizedBox(width: 10),
-              Text('Log out'),
-            ],
+        for (final login in const ['operator1', 'operator2', 'operator3'])
+          PopupMenuItem<String>(
+            value: login,
+            enabled: login != operatorLogin,
+            child: Row(
+              children: [
+                const Icon(Icons.person_outline_rounded, size: 17),
+                const SizedBox(width: 10),
+                Text(login),
+                if (login == operatorLogin) ...[
+                  const SizedBox(width: 8),
+                  const Icon(Icons.check_rounded, size: 16),
+                ],
+              ],
+            ),
           ),
-        ),
       ],
       child: ExcludeSemantics(
         child: SizedBox(
@@ -743,5 +747,3 @@ class _HeaderStatus extends StatelessWidget {
     ),
   );
 }
-
-enum _OperatorAction { logout }

@@ -19,6 +19,7 @@ class CaseWorkspace extends StatefulWidget {
     required this.onSelected,
     required this.onTelemetry,
     required this.onShiftLog,
+    required this.onInvestigation,
   });
 
   final Mission mission;
@@ -27,6 +28,7 @@ class CaseWorkspace extends StatefulWidget {
   final ValueChanged<String> onSelected;
   final void Function(String satelliteId) onTelemetry;
   final VoidCallback onShiftLog;
+  final VoidCallback onInvestigation;
 
   @override
   State<CaseWorkspace> createState() => CaseWorkspaceState();
@@ -256,14 +258,16 @@ class CaseWorkspaceState extends State<CaseWorkspace> {
   }
 
   Future<void> _selectCase(String caseId) async {
-    if (caseId == _selectedCaseId || !await canLeave()) return;
-    if (!mounted) return;
-    setState(() {
-      _selectedCaseId = caseId;
-      _detail = null;
-      _detailError = null;
-    });
-    unawaited(_loadDetail(caseId));
+    if (!await canLeave() || !mounted) return;
+    if (caseId != _selectedCaseId) {
+      setState(() {
+        _selectedCaseId = caseId;
+        _detail = null;
+        _detailError = null;
+      });
+      unawaited(_loadDetail(caseId));
+    }
+    if (widget.section == 'warnings') widget.onInvestigation();
   }
 
   Future<bool> _beginReport() async {
@@ -316,6 +320,7 @@ class CaseWorkspaceState extends State<CaseWorkspace> {
       return;
     }
     final identity = _identity;
+    var createdCase = false;
     setState(() {
       _saving = true;
       _error = null;
@@ -344,12 +349,16 @@ class CaseWorkspaceState extends State<CaseWorkspace> {
         _detailError = null;
         _clearCreateEditor();
       });
+      createdCase = true;
     } catch (error) {
       if (mounted && identity == _identity) {
         setState(() => _error = 'Could not create the case: $error');
       }
     } finally {
       if (mounted && identity == _identity) setState(() => _saving = false);
+    }
+    if (createdCase && mounted && identity == _identity) {
+      widget.onInvestigation();
     }
   }
 
@@ -583,6 +592,9 @@ class CaseWorkspaceState extends State<CaseWorkspace> {
     final hasCurrent = items.any(
       (item) => item.value == widget.selectedSatellite,
     );
+    final telemetryCase = widget.section == 'warnings' || _showCreate
+        ? null
+        : _selectedSummary;
     return Wrap(
       alignment: WrapAlignment.spaceBetween,
       crossAxisAlignment: WrapCrossAlignment.start,
@@ -642,9 +654,10 @@ class CaseWorkspaceState extends State<CaseWorkspace> {
           runSpacing: 8,
           children: [
             OutlinedButton.icon(
-              onPressed:
-                  _selectedSummary == null || _selectedSummary!.run_id == _runId
-                  ? () => widget.onTelemetry(widget.selectedSatellite)
+              onPressed: telemetryCase == null || telemetryCase.run_id == _runId
+                  ? () => widget.onTelemetry(
+                      telemetryCase?.satellite_id ?? widget.selectedSatellite,
+                    )
                   : null,
               icon: const Icon(Icons.show_chart, size: 17),
               label: const Text('Open telemetry'),

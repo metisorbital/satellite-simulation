@@ -46,11 +46,11 @@ models from the repository root:
 uv run metis-sim demo --config configs/telemetry-demo.yaml --at 0 --port 8002
 ```
 
-Open `http://127.0.0.1:8002`, log in with a local demo operator, start the run, and
+Open `http://127.0.0.1:8002` as the default `operator1`, start the run, and
 choose **Telemetry** in the sidebar (the chart icon on narrow screens).
 Spacecraft selection and the committed simulation clock remain shared with
 **Overview**. Start, pause/resume, speed, stop, and reset controls stay beside the
-Earth view on Overview. The single sidebar places the operator menu, Settings,
+Earth view on Overview. The single sidebar places the operator switcher, Settings,
 and Help at its bottom; **Shift log** opens the saved operator handover workflow.
 
 Open **Settings** to hide spacecraft from both the Earth view and telemetry
@@ -86,9 +86,9 @@ adapts to narrow screens. Layout preferences persist in this browser; they conta
 no telemetry values or identity. **Reset defaults** and **Apply** restore the
 current tab's default panel arrangement.
 
-The first demo login may prepare a complete simulation. Login allows up to
-three minutes for this preparation; ordinary API requests retain their
-20-second timeout.
+The first operator session or a switch may prepare a complete simulation. Session
+creation allows up to three minutes for this preparation; ordinary API requests
+retain their 20-second timeout.
 
 The dashboard groups committed measurements into Overview, EPS, Flight computer,
 Payload, ADCS, and Space weather. Channel search and the shared time range filter
