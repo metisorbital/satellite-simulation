@@ -25,6 +25,11 @@ uv run metis-sim migrate
 uv run metis-sim demo --at 0
 ```
 
+docs
+```aiignore
+zensical serve --dev-addr localhost:12345
+```
+
 Open `http://127.0.0.1:8000` and log in as `operator1`, `operator2`, or `operator3` with any nonempty demo password.
 Each login creates a separate editable run; use **Start run** to begin.
 The mock profiles and stable user IDs live in `backend/src/metis_sim/data/mock_operators.json`.
