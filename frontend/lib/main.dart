@@ -741,7 +741,7 @@ class _MissionPageState extends State<MissionPage> {
 
   Future<void> showCustomSpeed() async {
     final form = GlobalKey<FormState>();
-    var value = '${mission.status?['requested_speed'] ?? 20}';
+    var value = '${mission.status?['requested_speed'] ?? 90}';
     final speed = await showDialog<int>(
       context: context,
       builder: (dialogContext) {
@@ -1204,7 +1204,7 @@ class _MissionPageState extends State<MissionPage> {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      for (final speed in [1, 5, 20])
+                      for (final speed in [1, 5, 90])
                         ChoiceChip(
                           label: Text('$speed×'),
                           selected: status?['requested_speed'] == speed,
@@ -1244,7 +1244,7 @@ class _MissionPageState extends State<MissionPage> {
                 TextButton(
                   onPressed: disabled ? null : showCustomSpeed,
                   child: Text(
-                    const [1, 5, 20].contains(status?['requested_speed'])
+                    const [1, 5, 90].contains(status?['requested_speed'])
                         ? 'Custom'
                         : '${status?['requested_speed']}× · Custom',
                     style: const TextStyle(fontSize: 10),
