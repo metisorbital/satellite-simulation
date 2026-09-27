@@ -181,6 +181,43 @@ class ModeChangedDetails {
   };
 }
 
+/// Allowlisted details of a window the onboard start guard refused.
+class OperationSkippedDetails {
+  const OperationSkippedDetails({
+    required this.label,
+    required this.mode,
+    required this.start_s,
+    required this.end_s,
+    required this.battery_soc,
+    required this.min_start_soc,
+  });
+
+  final String? label;
+  final String mode;
+  final int start_s;
+  final int end_s;
+  final double battery_soc;
+  final double min_start_soc;
+
+  factory OperationSkippedDetails.fromJson(Map<String, dynamic> json) => OperationSkippedDetails(
+    label: json['label'] == null ? null : json['label'] as String,
+    mode: json['mode'] as String,
+    start_s: json['start_s'] as int,
+    end_s: json['end_s'] as int,
+    battery_soc: (json['battery_soc'] as num).toDouble(),
+    min_start_soc: (json['min_start_soc'] as num).toDouble(),
+  );
+
+  Map<String, dynamic> toJson() => {
+    'label': label == null ? null : label!,
+    'mode': mode,
+    'start_s': start_s,
+    'end_s': end_s,
+    'battery_soc': battery_soc,
+    'min_start_soc': min_start_soc,
+  };
+}
+
 /// Allowlisted observable operational event envelope.
 class OperationalEvent {
   const OperationalEvent({
@@ -574,6 +611,7 @@ class PublicRunStatus {
     required this.nominal_cadence_s,
     required this.playback_start_s,
     required this.model_provenance,
+    required this.environment_source,
     required this.frame_count,
     required this.diagnostic,
   });
@@ -598,6 +636,7 @@ class PublicRunStatus {
   final double? nominal_cadence_s;
   final int playback_start_s;
   final PublicModelProvenance model_provenance;
+  final String? environment_source;
   final int frame_count;
   final String? diagnostic;
 
@@ -622,6 +661,7 @@ class PublicRunStatus {
     nominal_cadence_s: json['nominal_cadence_s'] == null ? null : (json['nominal_cadence_s'] as num).toDouble(),
     playback_start_s: (json['playback_start_s'] ?? 0) as int,
     model_provenance: PublicModelProvenance.fromJson(Map<String, dynamic>.from(json['model_provenance'] as Map)),
+    environment_source: json['environment_source'] == null ? null : json['environment_source'] as String,
     frame_count: (json['frame_count'] ?? 0) as int,
     diagnostic: json['diagnostic'] == null ? null : json['diagnostic'] as String,
   );
@@ -647,6 +687,7 @@ class PublicRunStatus {
     'nominal_cadence_s': nominal_cadence_s == null ? null : nominal_cadence_s!,
     'playback_start_s': playback_start_s,
     'model_provenance': model_provenance.toJson(),
+    'environment_source': environment_source == null ? null : environment_source!,
     'frame_count': frame_count,
     'diagnostic': diagnostic == null ? null : diagnostic!,
   };

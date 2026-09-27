@@ -2,6 +2,7 @@
 
 from fastapi import FastAPI
 from fastapi.openapi.utils import get_openapi
+from metis_agent.models import MetisPreferenceRequest
 from pydantic import BaseModel
 
 from metis_sim.api.requests import (
@@ -48,6 +49,7 @@ def install_openapi(app: FastAPI) -> None:
             ("/v1/viewer/configuration", ViewerConfigurationRequest),
             ("/v1/viewer/source", ViewerSourceRequest),
             ("/v1/viewer/seek", ViewerSeekRequest),
+            ("/v1/metis/preference", MetisPreferenceRequest),
             ("/v1/runs/{run_id}/control", ControlRequest),
             ("/v1/runs/{run_id}/shift-logs/entries", AddShiftLogEntryRequest),
             ("/v1/runs/{run_id}/shift-logs/{shift_id}/summary", UpdateShiftLogSummaryRequest),
@@ -90,7 +92,10 @@ def install_openapi(app: FastAPI) -> None:
                 for operation in methods.values():
                     if isinstance(operation, dict):
                         named_session_only = (
-                            "/shift-logs" in path or "/cases" in path or "/notifications" in path
+                            "/shift-logs" in path
+                            or "/cases" in path
+                            or "/notifications" in path
+                            or path.startswith("/v1/metis/")
                         )
                         if (
                             path in {"/v1/viewer/session", "/v1/viewer/logout"}
@@ -103,6 +108,8 @@ def install_openapi(app: FastAPI) -> None:
                                     if "/shift-logs" in path
                                     else "notification"
                                     if "/notifications" in path
+                                    else "mission"
+                                    if path.startswith("/v1/metis/")
                                     else "case"
                                 )
                                 operation["description"] += (

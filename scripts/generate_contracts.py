@@ -10,6 +10,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from metis_agent.models import METIS_MODELS
 from metis_sim.api.requests import ViewerSeekRequest, ViewerSourceRequest
 from metis_sim.domain.cases import (
     AssessmentCaseRequest,
@@ -67,6 +68,7 @@ DART_OUTPUT = ROOT / "frontend/lib/api/generated.dart"
 SHIFT_LOG_DART_OUTPUT = ROOT / "frontend/lib/api/shift_log_generated.dart"
 CASES_DART_OUTPUT = ROOT / "frontend/lib/api/cases_generated.dart"
 NOTIFICATIONS_DART_OUTPUT = ROOT / "frontend/lib/api/notifications_generated.dart"
+METIS_DART_OUTPUT = ROOT / "frontend/lib/api/metis_generated.dart"
 SHIFT_LOG_MODELS: dict[str, tuple[type[BaseModel], JsonSchemaMode]] = {
     "ShiftLogEntryDetails": (ShiftLogEntryDetails, "serialization"),
     "ShiftLogEntry": (ShiftLogEntry, "serialization"),
@@ -397,6 +399,27 @@ def main() -> None:
         },
     )
     NOTIFICATIONS_DART_OUTPUT.write_text(render_dart(notification_definitions))
+
+    # The Metis demo agent's contracts stay separate from simulator telemetry.
+    metis_definitions: dict[str, Any] = {}
+    for name, (model, mode) in METIS_MODELS.items():
+        definition = model.model_json_schema(mode=mode, ref_template="#/$defs/{model}")
+        metis_definitions.update(definition.pop("$defs", {}))
+        metis_definitions[name] = definition
+    for name, (model, mode) in METIS_MODELS.items():
+        if mode == "serialization":
+            metis_definitions[name]["required"] = list(model.model_fields)
+    _write_json(
+        SCHEMA_DIR / "metis-agent.v1.schema.json",
+        {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "$id": "https://metisorbital.local/schemas/metis-agent.v1.json",
+            "title": "MetisAgentContracts",
+            "$defs": metis_definitions,
+            "oneOf": [{"$ref": f"#/$defs/{name}"} for name in METIS_MODELS],
+        },
+    )
+    METIS_DART_OUTPUT.write_text(render_dart(metis_definitions))
 
 
 if __name__ == "__main__":

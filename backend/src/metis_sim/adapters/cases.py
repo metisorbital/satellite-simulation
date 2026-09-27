@@ -291,6 +291,9 @@ class CaseRepository:
         priority: str,
         sequence: int | None,
         token: Idempotent,
+        *,
+        model_case_id: str | None = None,
+        model_recommendation: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         """Create an owned case and capture its selected committed public frame.
 
@@ -304,6 +307,12 @@ class CaseRepository:
             Exact public stream sequence, or the current committed tail.
         token : tuple of str
             Idempotency scope, key, and canonical request digest.
+        model_case_id : str or None
+            Deterministic server-owned identity for a saved model warning. It
+            prevents duplicate investigations even after retry records expire.
+        model_recommendation : dict of str, optional
+            Server-authored prediction recommendation, expected effect, and
+            tradeoffs. These are narrative planning claims, never evidence.
 
         Returns
         -------
@@ -319,10 +328,21 @@ class CaseRepository:
             existing = prior_result(connection, *token)
             if existing is not None:
                 return existing
+            if model_case_id is not None:
+                prior_case = connection.execute(
+                    select(tables.operator_cases.c.case_id).where(
+                        tables.operator_cases.c.case_id == model_case_id,
+                        tables.operator_cases.c.user_id == user_id,
+                        tables.operator_cases.c.run_id == run_id,
+                    )
+                ).scalar_one_or_none()
+                if prior_case is not None:
+                    return self._read(connection, prior_case)
             evidence = _capture_evidence(
                 connection, run_id, satellite_id, sequence, required=sequence is not None
             )
-            case_id = str(uuid4())
+            case_id = model_case_id or str(uuid4())
+            prediction = model_recommendation or {}
             now = utc_now()
             connection.execute(
                 insert(tables.operator_cases).values(
@@ -336,9 +356,9 @@ class CaseRepository:
                     status="open",
                     assessment="",
                     missing_information="",
-                    recommendation="",
-                    expected_effect="",
-                    tradeoffs="",
+                    recommendation=prediction.get("recommendation", ""),
+                    expected_effect=prediction.get("expected_effect", ""),
+                    tradeoffs=prediction.get("tradeoffs", ""),
                     decision="pending",
                     decision_reason="",
                     outcome="awaiting_observation",
@@ -349,7 +369,16 @@ class CaseRepository:
                     updated_at=now,
                 )
             )
-            _append_activity(connection, case_id, user_id, "created", "Case created.", evidence)
+            _append_activity(
+                connection,
+                case_id,
+                user_id,
+                "created",
+                "Saved model prediction raised for operator review. Evidence contains only committed telemetry."
+                if model_case_id
+                else "Case created.",
+                evidence,
+            )
             append_operator_entry(
                 connection,
                 run_id,
@@ -357,9 +386,55 @@ class CaseRepository:
                 "event",
                 _shift_entry_text(case_id, title, f"Created:\n{summary}"),
             )
+            if prediction:
+                text = (
+                    f"Saved model recommendation: {prediction['recommendation']}\n"
+                    f"Expected effect: {prediction['expected_effect']}\n"
+                    f"Tradeoffs: {prediction['tradeoffs']}\nAwaiting operator approval."
+                )
+                _append_activity(connection, case_id, user_id, "recommendation", text)
+                append_operator_entry(
+                    connection,
+                    run_id,
+                    user_id,
+                    "event",
+                    _shift_entry_text(case_id, title, text),
+                )
             result = self._read(connection, case_id)
             record_result(connection, *token, result)
             return result
+
+    def record_demo_result(
+        self, run_id: str, user_id: str, case_id: str | None, text: str, token: Idempotent
+    ) -> None:
+        """Append a labeled scenario result without deciding the human case outcome.
+
+        Parameters
+        ----------
+        run_id, user_id : str
+            Existing recorded replay and its authenticated owner.
+        case_id : str or None
+            Prediction case if Metis raised one; disabled runs use Shift Log only.
+        text : str
+            Explicitly labeled demo projection, never measured execution evidence.
+        token : tuple
+            Stable result identity preventing duplicate audit entries after retries.
+        """
+        with self.database.writer_transaction() as connection:
+            _validate_actor(connection, run_id, user_id)
+            if prior_result(connection, *token) is not None:
+                return
+            if case_id is not None:
+                case = self._owned_case(connection, case_id, user_id)
+                if case["run_id"] != run_id:
+                    raise ServiceError(
+                        "mission_case_mismatch", "The demo result belongs to another run.", 409
+                    )
+                self._update_revision(connection, case_id, case["revision"], {})
+                _append_activity(connection, case_id, user_id, "outcome", text)
+                text = _shift_entry_text(case_id, case["title"], text)
+            append_operator_entry(connection, run_id, user_id, "event", text)
+            record_result(connection, *token, {"recorded": True})
 
     def assessment(
         self,

@@ -235,13 +235,46 @@
     },
     "Operation": {
       "additionalProperties": false,
-      "description": "Half-open scheduled operational mode interval.\n\nAttributes\n----------\nstart_s, end_s : int\n    Simulated-second bounds of the half-open interval ``[start_s, end_s)``.\nmode : SatelliteMode\n    Mode active during the interval.\nrepeat : {\"orbit\"} or None\n    Repeat at the satellite's nominal orbital period, or run once when\n    omitted. Every repetition preserves ``end_s - start_s`` seconds.",
+      "description": "Half-open scheduled operational mode interval.\n\nAttributes\n----------\nstart_s, end_s : int\n    Simulated-second bounds of the half-open interval ``[start_s, end_s)``.\nmode : SatelliteMode\n    Mode active during the interval.\nrepeat : {\"orbit\"} or None\n    Repeat at the satellite's nominal orbital period, or run once when\n    omitted. Every repetition preserves ``end_s - start_s`` seconds.\nadded_load_w : float, default=0.0\n    Electrical load in watts added to the mode's profile load while the\n    interval is active, for tasks such as a capture, a downlink, or a\n    compute batch.\nlabel : str or None\n    Optional public task identifier, for example ``downlink``.\nmin_start_soc : float or None\n    Onboard start guard. When the battery state of charge at the window's\n    start tick is below this value, the spacecraft skips the whole window:\n    it stays in its initial mode with no added load and reports an\n    ``operation_skipped`` event. The guard is checked only at the start.",
       "properties": {
+        "added_load_w": {
+          "default": 0.0,
+          "maximum": 10000,
+          "minimum": 0,
+          "title": "Added Load W",
+          "type": "number"
+        },
         "end_s": {
           "maximum": 86400,
           "minimum": 1,
           "title": "End S",
           "type": "integer"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Label"
+        },
+        "min_start_soc": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Min Start Soc"
         },
         "mode": {
           "enum": [
@@ -462,7 +495,7 @@
     },
     "RunConfiguration": {
       "additionalProperties": false,
-      "description": "Simulation timing, seed, and versioned model selections.\n\nAttributes\n----------\nepoch_utc : datetime\n    UTC-normalized instant at which the run starts.\nduration_s : int\n    Configured elapsed duration in simulated seconds; samples include\n    both tick zero and the endpoint.\ntick_s, telemetry_period_s : int\n    Fixed physical and telemetry cadence; both are one second in P0.\nspeed : int\n    Requested wall-clock multiplier.\nseed : int\n    Reproducibility seed within JavaScript's exact integer range.\nearth_model, orbit_model, sun_model : str\n    Versioned model identifiers used by the run.",
+      "description": "Simulation timing, seed, and versioned model selections.\n\nAttributes\n----------\nepoch_utc : datetime\n    UTC-normalized instant at which the run starts.\nduration_s : int\n    Configured elapsed duration in simulated seconds; samples include\n    both tick zero and the endpoint.\ntick_s, telemetry_period_s : int\n    Fixed physical and telemetry cadence; both are one second in P0.\nspeed : int\n    Requested wall-clock multiplier.\nseed : int\n    Reproducibility seed within JavaScript's exact integer range.\nearth_model, orbit_model, sun_model : str\n    Versioned model identifiers used by the run.\nenvironment_source : str or None\n    Public name of recorded data that shaped the simulated environment,\n    such as ``BUPT-1 solar harvest, 21 June 2023 (scaled)``. It names a\n    source only; scenario values stay private.",
       "properties": {
         "duration_s": {
           "default": 21600,
@@ -475,6 +508,20 @@
           "const": "wgs84_j2_v1",
           "title": "Earth Model",
           "type": "string"
+        },
+        "environment_source": {
+          "anyOf": [
+            {
+              "maxLength": 160,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Environment Source"
         },
         "epoch_utc": {
           "format": "date-time",
@@ -810,7 +857,7 @@
   "$id": "https://metisorbital.local/schemas/simulation.v1.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "Complete validated P0 simulation input configuration.\n\nAttributes\n----------\nschema_version : str\n    Configuration contract revision, currently ``simulation.v1``.\nrun : RunConfiguration\n    Timing, seed, and selected model versions.\nprofiles : mapping of str to SpacecraftProfile\n    Reusable spacecraft subsystem definitions.\nsatellites : tuple of SatelliteDefinition\n    One to ten configured spacecraft.\nconstellations : tuple of ConstellationDefinition\n    Optional display groupings with validated membership.\nscenario : tuple of SolarDeratingScenario\n    Zero or one private P0 derating scenario.\n\nNotes\n-----\nCross-object references and nested mappings are validated and frozen\nbefore the configuration is normalized or hashed.",
+  "description": "Complete validated P0 simulation input configuration.\n\nAttributes\n----------\nschema_version : str\n    Configuration contract revision, currently ``simulation.v1``.\nrun : RunConfiguration\n    Timing, seed, and selected model versions.\nprofiles : mapping of str to SpacecraftProfile\n    Reusable spacecraft subsystem definitions.\nsatellites : tuple of SatelliteDefinition\n    One to ten configured spacecraft.\nconstellations : tuple of ConstellationDefinition\n    Optional display groupings with validated membership.\nscenario : tuple of SolarDeratingScenario\n    Private derating scenarios, at most one per spacecraft.\n\nNotes\n-----\nCross-object references and nested mappings are validated and frozen\nbefore the configuration is normalized or hashed.",
   "properties": {
     "constellations": {
       "items": {

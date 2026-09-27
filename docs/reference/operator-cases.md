@@ -10,8 +10,10 @@ audience: operators and developers
 The mission viewer connects **Early warnings**, **Investigations**, **Case history**,
 **Mission planning**, and **Shift Log** to the existing simulation and recorded-data
 viewer. A named operator owns each case across their runs.
-The workflow stores human assessments and recommendations; it does not generate an
-AI diagnosis, predict a failure, or execute a recommendation.
+The workflow stores human assessments, recommendations, and decisions.
+It can preserve a separately supplied saved model proposal for review, but does
+not generate an AI diagnosis, predict a failure from live telemetry, or execute a
+recommendation.
 
 ## Investigate a Measurement
 
@@ -19,6 +21,10 @@ AI diagnosis, predict a failure, or execute a recommendation.
    The view reports missing, invalid, or saturated readings, valid positive unserved
    power, and safe mode from its latest committed sample. These are current signals,
    not forecasts. No sample means the signal cannot be evaluated.
+   A separately labeled **model prediction** can appear only for the saved,
+   source-aligned recorded-mission exercise. It links to a durable case and means
+   a replay is held for human review; it is neither a measured fault nor future
+   ground truth.
 1. Review a signal or choose **Report concern** to describe an operator observation.
    The form fixes the spacecraft and available sequence when opened.
    Enter a title, context, and priority, then create the case.
@@ -40,6 +46,13 @@ has changed. Approval never automatically establishes a supported outcome.
 Unsaved form edits prompt before navigation; failed saves retain the draft.
 A stale revision returns a conflict so the operator can reload before saving again.
 
+For the linked recorded-mission case, approving the unchanged saved proposal
+applies its planning interpretation and resumes the same paused replay.
+Rejecting resumes the original interpretation.
+Editing or revising the saved recommendation remains a recorded operator narrative;
+it cannot rewrite recorded telemetry, execute a spacecraft command, or retroactively
+change a replay that has already continued.
+
 ## Review Unread Workflow Items
 
 The sidebar badge comes from database-backed per-operator read receipts.
@@ -52,6 +65,8 @@ close a case.
 Warnings keep a stable key while their committed condition remains active.
 They become unread again only when the condition reappears after clearing or its
 material fingerprint changes.
+The saved model-prediction warning is active only while its linked case awaits a
+decision and the source-aligned replay remains paused at its committed hold.
 Open cases become unread when their revision changes and disappear from the
 notification list when closed.
 Notification case items use the same latest-100-updated owned-case window as the
@@ -77,6 +92,12 @@ Every successful case creation, assessment, recommendation, decision, outcome,
 and evidence capture also appends an attributed entry to the originating run's
 [Shift Log](shift-log.md), in the same transaction.
 Idempotent retries cannot duplicate the case activity or handover entry.
+The recorded-mission bridge uses a deterministic case identity, so an interrupted
+delivery at a committed hold can be reconciled without creating a second model case.
+The wildfire demo also appends a labeled modeled image-delivery result to the
+linked case activity and Shift Log. An OFF run has no model case, so its result
+appears in the Shift Log only. These entries do not approve a recommendation,
+close the case, or change its separately recorded observed outcome.
 The Shift Log page shows the current operator's current-run draft and submitted
 handovers from all operators and runs. Submitting a handover shares its included
 case notes; the case itself and its complete workflow remain owner-only in case
@@ -101,6 +122,8 @@ All case routes require a named interactive viewer cookie and an allowed origin.
 Shared bearer credentials and anonymous demo sessions cannot access cases.
 Writes also require `X-CSRF-Token` and `Idempotency-Key`.
 Keep the same key and body when retrying an unconfirmed write.
+Metis-only approval and dismissal routes do not bypass these protections; decisions
+for a saved prediction use the same case endpoints below.
 
 | Method | Route | Body or result |
 | --- | --- | --- |

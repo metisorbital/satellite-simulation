@@ -290,7 +290,7 @@ class _CaseDetailsState extends State<CaseDetails> {
         _EditablePanel(
           title: 'Recommendation',
           subtitle:
-              'This is a proposed operator response. Approval only records a decision; it sends no command.',
+              'Approval records your decision. For a linked recorded mission, approving the unchanged model proposal applies its planning schedule and resumes playback. Edited recommendations remain narrative; playback keeps the original plan. No spacecraft command is sent.',
           editing: _editRecommendation,
           onEdit: () => setState(() => _editRecommendation = true),
           onCancel: () => setState(() {

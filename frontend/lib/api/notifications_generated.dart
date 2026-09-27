@@ -55,6 +55,9 @@ class OperatorNotification {
     required this.title,
     required this.summary,
     required this.unread,
+    required this.source,
+    required this.severity,
+    required this.case_id,
   });
 
   final String key;
@@ -64,6 +67,9 @@ class OperatorNotification {
   final String title;
   final String summary;
   final bool unread;
+  final String source;
+  final String severity;
+  final String? case_id;
 
   factory OperatorNotification.fromJson(Map<String, dynamic> json) => OperatorNotification(
     key: json['key'] as String,
@@ -73,6 +79,9 @@ class OperatorNotification {
     title: json['title'] as String,
     summary: json['summary'] as String,
     unread: json['unread'] as bool,
+    source: (json['source'] ?? "telemetry") as String,
+    severity: (json['severity'] ?? "warning") as String,
+    case_id: json['case_id'] == null ? null : json['case_id'] as String,
   );
 
   Map<String, dynamic> toJson() => {
@@ -83,5 +92,8 @@ class OperatorNotification {
     'title': title,
     'summary': summary,
     'unread': unread,
+    'source': source,
+    'severity': severity,
+    'case_id': case_id == null ? null : case_id!,
   };
 }

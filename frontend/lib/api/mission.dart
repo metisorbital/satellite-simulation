@@ -61,6 +61,10 @@ class Mission extends ChangeNotifier {
   int _demoRefreshAttempts = 0;
   int _generation = 0, _backoff = 1000, _nextTrajectory = 0;
   int _trajectoryRequest = 0;
+
+  /// Run whose orbit preview the server can no longer build, for example
+  /// after a restart released its engine; it is not requested again.
+  String? _trajectoryReleased;
   Timer? _reconnect;
   Timer? _demoRefresh;
   WebSocketChannel? _socket;
@@ -431,6 +435,7 @@ class Mission extends ChangeNotifier {
   }
 
   Future<void> _loadTrajectory(int generation, JsonMap run) async {
+    if (run['run_id'] == _trajectoryReleased) return;
     final request = ++_trajectoryRequest;
     final position = max(
       0,
@@ -453,6 +458,12 @@ class Mission extends ChangeNotifier {
         notifyListeners();
       }
     } catch (exception) {
+      if (exception is ViewerRequestException && exception.statusCode == 409) {
+        // `trajectory_not_prepared`: the preview will not come back for this
+        // run, and its retained telemetry still plays, so stop asking quietly.
+        _trajectoryReleased = run['run_id'] as String;
+        return;
+      }
       if (_current(generation, run['run_id'] as String) &&
           request == _trajectoryRequest &&
           trajectory == null) {
@@ -771,6 +782,10 @@ class Mission extends ChangeNotifier {
       return false;
     }
   }
+
+  /// Call a Metis agent route with this session's CSRF token.
+  Future<JsonMap> metis(String path, {JsonMap? body}) =>
+      _request(path, body: body);
 
   /// Create an unstarted run for the selected producer without mixing sources.
   Future<void> selectSource(String source, {String? datasetId}) async {

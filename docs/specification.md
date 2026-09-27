@@ -50,10 +50,10 @@ It does **not** own anomaly models, risk scores, estimated failure time, natural
 The viewer may show measured state and explicitly configured limit violations; it must not fabricate an AI health score.
 
 The September 26 [operator workflow extension](reference/operator-cases.md) adds
-private human-authored investigations, recommendations, decisions, and observed
-outcomes alongside configured mission planning and handover records.
-It preserves committed public evidence without implementing the separate
-automated analytics product or changing simulation physics.
+private investigations, recommendations, decisions, and observed outcomes alongside
+configured mission planning and handover records.
+It preserves committed public evidence without implementing the separate automated
+analytics product or changing simulation physics.
 
 ## 3. Priorities and Completion Boundary
 
@@ -345,3 +345,45 @@ See [Spacecraft Telemetry Models and Export](reference/spacecraft-telemetry.md) 
 The extension preserves commit-before-publication, one simulated clock, independent satellite state, deterministic generation, and separation of private scenario/outcome truth from consumer data.
 Its first health mechanism remains solar derating propagated through the power ledger and dependent physical states; future inference, real-mission validation, and a telemetry dashboard are not delivered by this source extension.
 Acceptance requires focused model/contract evidence and integration checks; neither the number of named channels nor successful export alone establishes physical fidelity or ML performance.
+
+## 14. Metis Recorded-Mission Review
+
+The [recorded-mission review](reference/metis-demo.md) exercises a separate
+analytics product against an existing BUPT-1 replay at one saved source-time origin.
+
+**Metis's role:** it exposes a saved forecast and planning proposal, then requests
+human review through the normal private operator-case workflow.
+It does not re-forecast from replay samples, create a new telemetry source, or
+issue a spacecraft command.
+
+**The simulator's role:** it preserves the recorded BUPT-1 stream and pauses it
+only at the durable committed review tick.
+The bridge creates a linked private case with immutable public evidence, and the
+existing Early warnings, Investigations, Case history, notification receipts, and
+Shift Log surfaces present and audit the work.
+An unchanged approved proposal changes only the planning interpretation while the
+same replay resumes; rejection retains the original interpretation.
+An observed outcome remains a separate human-recorded result.
+
+The uploaded-wildfire-mission demonstration also projects task execution and
+illustrative image delivery from the saved plan's energy margins. With Metis OFF,
+the modeled admission gate prevents the original downlink from starting because
+the saved budget cannot sustain its full window; with Metis ON and the proposed shift approved,
+the image reaches the ground at T+103, before the T+120 response briefing.
+These `demo_projection` outcomes are separate from unchanged recorded telemetry.
+The durable watch setting, model alert, human decision, and labeled demo result
+remain auditable; a demo result never automatically establishes a supported
+observed outcome. The exact default alert is T+60, 21 June 2023 at 14:05 UTC.
+The critical banner offers Review and direct Approve through the same audited
+case API. Overview compares OFF and approved ON delivery at one committed clock;
+the ON lane cannot display executed actions before approval.
+
+The saved forecast and proposal remain private operator-review data, not public
+telemetry, operational events, simulator truth, or evidence of a real fault.
+The normal restart policy aborts active/paused runs at a committed boundary;
+recovery can reconcile the deterministic linked case but does not resume or invent
+recorded playback.
+
+This narrow integration preserves the simulator's P0 boundary: a separate future
+analytics product may consume public measurements, but forecast performance,
+calibration, and operational benefit require independent evaluation.

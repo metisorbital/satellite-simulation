@@ -11,6 +11,7 @@ class PayloadTaskDraft {
     required int startS,
     required int durationS,
     required this.repeatEveryOrbit,
+    this.taskFields = const {},
   }) : startController = TextEditingController(text: '$startS'),
        durationController = TextEditingController(text: '$durationS');
 
@@ -22,6 +23,9 @@ class PayloadTaskDraft {
 
   /// Whether the backend repeats this activation on each nominal orbit.
   bool repeatEveryOrbit;
+
+  /// Task fields this editor does not change, such as `added_load_w`, `label` and `min_start_soc`.
+  final Map<String, dynamic> taskFields;
 
   String? _validateStart(String? value) => _wholeSeconds(value ?? '') == null
       ? 'Use a whole number of seconds, 0 or greater'
@@ -58,6 +62,10 @@ class PayloadScheduleDraft {
           startS: startS,
           durationS: endS - startS,
           repeatEveryOrbit: operation['repeat'] == 'orbit',
+          taskFields: {
+            for (final key in const ['added_load_w', 'label', 'min_start_soc'])
+              if (operation[key] != null) key: operation[key],
+          },
         );
         tasks.add(task);
         _allocatedTasks.add(task);
@@ -145,6 +153,7 @@ class PayloadScheduleDraft {
               _wholeSeconds(task.durationController.text)!,
           'mode': 'payload_active',
           'repeat': task.repeatEveryOrbit ? 'orbit' : null,
+          ...task.taskFields,
         },
   ];
 

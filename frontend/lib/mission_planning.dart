@@ -111,8 +111,8 @@ class MissionPlanningPage extends StatelessWidget {
             if (mission.isObserved)
               _empty(
                 Icons.satellite_alt_outlined,
-                'No mission plan in this recording',
-                'The recorded source provides measurements, not task intent or an operating schedule. Telemetry remains available for investigation.',
+                'Recorded source measurements',
+                'This source supplies measurements. The saved wildfire mission schedule and Metis forecast are in Missions; the recording cannot verify command execution or delivery.',
                 onOverview,
                 'Open replay overview',
               )
@@ -238,7 +238,14 @@ class MissionPlanningPage extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         Text(
-          (operation['mode'] as String).replaceAll('_', ' '),
+          [
+            ((operation['label'] ?? operation['mode']) as String).replaceAll(
+              '_',
+              ' ',
+            ),
+            if ((operation['added_load_w'] as num? ?? 0) > 0)
+              '+${(operation['added_load_w'] as num).toStringAsFixed(0)} W',
+          ].join('  ·  '),
           style: const TextStyle(fontSize: 16),
         ),
         const SizedBox(height: 10),

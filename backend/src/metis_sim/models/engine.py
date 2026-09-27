@@ -8,7 +8,14 @@ from typing import cast
 import numpy as np
 
 from metis_sim.domain.config import SatelliteMode, SimulationConfig
-from metis_sim.domain.physics import ChannelValue, OrbitSample, PhysicsSample, TruthSample, Vector3
+from metis_sim.domain.physics import (
+    ChannelValue,
+    OrbitSample,
+    PhysicsSample,
+    SkippedOperation,
+    TruthSample,
+    Vector3,
+)
 from metis_sim.models.constants import (
     AU_M,
     EARTH_RADIUS_M,
@@ -19,7 +26,11 @@ from metis_sim.models.constants import (
 )
 from metis_sim.models.environment import illumination_fraction, solar_generation_w
 from metis_sim.models.frames import FrameAdapter
-from metis_sim.models.operations import operational_mode, resolve_operations
+from metis_sim.models.operations import (
+    operational_added_load,
+    operational_mode,
+    resolve_operations,
+)
 from metis_sim.models.orbit import (
     FloatArray,
     acceleration,
@@ -161,6 +172,7 @@ class SimulationEngine:
         # curtailed, unserved: all powers describe one completed interval.
         self._ledger = np.empty((count, satellites, 7), dtype=np.float64)
         self._modes: list[tuple[str, ...]] = []
+        self._skipped: list[dict[int, SkippedOperation]] = []
         self._housekeeping: list[dict[str, FloatArray]] = []
         self._derating = np.ones((count, satellites), dtype=np.float64)
         self._interval_derating = np.ones((count, satellites), dtype=np.float64)
@@ -190,10 +202,22 @@ class SimulationEngine:
             operations = resolve_operations(
                 satellite.operations, self.duration_s, satellite.orbit.a_m
             )
-            modes = tuple(
+            modes = [
                 operational_mode(tick, satellite.initial_mode, operations) for tick in range(count)
+            ]
+            added_load = np.fromiter(
+                (operational_added_load(tick, operations) for tick in range(count)),
+                dtype=np.float64,
+                count=count,
             )
-            self._modes.append(modes)
+            # Guarded windows are decided in the ledger loop from the energy at
+            # their start tick, before that tick's mode is first used.
+            guards = {
+                operation.start_s: operation
+                for operation in operations
+                if operation.min_start_soc is not None
+            }
+            skipped: dict[int, SkippedOperation] = {}
             scenario = self._scenarios.get(satellite.satellite_id)
             evaluator = None
             if scenario is not None:
@@ -232,10 +256,27 @@ class SimulationEngine:
                 endpoint_acceleration = acceleration(self._gcrs[:, index, :3], axis)
             energy = battery.usable_capacity_wh * battery.initial_soc
             for tick in range(count):
+                guarded = guards.pop(max(tick - 1, 0), None)
+                limit = guarded.min_start_soc if guarded is not None else None
+                if guarded is not None and limit is not None:
+                    soc = energy / battery.usable_capacity_wh
+                    if soc < limit:
+                        for skipped_tick in range(guarded.start_s, min(guarded.end_s, count)):
+                            modes[skipped_tick] = satellite.initial_mode
+                            added_load[skipped_tick] = 0.0
+                        skipped[guarded.start_s] = SkippedOperation(
+                            label=guarded.label,
+                            mode=guarded.mode,
+                            start_s=guarded.start_s,
+                            end_s=guarded.end_s,
+                            battery_soc=soc,
+                            min_start_soc=limit,
+                        )
                 interval_mode = modes[max(tick - 1, 0)]
                 allocation = allocate_power(
                     float(interval_generation[tick]),
-                    profile.loads_w[cast(SatelliteMode, interval_mode)],
+                    profile.loads_w[cast(SatelliteMode, interval_mode)]
+                    + float(added_load[max(tick - 1, 0)]),
                     energy,
                     battery.usable_capacity_wh,
                     battery.charge_efficiency,
@@ -287,6 +328,8 @@ class SimulationEngine:
             for values in housekeeping.values():
                 values.setflags(write=False)
             self._housekeeping.append(housekeeping)
+            self._modes.append(tuple(modes))
+            self._skipped.append(skipped)
         for array in (
             self._elapsed,
             self._itrs,
@@ -411,6 +454,7 @@ class SimulationEngine:
                     unserved_power_w=unserved,
                     sun_position_itrf_m=self._vector(self._sun_itrs[tick]),
                     truth=truth,
+                    skipped_operation=self._skipped[index].get(tick),
                     housekeeping_channels=tuple(
                         (
                             name,

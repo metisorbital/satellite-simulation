@@ -559,13 +559,46 @@
     },
     "Operation": {
       "additionalProperties": false,
-      "description": "Half-open scheduled operational mode interval.\n\nAttributes\n----------\nstart_s, end_s : int\n    Simulated-second bounds of the half-open interval ``[start_s, end_s)``.\nmode : SatelliteMode\n    Mode active during the interval.\nrepeat : {\"orbit\"} or None\n    Repeat at the satellite's nominal orbital period, or run once when\n    omitted. Every repetition preserves ``end_s - start_s`` seconds.",
+      "description": "Half-open scheduled operational mode interval.\n\nAttributes\n----------\nstart_s, end_s : int\n    Simulated-second bounds of the half-open interval ``[start_s, end_s)``.\nmode : SatelliteMode\n    Mode active during the interval.\nrepeat : {\"orbit\"} or None\n    Repeat at the satellite's nominal orbital period, or run once when\n    omitted. Every repetition preserves ``end_s - start_s`` seconds.\nadded_load_w : float, default=0.0\n    Electrical load in watts added to the mode's profile load while the\n    interval is active, for tasks such as a capture, a downlink, or a\n    compute batch.\nlabel : str or None\n    Optional public task identifier, for example ``downlink``.\nmin_start_soc : float or None\n    Onboard start guard. When the battery state of charge at the window's\n    start tick is below this value, the spacecraft skips the whole window:\n    it stays in its initial mode with no added load and reports an\n    ``operation_skipped`` event. The guard is checked only at the start.",
       "properties": {
+        "added_load_w": {
+          "default": 0.0,
+          "maximum": 10000,
+          "minimum": 0,
+          "title": "Added Load W",
+          "type": "number"
+        },
         "end_s": {
           "maximum": 86400,
           "minimum": 1,
           "title": "End S",
           "type": "integer"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Label"
+        },
+        "min_start_soc": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Min Start Soc"
         },
         "mode": {
           "enum": [
@@ -604,6 +637,67 @@
       "title": "Operation",
       "type": "object"
     },
+    "OperationSkippedDetails": {
+      "additionalProperties": false,
+      "description": "Allowlisted details of a window the onboard start guard refused.\n\nAttributes\n----------\nlabel : str or None\n    Public task identifier of the skipped window.\nmode : Mode\n    Mode the window would have commanded.\nstart_s, end_s : int\n    The skipped half-open window in elapsed simulated seconds.\nbattery_soc : float\n    Observed state of charge at the start tick.\nmin_start_soc : float\n    Configured start guard the state of charge was below.",
+      "properties": {
+        "battery_soc": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Battery Soc",
+          "type": "number"
+        },
+        "end_s": {
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "title": "End S",
+          "type": "integer"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z0-9_-]{1,64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Label"
+        },
+        "min_start_soc": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Min Start Soc",
+          "type": "number"
+        },
+        "mode": {
+          "enum": [
+            "nominal",
+            "payload_active",
+            "safe"
+          ],
+          "title": "Mode",
+          "type": "string"
+        },
+        "start_s": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "title": "Start S",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "label",
+        "mode",
+        "start_s",
+        "end_s",
+        "battery_soc",
+        "min_start_soc"
+      ],
+      "title": "OperationSkippedDetails",
+      "type": "object"
+    },
     "OperationalEvent": {
       "additionalProperties": false,
       "description": "Allowlisted observable operational event envelope.\n\nAttributes\n----------\nschema_version : str\n    Breaking-contract identifier, currently ``operational_event.v1``.\nsource_id : str\n    Stable producer identity.\nstream_id : UUID\n    Stream namespace associated with the event.\nevent_sequence : int\n    Monotonic sequence within the stream's event namespace.\nsatellite_id : str\n    Logical spacecraft identity.\nsource_kind : {\"synthetic\", \"observed\"}\n    Provenance of the producer data.\ntime_domain : {\"simulation_utc\", \"mission_utc\"}\n    Meaning of ``observed_at``.\nobserved_at, emitted_at : datetime\n    UTC event time and producer emission time.\nevent_type : EventType\n    Allowlisted observable event discriminator.\nreason_code : str\n    Stable ASCII reason code for the event.\ndetails : EventDetails\n    Typed details matching ``event_type`` exactly.\n\nNotes\n-----\nEvent details describe an observed condition or transition. Private\ninjection schedules and evaluator-only outcome labels are excluded.",
@@ -618,6 +712,9 @@
             },
             {
               "$ref": "#/$defs/PowerUnservedDetails"
+            },
+            {
+              "$ref": "#/$defs/OperationSkippedDetails"
             }
           ],
           "title": "Details"
@@ -638,7 +735,8 @@
             "mode_changed",
             "low_energy_limit_entered",
             "low_energy_limit_cleared",
-            "power_unserved"
+            "power_unserved",
+            "operation_skipped"
           ],
           "title": "Event Type",
           "type": "string"
@@ -1263,7 +1361,7 @@
     },
     "PublicRunStatus": {
       "additionalProperties": false,
-      "description": "Committed run status containing no configuration or scenario identity.\n\nAttributes\n----------\nrun_id : str\n    Identifier for this execution.\nstatus : RunState\n    Public lifecycle state.\nepoch_utc : datetime\n    Run start epoch in UTC.\nduration_s : int\n    Configured simulated duration.\ncommitted_tick : int\n    Latest durably committed elapsed source second, or ``-1`` before the\n    first commit. Observed replay advances this clock through source gaps.\ncommitted_sequence : int or None\n    Last committed observation index for recorded sources. For physics\n    runs it is omitted and the sequence equals ``committed_tick``.\nstatus_revision : int\n    Monotonic status revision used to order same-tick responses.\ncommitted_at : datetime or None\n    Simulation UTC timestamp of the latest committed sample; ``None``\n    before the first sample.\nrequested_speed, effective_speed : float or int\n    Requested pacing multiplier and measured effective multiplier.\nwall_lag_s : float\n    Difference between requested simulated progress and wall pacing.\nsatellites : list of PublicSpacecraft\n    Public spacecraft descriptors and stream identities.\nsource_kind : str\n    Provenance label, ``synthetic`` or ``observed``.\ndata_source : str\n    Selected physics or recorded dataset adapter.\ndataset_id, dataset_title : str or None\n    Imported archive identity and title, absent for physics runs.\ntime_domain : str\n    Meaning of source timestamps, simulation or mission UTC.\nnominal_cadence_s : float or None\n    Documented observation cadence; gaps are not filled to meet it.\nplayback_start_s : int\n    First source-time position selected for this independent playback.\nmodel_provenance : PublicModelProvenance\n    Allowlisted model and Earth-orientation metadata.\nframe_count : int\n    Number of committed public frames.\ndiagnostic : str or None\n    Safe terminal or health diagnostic, when present.\n\nNotes\n-----\nSeeds, scenario parameters, private manifests, and future outcome labels\nare intentionally excluded from this projection.",
+      "description": "Committed run status containing no configuration or scenario identity.\n\nAttributes\n----------\nrun_id : str\n    Identifier for this execution.\nstatus : RunState\n    Public lifecycle state.\nepoch_utc : datetime\n    Run start epoch in UTC.\nduration_s : int\n    Configured simulated duration.\ncommitted_tick : int\n    Latest durably committed elapsed source second, or ``-1`` before the\n    first commit. Observed replay advances this clock through source gaps.\ncommitted_sequence : int or None\n    Last committed observation index for recorded sources. For physics\n    runs it is omitted and the sequence equals ``committed_tick``.\nstatus_revision : int\n    Monotonic status revision used to order same-tick responses.\ncommitted_at : datetime or None\n    Simulation UTC timestamp of the latest committed sample; ``None``\n    before the first sample.\nrequested_speed, effective_speed : float or int\n    Requested pacing multiplier and measured effective multiplier.\nwall_lag_s : float\n    Difference between requested simulated progress and wall pacing.\nsatellites : list of PublicSpacecraft\n    Public spacecraft descriptors and stream identities.\nsource_kind : str\n    Provenance label, ``synthetic`` or ``observed``.\ndata_source : str\n    Selected physics or recorded dataset adapter.\ndataset_id, dataset_title : str or None\n    Imported archive identity and title, absent for physics runs.\ntime_domain : str\n    Meaning of source timestamps, simulation or mission UTC.\nnominal_cadence_s : float or None\n    Documented observation cadence; gaps are not filled to meet it.\nplayback_start_s : int\n    First source-time position selected for this independent playback.\nmodel_provenance : PublicModelProvenance\n    Allowlisted model and Earth-orientation metadata.\nenvironment_source : str or None\n    Public name of recorded data that shaped a physics run's environment.\nframe_count : int\n    Number of committed public frames.\ndiagnostic : str or None\n    Safe terminal or health diagnostic, when present.\n\nNotes\n-----\nSeeds, scenario parameters, private manifests, and future outcome labels\nare intentionally excluded from this projection.",
       "properties": {
         "committed_at": {
           "anyOf": [
@@ -1348,6 +1446,18 @@
           "default": 0,
           "title": "Effective Speed",
           "type": "number"
+        },
+        "environment_source": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Environment Source"
         },
         "epoch_utc": {
           "format": "date-time",
@@ -1458,6 +1568,7 @@
         "nominal_cadence_s",
         "playback_start_s",
         "model_provenance",
+        "environment_source",
         "frame_count",
         "diagnostic"
       ],
@@ -1557,7 +1668,7 @@
     },
     "RunConfiguration": {
       "additionalProperties": false,
-      "description": "Simulation timing, seed, and versioned model selections.\n\nAttributes\n----------\nepoch_utc : datetime\n    UTC-normalized instant at which the run starts.\nduration_s : int\n    Configured elapsed duration in simulated seconds; samples include\n    both tick zero and the endpoint.\ntick_s, telemetry_period_s : int\n    Fixed physical and telemetry cadence; both are one second in P0.\nspeed : int\n    Requested wall-clock multiplier.\nseed : int\n    Reproducibility seed within JavaScript's exact integer range.\nearth_model, orbit_model, sun_model : str\n    Versioned model identifiers used by the run.",
+      "description": "Simulation timing, seed, and versioned model selections.\n\nAttributes\n----------\nepoch_utc : datetime\n    UTC-normalized instant at which the run starts.\nduration_s : int\n    Configured elapsed duration in simulated seconds; samples include\n    both tick zero and the endpoint.\ntick_s, telemetry_period_s : int\n    Fixed physical and telemetry cadence; both are one second in P0.\nspeed : int\n    Requested wall-clock multiplier.\nseed : int\n    Reproducibility seed within JavaScript's exact integer range.\nearth_model, orbit_model, sun_model : str\n    Versioned model identifiers used by the run.\nenvironment_source : str or None\n    Public name of recorded data that shaped the simulated environment,\n    such as ``BUPT-1 solar harvest, 21 June 2023 (scaled)``. It names a\n    source only; scenario values stay private.",
       "properties": {
         "duration_s": {
           "default": 21600,
@@ -1570,6 +1681,20 @@
           "const": "wgs84_j2_v1",
           "title": "Earth Model",
           "type": "string"
+        },
+        "environment_source": {
+          "anyOf": [
+            {
+              "maxLength": 160,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Environment Source"
         },
         "epoch_utc": {
           "format": "date-time",
@@ -1746,7 +1871,7 @@
     },
     "SimulationConfig": {
       "additionalProperties": false,
-      "description": "Complete validated P0 simulation input configuration.\n\nAttributes\n----------\nschema_version : str\n    Configuration contract revision, currently ``simulation.v1``.\nrun : RunConfiguration\n    Timing, seed, and selected model versions.\nprofiles : mapping of str to SpacecraftProfile\n    Reusable spacecraft subsystem definitions.\nsatellites : tuple of SatelliteDefinition\n    One to ten configured spacecraft.\nconstellations : tuple of ConstellationDefinition\n    Optional display groupings with validated membership.\nscenario : tuple of SolarDeratingScenario\n    Zero or one private P0 derating scenario.\n\nNotes\n-----\nCross-object references and nested mappings are validated and frozen\nbefore the configuration is normalized or hashed.",
+      "description": "Complete validated P0 simulation input configuration.\n\nAttributes\n----------\nschema_version : str\n    Configuration contract revision, currently ``simulation.v1``.\nrun : RunConfiguration\n    Timing, seed, and selected model versions.\nprofiles : mapping of str to SpacecraftProfile\n    Reusable spacecraft subsystem definitions.\nsatellites : tuple of SatelliteDefinition\n    One to ten configured spacecraft.\nconstellations : tuple of ConstellationDefinition\n    Optional display groupings with validated membership.\nscenario : tuple of SolarDeratingScenario\n    Private derating scenarios, at most one per spacecraft.\n\nNotes\n-----\nCross-object references and nested mappings are validated and frozen\nbefore the configuration is normalized or hashed.",
       "properties": {
         "constellations": {
           "items": {

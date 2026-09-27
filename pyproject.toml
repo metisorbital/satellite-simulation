@@ -31,7 +31,7 @@ dev = [
 metis-sim = "metis_sim.cli:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["backend/src/metis_sim"]
+packages = ["backend/src/metis_sim", "backend/src/metis_agent"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -15,6 +15,7 @@ enum MissionView {
   telemetry('Telemetry', Icons.show_chart_rounded),
   warnings('Early warnings', Icons.warning_amber_rounded),
   investigations('Investigations', Icons.search_rounded),
+  missions('Missions', Icons.flag_outlined),
   planning('Mission planning', Icons.event_note_outlined),
   history('Case history', Icons.history_rounded),
   shiftLog('Shift log', Icons.menu_book_outlined);

@@ -419,18 +419,21 @@ class DecisionCaseRequest {
     required this.decision,
     required this.reason,
     this.revised_recommendation,
+    this.mission_proposal_id,
   });
 
   final int revision;
   final String decision;
   final String reason;
   final String? revised_recommendation;
+  final String? mission_proposal_id;
 
   factory DecisionCaseRequest.fromJson(Map<String, dynamic> json) => DecisionCaseRequest(
     revision: json['revision'] as int,
     decision: json['decision'] as String,
     reason: json['reason'] as String,
     revised_recommendation: json['revised_recommendation'] == null ? null : json['revised_recommendation'] as String,
+    mission_proposal_id: json['mission_proposal_id'] == null ? null : json['mission_proposal_id'] as String,
   );
 
   Map<String, dynamic> toJson() => {
@@ -438,6 +441,7 @@ class DecisionCaseRequest {
     'decision': decision,
     'reason': reason,
     if (revised_recommendation != null) 'revised_recommendation': revised_recommendation == null ? null : revised_recommendation!,
+    if (mission_proposal_id != null) 'mission_proposal_id': mission_proposal_id == null ? null : mission_proposal_id!,
   };
 }
 

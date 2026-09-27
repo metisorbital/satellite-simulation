@@ -244,13 +244,41 @@ class PowerUnservedDetails(PublicModel):
         return self
 
 
+class OperationSkippedDetails(PublicModel):
+    """Allowlisted details of a window the onboard start guard refused.
+
+    Attributes
+    ----------
+    label : str or None
+        Public task identifier of the skipped window.
+    mode : Mode
+        Mode the window would have commanded.
+    start_s, end_s : int
+        The skipped half-open window in elapsed simulated seconds.
+    battery_soc : float
+        Observed state of charge at the start tick.
+    min_start_soc : float
+        Configured start guard the state of charge was below.
+    """
+
+    label: Annotated[str, Field(pattern=ID_PATTERN)] | None
+    mode: Mode
+    start_s: Annotated[int, Field(ge=0, le=MAX_SAFE_INTEGER)]
+    end_s: Annotated[int, Field(ge=1, le=MAX_SAFE_INTEGER)]
+    battery_soc: Annotated[float, Field(ge=0, le=1)]
+    min_start_soc: Annotated[float, Field(ge=0, le=1)]
+
+
 EventType = Literal[
     "mode_changed",
     "low_energy_limit_entered",
     "low_energy_limit_cleared",
     "power_unserved",
+    "operation_skipped",
 ]
-EventDetails = ModeChangedDetails | LowEnergyLimitDetails | PowerUnservedDetails
+EventDetails = (
+    ModeChangedDetails | LowEnergyLimitDetails | PowerUnservedDetails | OperationSkippedDetails
+)
 
 
 class OperationalEvent(PublicModel):
@@ -314,6 +342,7 @@ class OperationalEvent(PublicModel):
             "low_energy_limit_entered": LowEnergyLimitDetails,
             "low_energy_limit_cleared": LowEnergyLimitDetails,
             "power_unserved": PowerUnservedDetails,
+            "operation_skipped": OperationSkippedDetails,
         }[self.event_type]
         if not isinstance(self.details, detail_model):
             raise ValueError(f"{self.event_type} requires {detail_model.__name__}")

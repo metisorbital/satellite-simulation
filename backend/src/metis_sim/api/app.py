@@ -12,6 +12,9 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from metis_agent.api import Metis
+from metis_agent.recorded import build_recorded_decision, recorded_mission_epoch
+from metis_agent.store import MetisError
 from pydantic import ValidationError
 from sqlalchemy.exc import SQLAlchemyError
 from starlette.exceptions import HTTPException
@@ -19,18 +22,21 @@ from starlette.exceptions import HTTPException
 from metis_sim.adapters.cases import CaseRepository
 from metis_sim.adapters.configuration import ConfigurationParsingError
 from metis_sim.adapters.database import Database
+from metis_sim.adapters.mission import MissionRepository
 from metis_sim.adapters.notifications import NotificationRepository
 from metis_sim.adapters.reads import PublicReader
 from metis_sim.adapters.repository import Repository
 from metis_sim.adapters.shift_log import ShiftLogRepository
 from metis_sim.api.auth import Auth
 from metis_sim.api.cases import router as cases_router
+from metis_sim.api.metis_host import SimulatorMetisHost
 from metis_sim.api.notifications import router as notifications_router
 from metis_sim.api.openapi import install_openapi
 from metis_sim.api.routes import router
 from metis_sim.api.shift_log import router as shift_log_router
 from metis_sim.api.visual import router as visual_router
 from metis_sim.application.errors import ServiceError
+from metis_sim.application.mission_cases import MissionCaseBridge
 from metis_sim.application.runner import Runner
 from metis_sim.application.service import SimulationService
 from metis_sim.logging import safe_sqlstate
@@ -108,6 +114,8 @@ def create_app(
                 [operator.model_dump(mode="json") for operator in auth.operators.values()]
             )
             repository.recover()
+            if getattr(app.state, "metis", None) is not None:
+                runner.holds.update(await run_in_threadpool(app.state.metis.recover))
             repository.expire_terminal(days=0 if settings.public_demo else 7)
             if settings.local_demo and prepare_demo:
                 await run_in_threadpool(service.prepare_demo, settings.demo_config, demo_at)
@@ -266,6 +274,27 @@ def create_app(
     app.include_router(notifications_router)
     app.include_router(shift_log_router)
     app.include_router(visual_router)
+    if settings.metis_mission_config.is_file():
+        # Saved predictions and mission state share the real replay identity.
+        service.recorded_mission_epoch = recorded_mission_epoch()
+        app.state.metis_host = SimulatorMetisHost(app.state)
+        metis = Metis(
+            build_recorded_decision(),
+            MissionRepository(database),
+            app.state.metis_host,
+            settings.metis_alert_s,
+        )
+        mission_cases = MissionCaseBridge(cases)
+        metis.on_mission_alert = mission_cases.raise_alert
+        metis.on_mission_result = mission_cases.record_result
+        app.state.metis = metis
+        runner.on_commit = metis.committed
+        app.include_router(metis.router(app.state.metis_host))
+
+        @app.exception_handler(MetisError)
+        async def metis_error(request: Request, error: MetisError) -> JSONResponse:
+            return error_response(request, error.code, error.message, error.status, [])
+
     install_openapi(app)
     if settings.frontend_path.is_dir():
         # A root StaticFiles mount also matches WebSocket scopes. Reject unknown

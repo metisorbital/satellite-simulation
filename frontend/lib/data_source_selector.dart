@@ -19,6 +19,9 @@ class DataSourceSelector extends StatelessWidget {
     final currentDataset = mission.status?['dataset_id'] as String?;
     final value = mission.isObserved ? 'dataset:$currentDataset' : 'physics';
     final enabled = !mission.busy && mission.canReplaceRun;
+    final environment = mission.isObserved
+        ? null
+        : mission.status?['environment_source'] as String?;
     final guidance = !mission.canReplaceRun && mission.canControl
         ? 'Stop this run to change its data source.'
         : mission.isObserved
@@ -102,7 +105,9 @@ class DataSourceSelector extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.only(left: 8),
                 child: Tooltip(
-                  message: guidance,
+                  message: environment == null
+                      ? guidance
+                      : '$guidance Conditions: $environment.',
                   child: const Icon(Icons.info_outline, size: 15),
                 ),
               ),
@@ -122,6 +127,13 @@ class DataSourceSelector extends StatelessWidget {
             guidance,
             style: const TextStyle(fontSize: 10, color: Color(0xff94a4b7)),
           ),
+          if (environment != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              'Conditions: $environment',
+              style: const TextStyle(fontSize: 10, color: Color(0xffd4dfe8)),
+            ),
+          ],
         ],
         if (mission.datasetsError != null)
           const Padding(

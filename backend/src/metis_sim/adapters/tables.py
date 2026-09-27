@@ -66,6 +66,17 @@ runs = Table(
     ),
     schema="private",
 )
+mission_states = Table(
+    "mission_states",
+    metadata,
+    Column("run_id", ForeignKey("private.runs.run_id"), primary_key=True),
+    Column("user_id", ForeignKey("private.users.user_id"), primary_key=True),
+    Column("state", document, nullable=False),
+    Column("created_at", DateTime(timezone=True), nullable=False),
+    Column("updated_at", DateTime(timezone=True), nullable=False),
+    schema="private",
+)
+Index("mission_states_user_updated", mission_states.c.user_id, mission_states.c.updated_at)
 Index(
     "one_active_run_per_source",
     runs.c.source_id,

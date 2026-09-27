@@ -19,6 +19,7 @@ nav = [
   { "Database Tables" = "reference/database.md" },
   { "Shift Log" = "reference/shift-log.md" },
   { "Operator Cases" = "reference/operator-cases.md" },
+  { "Metis Wildfire Demo" = "reference/metis-demo.md" },
   { "Consume the API" = "api.md" },
   { "Satellite Telemetry" = [
     { "Models and ML Export" = "reference/spacecraft-telemetry.md" },
