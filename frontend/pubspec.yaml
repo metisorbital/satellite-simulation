@@ -21,6 +21,7 @@ flutter:
   assets:
     - assets/images/metis-orbital-logo.png
     - assets/images/metis-orbital-mark.png
+    - assets/images/wildfire-camp-fire-landsat8.jpg
   fonts:
     - family: MetisSans
       fonts:

@@ -103,6 +103,22 @@ recurrence and rejects overlapping windows, including overlaps created by later
 cycles; the first declared window must fit within the run. The viewer does not
 predict recurrence or replace backend schedule validation.
 
+## Metis in the Overview
+
+When the server has the Metis demo installed, the **Overview** (`lib/metis/metis_panels.dart`) shows it around the globe; there is no separate Metis tab. `MetisBar`, above the globe, shows the wildfire request, the simulated conditions and a **Metis OFF | ON** switch.
+- **Off:** **Fly mission** flies the original schedule.
+- **On:** **Fly mission** starts the run at T0 with "Metis watching". At +60 the run pauses by itself and the **Metis alert** appears: the proposal with **Approve and uplink** and **Dismiss**, and one folded **Metis forecast** section that opens both the solar supply and essential load charts (p10–p90 band) together. Nothing about the proposal shows before the alert.
+
+Both Metis sections render text 15% larger than the rest of the Overview.
+
+`MetisResults`, below the globe, shows the energy-margin chart (the active run, plus the other plan's latest run for comparison), the wildfire image panel, verdict cards and a task timeline that crosses out skipped tasks. The globe keeps a fixed height, and the whole Overview, including its run toolbar, scrolls. Metis is hidden for recorded replays and when `/v1/metis/briefing` returns 404.
+The image panel reveals `assets/images/wildfire-camp-fire-landsat8.jpg` (NASA Earth Observatory, Landsat 8) as the downlink progresses, and only once telemetry shows the capture and the downlink done. It is credited as an illustrative product.
+
+`MetisController`, owned by the mission shell, loads `/v1/metis/briefing` and calls `Mission.launchMissionRun`, which launches the plan's run and resumes it unless Metis holds it for its alert. Approving launches the Metis plan from the alert; dismissing resumes the held run. It then polls `/v1/metis/runs/{run_id}/outcome` once a second until the run completes. All values come from the Metis API; the view computes no physics.
+
+The Overview's data-source line also shows `Conditions: …` when the run status carries `environment_source`.
+See the [Metis demo guide](reference/metis-demo.md).
+
 ## Component Responsibilities
 
 | Layer | Responsibility |

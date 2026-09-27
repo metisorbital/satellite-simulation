@@ -233,6 +233,8 @@ The payload-active `210 W` is the total spacecraft load; nominal and safe modes 
 A fully supplied 300-second activation consumes `17.5 Wh` of total spacecraft load, of which `5 Wh` is additional to nominal operation.
 Battery energy change also depends on solar generation during the interval and charge/discharge efficiency.
 
+An operation may add `added_load_w` watts to its mode's profile load, for a task such as a capture, a downlink or a compute batch. The requested load for an interval is `loads_w[mode] + added_load_w` of the operation active at the interval start, and zero is added outside operations. An optional public `label` names the task. An optional `min_start_soc` guards the start: the engine evaluates it in the ledger loop with the energy at the window's start tick, before that tick's mode is used, and a window whose state of charge is below it is flown as `initial_mode` with no added load. Added loads are rejected on `spacecraft.v1` housekeeping profiles, whose rail and thermal ledgers are built from mode totals.
+
 ## 6. Define the First Fault Outcome
 
 **FLT-03:** `solar_derating` applies a piecewise-linear multiplier in `[0,1]` to available generation.
@@ -418,6 +420,8 @@ If a gate fails, fix the model or reduce the supported envelope explicitly; do n
 The subsequent `spacecraft.v1` extension adds declared models around the existing conserved orbit/EPS ledger; the historical P0 fidelity table above describes `power-leo.v1`.
 Its [model reference](reference/spacecraft-telemetry.md#interpret-the-physical-models) records exact equations, units, and limits, and [telemetry configuration](../configs/telemetry-demo.yaml) provides an explicit opt-in example.
 No supplied CSV values enter simulation or substitute for a physical model.
+
+One exception is approved for the [Metis wildfire demo](reference/metis-demo.md). `configs/metis-wildfire.yaml` carries a private solar-derating scenario whose multipliers are shaped, per 5-minute bin, from BUPT-1's realized harvest on 21 June 2023, relative to a healthy 68 W ideal array. It is a scenario input written offline by `scripts/build_metis_scenario.py`, not replayed telemetry. Viewers see only the source's name, through `run.environment_source`, never the multipliers. The harvest ratio stands in for attitude-driven no-harvest time, not a component fault.
 
 Ideal regulated rails derive charge/discharge terminal currents using the existing efficiencies and `I=P/V`; converter losses enter a three-node battery/avionics/payload heat ledger.
 One-second forward Euler combines electrical heat, distance/eclipse-dependent direct solar absorption, symmetric conduction, and Stefan–Boltzmann radiation.

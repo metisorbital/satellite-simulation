@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import Literal
 
 from fastapi import APIRouter, Query, Request, Response
+from metis_agent.models import ViewerMissionRunRequest
 from starlette.concurrency import run_in_threadpool
 
 from metis_sim.adapters.configuration import normalize_configuration
@@ -725,6 +726,63 @@ async def seek_viewer_source(request: Request, response: Response) -> ViewerBoot
         command.elapsed_s,
         mutation_token(request, principal, body),
         viewer_expires_at=expires_at,
+    )
+    return _viewer_bootstrap_response(request, response, run, user_id=principal.user_id)
+
+
+@router.post("/v1/viewer/mission-run", response_model=ViewerBootstrap)
+async def launch_mission_run(request: Request, response: Response) -> ViewerBootstrap:
+    """Replace the viewer run with a Metis demo run flying one plan.
+
+    Parameters
+    ----------
+    request : Request
+        Scoped viewer request naming the plan (``original`` or ``metis``, the
+        latter with its approved proposal) and whether Metis watches it, with
+        CSRF and idempotency headers.
+    response : Response
+        Receives the cookie rebound to the new run.
+
+    Returns
+    -------
+    ViewerBootstrap
+        Demo run ready to start at T0. A watched run pauses by itself at the
+        Metis alert; the Metis plan resumes from there.
+    """
+    context = request.app.state
+    metis = getattr(context, "metis", None)
+    if metis is None:
+        raise ServiceError("metis_unavailable", "The Metis demo template is not installed.", 404)
+    principal = context.auth.principal(request)
+    principal.require({"viewer_control"}, action="start")
+    context.auth.csrf(request, principal)
+    if principal.user_id is None:
+        raise ServiceError("unauthorized", "Sign in with a demo operator.", 401)
+    body = parse_json(await body_text(request))
+    command = ViewerMissionRunRequest.model_validate(body)
+    windows = metis.flight_windows(principal.user_id, command.plan, command.proposal_id)
+    alert_s = context.settings.metis_alert_s
+    expires_at = time.time() + context.settings.session_lifetime_s
+    run = await run_in_threadpool(
+        context.service.create_mission_run,
+        principal.run_id,
+        context.settings.metis_mission_config,
+        windows,
+        metis.plan_name(command.plan),
+        mutation_token(request, principal, body),
+        viewer_expires_at=expires_at,
+        speed=context.settings.metis_mission_speed,
+        precommit_s=alert_s if command.plan == "metis" else 0,
+        hold_s=alert_s if command.watch else None,
+    )
+    metis.record_run(
+        principal.user_id,
+        run["run_id"],
+        command.plan,
+        windows,
+        watch=command.watch,
+        alert_min=alert_s / 60,
+        operator=context.metis_host.viewer(request).display_name,
     )
     return _viewer_bootstrap_response(request, response, run, user_id=principal.user_id)
 

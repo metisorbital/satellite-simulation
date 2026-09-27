@@ -12,12 +12,15 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from metis_agent.api import Metis
+from metis_agent.briefing import build_decision
+from metis_agent.store import DecisionStore, MetisError
 from pydantic import ValidationError
 from sqlalchemy.exc import SQLAlchemyError
 from starlette.exceptions import HTTPException
 
 from metis_sim.adapters.cases import CaseRepository
-from metis_sim.adapters.configuration import ConfigurationParsingError
+from metis_sim.adapters.configuration import ConfigurationParsingError, load_configuration
 from metis_sim.adapters.database import Database
 from metis_sim.adapters.notifications import NotificationRepository
 from metis_sim.adapters.reads import PublicReader
@@ -25,6 +28,7 @@ from metis_sim.adapters.repository import Repository
 from metis_sim.adapters.shift_log import ShiftLogRepository
 from metis_sim.api.auth import Auth
 from metis_sim.api.cases import router as cases_router
+from metis_sim.api.metis_host import SimulatorMetisHost
 from metis_sim.api.notifications import router as notifications_router
 from metis_sim.api.openapi import install_openapi
 from metis_sim.api.routes import router
@@ -266,6 +270,42 @@ def create_app(
     app.include_router(notifications_router)
     app.include_router(shift_log_router)
     app.include_router(visual_router)
+    if settings.metis_mission_config.is_file():
+        # The Metis demo agent: its decision is fixed at the demo template's T0.
+        template = load_configuration(settings.metis_mission_config.read_text()).run
+        metis = Metis(
+            build_decision(
+                template.epoch_utc.isoformat().replace("+00:00", "Z"),
+                template.environment_source,
+            ),
+            DecisionStore(settings.metis_decision_window_s),
+        )
+        app.state.metis = metis
+        app.state.metis_host = SimulatorMetisHost(app.state)
+        app.include_router(metis.router(app.state.metis_host))
+
+        def warm_mission_engines() -> None:
+            try:
+                for plan in ("original", "metis"):
+                    service.warm_engine(
+                        service.mission_config(
+                            settings.metis_mission_config,
+                            metis.plan_windows(plan),
+                            metis.plan_name(plan),
+                            settings.metis_mission_speed,
+                        )
+                    )
+            except Exception:
+                logger.exception("engine_warm_failed")
+
+        threading.Thread(
+            target=warm_mission_engines, name="metis-mission-warmup", daemon=True
+        ).start()
+
+        @app.exception_handler(MetisError)
+        async def metis_error(request: Request, error: MetisError) -> JSONResponse:
+            return error_response(request, error.code, error.message, error.status, [])
+
     install_openapi(app)
     if settings.frontend_path.is_dir():
         # A root StaticFiles mount also matches WebSocket scopes. Reject unknown

@@ -75,6 +75,39 @@ class ScheduledOperation(OperationInterval, Protocol):
         """
         ...
 
+    @property
+    def added_load_w(self) -> float:
+        """Return the load added while the interval is active.
+
+        Returns
+        -------
+        float
+            Watts added to the mode's profile load.
+        """
+        ...
+
+    @property
+    def label(self) -> str | None:
+        """Return the optional public task identifier.
+
+        Returns
+        -------
+        str or None
+            Task label such as ``downlink``.
+        """
+        ...
+
+    @property
+    def min_start_soc(self) -> float | None:
+        """Return the onboard start guard.
+
+        Returns
+        -------
+        float or None
+            Minimum state of charge at the window start, or no guard.
+        """
+        ...
+
 
 @dataclass(frozen=True, slots=True)
 class ResolvedOperation:
@@ -87,11 +120,20 @@ class ResolvedOperation:
         The end may exceed the run duration for its final partial window.
     mode : str
         Operational mode active throughout the interval.
+    added_load_w : float
+        Watts added to the mode's profile load during the interval.
+    label : str or None
+        Optional public task identifier.
+    min_start_soc : float or None
+        Skip the window when the state of charge at its start is below this.
     """
 
     start_s: int
     end_s: int
     mode: str
+    added_load_w: float = 0.0
+    label: str | None = None
+    min_start_soc: float | None = None
 
 
 def resolve_operations(
@@ -132,7 +174,12 @@ def resolve_operations(
         while (start := operation.start_s + round(occurrence * period_s)) <= duration_s:
             resolved.append(
                 ResolvedOperation(
-                    start, start + operation.end_s - operation.start_s, operation.mode
+                    start,
+                    start + operation.end_s - operation.start_s,
+                    operation.mode,
+                    operation.added_load_w,
+                    operation.label,
+                    operation.min_start_soc,
                 )
             )
             if operation.repeat is None:
@@ -166,3 +213,24 @@ def operational_mode(tick: int, initial_mode: str, operations: Sequence[Operatio
         if operation.start_s <= tick < operation.end_s:
             return operation.mode
     return initial_mode
+
+
+def operational_added_load(tick: int, operations: Sequence[ResolvedOperation]) -> float:
+    """Resolve the task load added at an endpoint with [start,end) precedence.
+
+    Parameters
+    ----------
+    tick : int
+        Endpoint elapsed seconds from the common run epoch.
+    operations : sequence of ResolvedOperation
+        Validated nonoverlapping resolved operations.
+
+    Returns
+    -------
+    float
+        Watts added to the active mode's profile load; zero outside any task.
+    """
+    for operation in operations:
+        if operation.start_s <= tick < operation.end_s:
+            return operation.added_load_w
+    return 0.0

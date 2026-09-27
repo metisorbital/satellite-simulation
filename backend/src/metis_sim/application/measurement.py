@@ -151,6 +151,22 @@ class MeasurementProjector:
                 )
             )
         self.unserved[satellite] = unserved
+        skipped = sample.skipped_operation
+        if skipped is not None:
+            events.append(
+                (
+                    "operation_skipped",
+                    "battery_below_start_limit",
+                    dict(
+                        label=skipped.label,
+                        mode=skipped.mode,
+                        start_s=skipped.start_s,
+                        end_s=skipped.end_s,
+                        battery_soc=skipped.battery_soc,
+                        min_start_soc=skipped.min_start_soc,
+                    ),
+                )
+            )
         for index, limit in enumerate(self.limits[satellite]):
             key = (satellite, index)
             active = self.active_limits.get(key, False)

@@ -11,6 +11,8 @@ import 'auth/operator_gate.dart';
 import 'data_source_selector.dart';
 import 'mission_shell.dart';
 import 'mission_planning.dart';
+import 'metis/metis_controller.dart';
+import 'metis/metis_panels.dart';
 import 'observed_timeline.dart';
 import 'overview_inspector.dart';
 import 'payload_schedule.dart';
@@ -98,6 +100,11 @@ class _MissionPageState extends State<MissionPage> {
   DialogRoute<void>? _constellationEditorRoute;
   final historyFocus = FocusNode(debugLabel: "Measurement history");
   final overviewScroll = ScrollController();
+  final metisResultsKey = GlobalKey();
+  late final MetisController metis;
+  // Built once so the per-frame Overview refresh does not rebuild the Metis
+  // charts; they rebuild on Metis and mission changes.
+  late final Widget metisBar, metisResults;
   String selected = '', chart = 'eps.battery_soc';
   MissionView view = MissionView.overview;
   bool get telemetryVisible => view == MissionView.telemetry;
@@ -116,9 +123,16 @@ class _MissionPageState extends State<MissionPage> {
     mission.addListener(refresh);
     notifications = NotificationController(mission)..addListener(refresh);
     mission.connect(initial: widget.bootstrap);
-    WidgetsBinding.instance.addPostFrameCallback(
-      (_) => notifications.refresh(),
+    metis = MetisController(mission);
+    metisBar = MetisBar(controller: metis, onLaunch: flyMetis);
+    metisResults = KeyedSubtree(
+      key: metisResultsKey,
+      child: MetisResults(controller: metis),
     );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      notifications.refresh();
+      metis.load();
+    });
     ticker = Ticker((_) {
       final second = mission.clock.elapsed.inSeconds;
       if (overviewVisible || second != lastDashboardSecond) {
@@ -159,6 +173,7 @@ class _MissionPageState extends State<MissionPage> {
       });
     }
     ticker?.dispose();
+    metis.dispose();
     historyFocus.dispose();
     overviewScroll.dispose();
     mission.removeListener(refresh);
@@ -986,6 +1001,11 @@ class _MissionPageState extends State<MissionPage> {
           final desktop = constraints.maxWidth >= 1150;
           final compact = constraints.maxWidth < 900;
           final shortOverview = overviewVisible && constraints.maxHeight < 600;
+          // With the Metis demo the Overview is a long page, so its header
+          // scrolls with the Metis bar, globe and results.
+          final scrollHeader =
+              shortOverview ||
+              overviewVisible && !metis.unavailable && !mission.isObserved;
           final body = Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -1035,9 +1055,9 @@ class _MissionPageState extends State<MissionPage> {
                         observed: mission.isObserved,
                         compact: compact,
                       ),
-                    if (overviewVisible && !shortOverview)
+                    if (overviewVisible && !scrollHeader)
                       toolbar(status, compact: constraints.maxHeight < 820),
-                    if (mission.error != null && !shortOverview)
+                    if (mission.error != null && !scrollHeader)
                       connectionIssue(),
                     Expanded(
                       child: view.isCase
@@ -1095,6 +1115,8 @@ class _MissionPageState extends State<MissionPage> {
                                     desktop: desktop,
                                     compact: compact,
                                     scrollToolbar: shortOverview,
+                                    scrollHeader: scrollHeader,
+                                    compactToolbar: constraints.maxHeight < 820,
                                   ),
                                 ),
                                 if (desktop)
@@ -1134,6 +1156,18 @@ class _MissionPageState extends State<MissionPage> {
     ),
   );
 
+  /// Runs a Metis launch, then scrolls the Overview to the Metis results.
+  Future<void> flyMetis(Future<void> Function() launch) async {
+    await launch();
+    final target = metisResultsKey.currentContext;
+    if (!mounted || target == null || !target.mounted) return;
+    await Scrollable.ensureVisible(
+      target,
+      duration: const Duration(milliseconds: 450),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
   Widget overviewContent(
     JsonMap? status,
     JsonMap? frame,
@@ -1141,20 +1175,31 @@ class _MissionPageState extends State<MissionPage> {
     required bool desktop,
     required bool compact,
     required bool scrollToolbar,
+    required bool scrollHeader,
+    required bool compactToolbar,
   }) => LayoutBuilder(
     builder: (context, constraints) {
+      // The Metis demo stacks its bar and results around the globe, so the
+      // Overview scrolls with a fixed-height scene.
+      final showMetis = !metis.unavailable && !mission.isObserved;
+      final fixedScene = scrollToolbar || showMetis;
       // This height also stops intrinsic layout at the platform view boundary.
       final scene = SizedBox(
         height: scrollToolbar
             ? constraints.maxHeight.clamp(240.0, 320.0).toDouble()
+            : showMetis
+            ? constraints.maxHeight.clamp(360.0, 520.0).toDouble()
             : 320,
         child: orbitStage(status, frame, count, desktop),
       );
       final content = Column(
         children: [
-          if (scrollToolbar) toolbar(status, compact: true),
-          if (scrollToolbar && mission.error != null) connectionIssue(),
-          if (scrollToolbar) scene else Expanded(child: scene),
+          if (scrollHeader)
+            toolbar(status, compact: scrollToolbar || compactToolbar),
+          if (scrollHeader && mission.error != null) connectionIssue(),
+          if (showMetis) metisBar,
+          if (fixedScene) scene else Expanded(child: scene),
+          if (showMetis) metisResults,
           if (mission.isObserved) ObservedTimeline(mission: mission),
           if (!compact)
             Focus(focusNode: historyFocus, child: historyPanel())
@@ -1180,7 +1225,7 @@ class _MissionPageState extends State<MissionPage> {
           primary: false,
           // Keep the scroll thumb outside the platform view's pointer surface.
           padding: const EdgeInsets.only(right: 12),
-          child: scrollToolbar
+          child: fixedScene
               ? content
               : ConstrainedBox(
                   constraints: BoxConstraints(minHeight: constraints.maxHeight),

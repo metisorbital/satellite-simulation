@@ -167,6 +167,8 @@ class PublicRunStatus(PublicModel):
         First source-time position selected for this independent playback.
     model_provenance : PublicModelProvenance
         Allowlisted model and Earth-orientation metadata.
+    environment_source : str or None
+        Public name of recorded data that shaped a physics run's environment.
     frame_count : int
         Number of committed public frames.
     diagnostic : str or None
@@ -198,6 +200,7 @@ class PublicRunStatus(PublicModel):
     nominal_cadence_s: float | None = None
     playback_start_s: int = 0
     model_provenance: PublicModelProvenance
+    environment_source: str | None = None
     frame_count: int = 0
     diagnostic: str | None = None
 

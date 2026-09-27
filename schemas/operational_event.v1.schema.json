@@ -69,6 +69,67 @@
       "title": "ModeChangedDetails",
       "type": "object"
     },
+    "OperationSkippedDetails": {
+      "additionalProperties": false,
+      "description": "Allowlisted details of a window the onboard start guard refused.\n\nAttributes\n----------\nlabel : str or None\n    Public task identifier of the skipped window.\nmode : Mode\n    Mode the window would have commanded.\nstart_s, end_s : int\n    The skipped half-open window in elapsed simulated seconds.\nbattery_soc : float\n    Observed state of charge at the start tick.\nmin_start_soc : float\n    Configured start guard the state of charge was below.",
+      "properties": {
+        "battery_soc": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Battery Soc",
+          "type": "number"
+        },
+        "end_s": {
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "title": "End S",
+          "type": "integer"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z0-9_-]{1,64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Label"
+        },
+        "min_start_soc": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Min Start Soc",
+          "type": "number"
+        },
+        "mode": {
+          "enum": [
+            "nominal",
+            "payload_active",
+            "safe"
+          ],
+          "title": "Mode",
+          "type": "string"
+        },
+        "start_s": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "title": "Start S",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "label",
+        "mode",
+        "start_s",
+        "end_s",
+        "battery_soc",
+        "min_start_soc"
+      ],
+      "title": "OperationSkippedDetails",
+      "type": "object"
+    },
     "PowerUnservedDetails": {
       "additionalProperties": false,
       "description": "Allowlisted observed unserved-power state details.\n\nAttributes\n----------\nactive : bool\n    Whether requested load was not fully served.\nvalue_w : float\n    Unserved requested load in watts.\nsample_window_s : float\n    Interval represented by the value in seconds.",
@@ -112,6 +173,9 @@
         },
         {
           "$ref": "#/$defs/PowerUnservedDetails"
+        },
+        {
+          "$ref": "#/$defs/OperationSkippedDetails"
         }
       ],
       "title": "Details"
@@ -132,7 +196,8 @@
         "mode_changed",
         "low_energy_limit_entered",
         "low_energy_limit_cleared",
-        "power_unserved"
+        "power_unserved",
+        "operation_skipped"
       ],
       "title": "Event Type",
       "type": "string"

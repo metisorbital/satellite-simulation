@@ -1,0 +1,54 @@
+{
+ "name": "Three-hour wildfire delivery illustration",
+ "duration": 180,
+ "step": 0.1,
+ "commandLead": 15,
+ "initialMargin": 9.5,
+ "maxMargin": 9.5,
+ "essentialW": 10,
+ "batchW": 16,
+ "captureW": 20,
+ "radioW": 30,
+ "solarW": 35,
+ "efficiency": 0.95,
+ "originalBatch": [
+  70,
+  86
+ ],
+ "batchMinutes": 16,
+ "capture": [
+  90,
+  91.5
+ ],
+ "downlink": [
+  100,
+  103
+ ],
+ "deliveryDeadline": 120,
+ "batchDeadline": 165,
+ "eclipses": [
+  [
+   -20,
+   15
+  ],
+  [
+   75,
+   110
+  ],
+  [
+   170,
+   205
+  ]
+ ],
+ "orbitMinutes": 95,
+ "binMinutes": 5,
+ "planner": {
+  "release": 70,
+  "lastStart": 149,
+  "stepMinutes": 1,
+  "tolerance": 1e-09,
+  "rule": "A batch start is safe when its margin stays at or above min(0, the no-batch margin) at every step and the batch ends by the batch deadline. The earliest safe start is chosen."
+ },
+ "stageDemoSeconds": 120,
+ "scope": "Assumed small-spacecraft mission. Solar supply and essential load come from BUPT-1 forecasts made at the decision time and scaled to this spacecraft's nominal 35 W and 10 W. Energy is the usable margin above a protected payload reserve, capped at 9.5 Wh; surplus is curtailed. Negative margins are infeasible requested loads, not executed protected trajectories. The downlink must complete all three minutes within the reserve constraint, and no second eligible contact before the briefing is assumed. Access geometry, link rate, processing and actual delivery remain unvalidated."
+}

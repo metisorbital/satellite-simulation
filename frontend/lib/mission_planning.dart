@@ -238,7 +238,14 @@ class MissionPlanningPage extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         Text(
-          (operation['mode'] as String).replaceAll('_', ' '),
+          [
+            ((operation['label'] ?? operation['mode']) as String).replaceAll(
+              '_',
+              ' ',
+            ),
+            if ((operation['added_load_w'] as num? ?? 0) > 0)
+              '+${(operation['added_load_w'] as num).toStringAsFixed(0)} W',
+          ].join('  ·  '),
           style: const TextStyle(fontSize: 16),
         ),
         const SizedBox(height: 10),

@@ -71,6 +71,10 @@ class RunConfiguration(ContractModel):
         Reproducibility seed within JavaScript's exact integer range.
     earth_model, orbit_model, sun_model : str
         Versioned model identifiers used by the run.
+    environment_source : str or None
+        Public name of recorded data that shaped the simulated environment,
+        such as ``BUPT-1 solar harvest, 21 June 2023 (scaled)``. It names a
+        source only; scenario values stay private.
     """
 
     epoch_utc: datetime
@@ -82,6 +86,7 @@ class RunConfiguration(ContractModel):
     earth_model: Literal["wgs84_j2_v1"]
     orbit_model: Literal["j2_cartesian"]
     sun_model: Literal["astropy_builtin"]
+    environment_source: Annotated[str, Field(min_length=1, max_length=160)] | None = None
 
     @field_validator("epoch_utc")
     @classmethod
@@ -343,12 +348,32 @@ class Operation(ContractModel):
     repeat : {"orbit"} or None
         Repeat at the satellite's nominal orbital period, or run once when
         omitted. Every repetition preserves ``end_s - start_s`` seconds.
+    added_load_w : float, default=0.0
+        Electrical load in watts added to the mode's profile load while the
+        interval is active, for tasks such as a capture, a downlink, or a
+        compute batch.
+    label : str or None
+        Optional public task identifier, for example ``downlink``.
+    min_start_soc : float or None
+        Onboard start guard. When the battery state of charge at the window's
+        start tick is below this value, the spacecraft skips the whole window:
+        it stays in its initial mode with no added load and reports an
+        ``operation_skipped`` event. The guard is checked only at the start.
     """
 
     start_s: Annotated[int, Field(ge=0, le=86_400)]
     end_s: Annotated[int, Field(ge=1, le=86_400)]
     mode: SatelliteMode
     repeat: Literal["orbit"] | None = None
+    added_load_w: Annotated[float, Field(ge=0, le=10_000)] = 0.0
+    label: str | None = None
+    min_start_soc: Annotated[float, Field(ge=0, le=1)] | None = None
+
+    @field_validator("label")
+    @classmethod
+    def validate_label(cls, value: str | None) -> str | None:
+        """Apply the public ASCII identifier grammar to task labels."""
+        return None if value is None else _check_identifier(value)
 
     @model_validator(mode="after")
     def validate_interval(self) -> Operation:
@@ -533,7 +558,7 @@ class SimulationConfig(ContractModel):
     constellations : tuple of ConstellationDefinition
         Optional display groupings with validated membership.
     scenario : tuple of SolarDeratingScenario
-        Zero or one private P0 derating scenario.
+        Private derating scenarios, at most one per spacecraft.
 
     Notes
     -----
@@ -573,6 +598,13 @@ class SimulationConfig(ContractModel):
             for operation in satellite.operations:
                 if operation.end_s > self.run.duration_s:
                     raise ValueError("operation interval must be within run.duration_s")
+                if (
+                    operation.added_load_w > 0
+                    and self.profiles[satellite.profile_id].housekeeping is not None
+                ):
+                    raise ValueError(
+                        "added_load_w is not supported with spacecraft.v1 housekeeping profiles"
+                    )
             resolve_operations(satellite.operations, self.run.duration_s, satellite.orbit.a_m)
         constellation_ids = [item.constellation_id for item in self.constellations]
         if len(constellation_ids) != len(set(constellation_ids)):
@@ -581,8 +613,9 @@ class SimulationConfig(ContractModel):
             unknown = set(constellation.satellite_ids) - satellite_id_set
             if unknown:
                 raise ValueError(f"unknown constellation satellite IDs: {sorted(unknown)}")
-        if len(self.scenario) > 1:
-            raise ValueError("P0 supports at most one solar_derating scenario")
+        scenario_ids = [item.satellite_id for item in self.scenario]
+        if len(scenario_ids) != len(set(scenario_ids)):
+            raise ValueError("at most one solar_derating scenario per satellite_id")
         for scenario in self.scenario:
             if scenario.satellite_id not in satellite_id_set:
                 raise ValueError(f"unknown scenario satellite_id: {scenario.satellite_id}")

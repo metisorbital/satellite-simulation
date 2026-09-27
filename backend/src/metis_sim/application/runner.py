@@ -96,6 +96,9 @@ class Runner:
         self._monotonic = monotonic
         self._wait = wait
         self.prepared: dict[str, PreparedRun | PreparedReplay] = {}
+        # Run ID to the tick where playback pauses by itself, such as a Metis
+        # demo run held for the operator's decision.
+        self.holds: dict[str, int] = {}
         self.commands: queue.Queue[PendingCommand] = queue.Queue(maxsize=32)
         self.stop_event = threading.Event()
         self.wakeup = threading.Event()
@@ -314,6 +317,12 @@ class Runner:
         # Four complete ticks / 200ms at most, never omit initial t=0.
         count = min(4, max(1, status["requested_speed"] // 5)) if self.paced else 4
         end = min(status["duration_s"], start + count - 1)
+        hold = self.holds.get(status["run_id"])
+        if hold is not None and hold < start:
+            self.holds.pop(status["run_id"], None)
+            hold = None
+        if hold is not None:
+            end = min(end, hold)
         frames, events, truth = [], [], []
         if isinstance(run, PreparedReplay):
             frames = self._retry_persistence(lambda: run.frames_through(end), status["run_id"])
@@ -341,6 +350,10 @@ class Runner:
         )
         if isinstance(run, PreparedReplay) and frames:
             status["committed_sequence"] = frames[-1]["sequence"]
+        if end == hold:
+            # Pause in the same transaction as the hold tick, so no frame past it commits.
+            status.update(status="paused", effective_speed=0)
+            self.holds.pop(status["run_id"], None)
         self._commit(status, frames, events, truth, processing_ms=(self._monotonic() - now) * 1000)
         period = (end - start + 1) / status["requested_speed"]
         next_due = self._next_due + period
@@ -447,6 +460,7 @@ class Runner:
         status.update(status=state, effective_speed=0)
         result = self._commit(status, [], [], records, token, command=command)
         self.active_id = None
+        self.holds.pop(status["run_id"], None)
         return result
 
     def _fail(self, error: Exception) -> None:

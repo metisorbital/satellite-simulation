@@ -28,6 +28,15 @@ class Settings:
         Explicitly enable a shared, read-only HTTPS demo.
     public_viewer_limit : int
         Maximum simultaneous public demo visual streams per process.
+    metis_mission_config : Path
+        Server-owned Metis demo template: one spacecraft and its private scenario.
+    metis_mission_speed : int
+        Playback speed of a Metis demo run.
+    metis_alert_s : int
+        Mission second where a Metis-watched run pauses with its alert. The
+        Metis plan continues from it after approval.
+    metis_decision_window_s : float
+        Wall-clock approval window before the planning uplink closes.
     """
 
     database_url: str = "postgresql+psycopg://metis:metis-local@127.0.0.1:55432/metis"
@@ -51,6 +60,10 @@ class Settings:
     )
     frontend_path: Path = field(default_factory=lambda: Path("frontend/build/web"))
     demo_config: Path = field(default_factory=lambda: Path("configs/demo.yaml"))
+    metis_mission_config: Path = field(default_factory=lambda: Path("configs/metis-wildfire.yaml"))
+    metis_mission_speed: int = 120
+    metis_alert_s: int = 3600
+    metis_decision_window_s: float = 900.0
     minimum_free_bytes: int = 256 * 1024 * 1024
     storage_quota_bytes: int = 5 * 1024 * 1024 * 1024
 
@@ -112,6 +125,12 @@ class Settings:
             origins=tuple(os.getenv("METIS_ORIGINS", ",".join(default.origins)).split(",")),
             frontend_path=Path(os.getenv("METIS_FRONTEND_PATH", str(default.frontend_path))),
             demo_config=Path(os.getenv("METIS_DEMO_CONFIG", str(default.demo_config))),
+            metis_mission_config=Path(
+                os.getenv("METIS_MISSION_CONFIG", str(default.metis_mission_config))
+            ),
+            metis_mission_speed=max(1, int(os.getenv("METIS_MISSION_SPEED", "120"))),
+            metis_alert_s=max(0, int(os.getenv("METIS_ALERT_S", "3600"))),
+            metis_decision_window_s=float(os.getenv("METIS_DECISION_WINDOW_S", "900")),
             minimum_free_bytes=int(
                 os.getenv("METIS_MINIMUM_FREE_BYTES", str(default.minimum_free_bytes))
             ),

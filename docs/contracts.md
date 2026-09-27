@@ -62,7 +62,9 @@ Starts are `start_s + round(n*T)` for `n=0,1,...`, using Python nearest-integer 
 Cadence is anchored to the first operation and is not adjusted for J2 crossings or phase.
 Require the first declared interval to fit the run; consider later windows whose starts are at or before run end, integrate only to run duration, and retain active terminal mode if the last window extends past it.
 Reject overlaps among declared and generated intervals, and restore `initial_mode` outside operation windows.
-P0 allows at most one `solar_derating` scenario instance in the whole run; supporting more affected satellites later does not require a new fault type, but is outside the initial validation envelope.
+A run allows at most one `solar_derating` scenario per satellite.
+An operation may also carry `added_load_w` (0 to 10,000 W, default 0), added to its mode's load while active, and an optional public `label` with the identifier grammar.
+An optional `min_start_soc` (0 to 1) is an onboard start guard: when the battery state of charge at the window's start tick is below it, the spacecraft skips the whole window, staying in `initial_mode` with no added load, and emits `operation_skipped`. The guard is checked only at the start and never ends a running window.
 All per-satellite operational schedule overlaps, including safe-mode overlaps, are rejected in P0.
 
 The fixed P0 validation matrix is:
@@ -74,6 +76,7 @@ The fixed P0 validation matrix is:
 | `run.speed` | Positive whole-number multiplier; default 90. |
 | `run.seed` | Integer 0 through `2^53-1`; required. |
 | `run.earth_model` / `orbit_model` / `sun_model` | `wgs84_j2_v1` / `j2_cartesian` / `astropy_builtin`. |
+| `run.environment_source` | Optional public name (1–160 characters) of recorded data that shaped the simulated environment; copied to `PublicRunStatus.environment_source`. It names a source, never scenario values. |
 | `panel.pointing.type` / `battery.type` | `ideal_sun_tracking` / `energy_store`. |
 | `sensors.noise.type` | `none` in the baseline; optional seeded noise requires a separately specified supported model. |
 | `initial_mode`, operation `mode` | `nominal`, `payload_active`, `safe`. |
@@ -234,13 +237,14 @@ Operational events use the associated telemetry `stream_id` with a separate `eve
 Their identity is `(source_id, stream_id, event_sequence)` within the event table/type; event cursors are explicitly bound to this sequence namespace.
 The required envelope is `{schema_version: operational_event.v1, source_id, stream_id, event_sequence, satellite_id, source_kind, time_domain, observed_at, emitted_at, event_type, reason_code, details}`.
 `details` is an allowlisted payload defined per event type; unknown arbitrary domain fields must not be serialized.
-P0 events include `mode_changed`, `low_energy_limit_entered`, `low_energy_limit_cleared`, and `power_unserved`.
+P0 events include `mode_changed`, `low_energy_limit_entered`, `low_energy_limit_cleared`, `power_unserved`, and `operation_skipped`.
 Public limit events describe an existing measured condition and may be used for detection workflows; they are not future-failure ground truth.
 The optional profile field `public_limits` defaults to an empty list; each configured entry has `channel_id`, `operator` (`lt` or `gt`), `value`, and `clear_value` for hysteresis.
 P0 only supports limits on `eps.battery_soc`; require clear_value ≥ value for `lt` and clear_value ≤ value for `gt`.
 Emit entered/cleared once on transitions and expose these public limit definitions in the spacecraft descriptor.
 The complete example deliberately has no public low-energy limit configured; its private reserve-outcome rule does not implicitly create a public limit event.
 `mode_changed` comes from the public operating state.
+`operation_skipped` (reason `battery_below_start_limit`) is emitted at the start tick of a guarded window the spacecraft skipped; its details are `{label, mode, start_s, end_s, battery_soc, min_start_soc}`, all public configuration or observed values.
 `power_unserved` is emitted only when unserved power changes between zero and positive; its details are `{active, value_w, sample_window_s}` and contain only the observed value/window.
 Clearing occurs exactly at zero; no private threshold is involved.
 For public low-energy `lt` limits, entry is strictly below value and clear is greater than or equal to clear_value; reverse those comparisons for `gt`.
@@ -354,6 +358,7 @@ Use `422` for invalid configuration, `404` for unknown resources, `409` for life
 All mutation requests, including run controls, use an `Idempotency-Key`: persist key, request hash, and result; same key/body returns the original response, same key/different body returns `409`.
 `PublicRunStatus`, public spacecraft descriptors, snapshots, and visual batches are explicit response models with allowlisted fields, never serialized ORM rows, `RunManifest`, or `SatelliteState` objects.
 Public provenance may include orbit/Earth/Sun model identifiers and Earth-orientation coverage status; it must not include scenario names, seed, hidden parameters, private threshold rules, or configuration hashes that serve as evaluation labels.
+The one exception is the optional `environment_source` label, which a configuration author sets to name the recorded data behind a run's conditions, such as the Metis demo's `BUPT-1 solar harvest, 21 June 2023 (scaled)`.
 Control operations serialize through the single runner command queue; acknowledge only after the command and idempotency result are durably applied at the stated boundary.
 Give an unapplied command a five-wall-second deadline; cancellation and application must be serialized so a `503 control_not_applied` response guarantees that command cannot run later.
 If it committed but the HTTP response was lost, retrying the same key returns the original acknowledgement.
@@ -492,3 +497,25 @@ Each stream persists its immutable catalog version; migration `0003` assigns `po
 Interval integrals use channel-unit seconds and exclude zero-duration or non-valid readings; componentwise quaternion statistics are not attitude averages.
 The standalone public [dataset exporter](../examples/export_run.py) preserves frame identities and the captured boundary without including evaluator truth.
 Outcome labels and private reproducibility metadata remain separately authorized, and related executions must remain grouped when forming ML splits.
+
+## Metis Demo Agent
+
+The Metis agent (`backend/src/metis_agent`) is mounted when `METIS_MISSION_CONFIG` exists. It never imports the simulator.
+Its contracts are generated into `schemas/metis-agent.v1.schema.json` and `frontend/lib/api/metis_generated.dart`.
+
+Every route requires a signed-in viewer session. State-changing routes also require the CSRF token and an `Idempotency-Key`.
+
+| Route | Result |
+|---|---|
+| `GET /v1/metis/briefing` | `MetisBriefing`: mission, forecast bands in mission watts, proposal with forecast margins, approval window, and the operator's latest run with Metis off and on (`runs.metis_off`, `runs.metis_on`) |
+| `POST /v1/metis/proposals/{id}/approve` | `ApprovedPlan` with the Metis plan's task windows, or 409 `uplink_closed` after the window |
+| `POST /v1/metis/proposals/{id}/reopen` | `ApprovalWindow`, cleared and reopened for rehearsal; both modes' runs are forgotten |
+| `POST /v1/viewer/mission-run {plan, proposal_id?, watch?}` | `ViewerBootstrap` for a run flying `original` or the approved `metis` plan; `watch: true` flies the original plan with Metis on: the run starts at T0 and pauses by itself at the alert (`METIS_ALERT_S`, +60), the pending alert is reported only once the run reaches it, and the approval window restarts; `plan: metis` commits history up to the alert and continues from there; 409 `not_approved` for an unapproved Metis plan; the cookie is rebound to the new run |
+| `POST /v1/metis/runs/{run_id}/dismiss` | `MetisAlert`, dismissed; 409 `alert_not_pending` when there is no pending alert |
+| `GET /v1/metis/runs/{run_id}/outcome` | `RunOutcome` from public frames and events: margin, task states (`pending`, `running`, `done`, `skipped`), downlink progress and delivery time, `metis_on` and the alert; 404 for a run this operator did not launch |
+
+**Data boundary:**
+- Metis reads only its allowlisted decision artifact (no realized values) and public run status, frames and events.
+- Each demo run is created server-side from `configs/metis-wildfire.yaml` with its private scenario. The browser chooses only the plan; it can neither read that scenario nor supply it.
+- An edit through `/v1/viewer/configuration` still strips the scenario.
+- Approval state and the run registry are held in memory per operator.

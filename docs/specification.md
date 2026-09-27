@@ -345,3 +345,23 @@ See [Spacecraft Telemetry Models and Export](reference/spacecraft-telemetry.md) 
 The extension preserves commit-before-publication, one simulated clock, independent satellite state, deterministic generation, and separation of private scenario/outcome truth from consumer data.
 Its first health mechanism remains solar derating propagated through the power ledger and dependent physical states; future inference, real-mission validation, and a telemetry dashboard are not delivered by this source extension.
 Acceptance requires focused model/contract evidence and integration checks; neither the number of named channels nor successful export alone establishes physical fidelity or ML performance.
+
+## 14. Metis Wildfire Demo
+
+The [Metis demo](reference/metis-demo.md) shows the separate analytics product making a decision against this simulator.
+
+**Metis's role:**
+- It forecasts solar supply and essential load from a model trained on BUPT-1 telemetry.
+- It proposes moving a compute batch away from a downlink.
+- It raises an alert before the batch starts and records the operator's decision.
+
+**The simulator's role:** the Overview has a Metis on/off switch. Each choice flies the same spacecraft, orbit and hidden truth. With Metis off the original schedule flies. With Metis on the run starts at T0 and pauses by itself at +60 on Metis's alert; approving continues it on the Metis plan, dismissing on the original. The spacecraft's onboard start guard decides which tasks run; with Metis off it skips the downlink and the image misses the briefing. The simulator computes all physics.
+
+The simulator still owns no forecast or recommendation logic. Metis lives in its own package, and its outputs are labelled as forecasts.
+
+**Scope extensions made for the demo:**
+- per-operation `added_load_w`, `label` and `min_start_soc`, with the public `operation_skipped` event;
+- one `solar_derating` scenario per satellite;
+- a private scenario shaped from BUPT-1's realized harvest, the approved exception in the physics model.
+
+Validation is recorded in [Metis demo validation](validation/metis-demo.md).

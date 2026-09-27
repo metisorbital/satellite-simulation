@@ -40,6 +40,32 @@ class TruthSample:
 
 
 @dataclass(frozen=True, slots=True)
+class SkippedOperation:
+    """A scheduled window the onboard start guard refused.
+
+    Attributes
+    ----------
+    label : str or None
+        Public task identifier of the skipped window.
+    mode : str
+        Mode the window would have commanded.
+    start_s, end_s : int
+        The skipped half-open window.
+    battery_soc : float
+        State of charge at the start tick.
+    min_start_soc : float
+        Configured guard the state of charge was below.
+    """
+
+    label: str | None
+    mode: str
+    start_s: int
+    end_s: int
+    battery_soc: float
+    min_start_soc: float
+
+
+@dataclass(frozen=True, slots=True)
 class OrbitSample:
     """Orbit-only preview with explicit terrestrial position and velocity.
 
@@ -77,6 +103,8 @@ class PhysicsSample:
     zero, which has an instantaneous allocation and no energy advancement.
     This object contains private truth. Public transport must use the
     explicit ``public_channels`` projection and selected envelope fields.
+    ``skipped_operation`` is set only at the start tick of a window the
+    onboard start guard refused.
     """
 
     satellite_id: str
@@ -103,6 +131,7 @@ class PhysicsSample:
     sun_position_itrf_m: Vector3
     truth: TruthSample
     housekeeping_channels: tuple[tuple[str, ChannelValue], ...] = ()
+    skipped_operation: SkippedOperation | None = None
 
     def public_channels(self) -> dict[str, float | list[float] | None]:
         """Project only the immutable public catalog's physical values.

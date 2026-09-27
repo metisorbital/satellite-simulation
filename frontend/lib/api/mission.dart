@@ -61,6 +61,10 @@ class Mission extends ChangeNotifier {
   int _demoRefreshAttempts = 0;
   int _generation = 0, _backoff = 1000, _nextTrajectory = 0;
   int _trajectoryRequest = 0;
+
+  /// Run whose orbit preview the server can no longer build, for example
+  /// after a restart released its engine; it is not requested again.
+  String? _trajectoryReleased;
   Timer? _reconnect;
   Timer? _demoRefresh;
   WebSocketChannel? _socket;
@@ -431,6 +435,7 @@ class Mission extends ChangeNotifier {
   }
 
   Future<void> _loadTrajectory(int generation, JsonMap run) async {
+    if (run['run_id'] == _trajectoryReleased) return;
     final request = ++_trajectoryRequest;
     final position = max(
       0,
@@ -453,6 +458,12 @@ class Mission extends ChangeNotifier {
         notifyListeners();
       }
     } catch (exception) {
+      if (exception is ViewerRequestException && exception.statusCode == 409) {
+        // `trajectory_not_prepared`: the preview will not come back for this
+        // run, and its retained telemetry still plays, so stop asking quietly.
+        _trajectoryReleased = run['run_id'] as String;
+        return;
+      }
       if (_current(generation, run['run_id'] as String) &&
           request == _trajectoryRequest &&
           trajectory == null) {
@@ -763,6 +774,51 @@ class Mission extends ChangeNotifier {
       await connect(initial: replacement);
       // The POST already committed; a refresh error must not invite a second save.
       return !_closed;
+    } catch (exception) {
+      if (_closed || generation != _generation) return false;
+      error = '$exception';
+      busy = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// Call a Metis agent route with this session's CSRF token.
+  Future<JsonMap> metis(String path, {JsonMap? body}) =>
+      _request(path, body: body);
+
+  /// Replace this run with a Metis demo run flying [plan], then start playback
+  /// unless [resume] is false.
+  ///
+  /// [plan] is `original` or `metis`; the Metis plan needs its approved
+  /// [proposalId]. With [watch], Metis watches the original plan and raises its alert.
+  Future<bool> launchMissionRun(
+    String plan, {
+    String? proposalId,
+    bool watch = false,
+    bool resume = true,
+  }) async {
+    if (_closed || busy) return false;
+    final generation = _generation;
+    busy = true;
+    error = null;
+    notifyListeners();
+    try {
+      final bootstrap = await _request(
+        '/v1/viewer/mission-run',
+        body: {'plan': plan, 'proposal_id': ?proposalId, 'watch': watch},
+      );
+      if (_closed || generation != _generation) return false;
+      busy = false;
+      await connect(initial: bootstrap);
+      final state = status?['status'];
+      // A held run waits for an operator decision, such as a Metis alert.
+      if (resume && state == 'paused') {
+        await control('resume');
+      } else if (resume && state == 'created') {
+        await control('start');
+      }
+      return !_closed && error == null;
     } catch (exception) {
       if (_closed || generation != _generation) return false;
       error = '$exception';

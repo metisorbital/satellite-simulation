@@ -15,6 +15,8 @@ The authoritative acceptance requirements remain the [specification](../specific
 
 ## Evidence by Boundary
 
+The September 27 [Metis demo validation](metis-demo.md) records both plans' outcomes, Metis off and on, in simulator physics and through the live API.
+
 The September 27 [Earth rotation validation](earth-rotation.md) records inertial camera framing, orbit-path conversion, and unchanged eclipse physics.
 
 The September 26 [operator workflow validation](operator-workflows.md) records

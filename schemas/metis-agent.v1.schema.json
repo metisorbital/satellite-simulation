@@ -1,0 +1,908 @@
+{
+  "$defs": {
+    "Alternative": {
+      "additionalProperties": false,
+      "description": "Slot another planner input would choose.\n\nAttributes\n----------\nplanner : str\n    Input name.\nstart_min : float or None\n    Chosen batch start.\nstatus : str\n    Planner status.",
+      "properties": {
+        "planner": {
+          "title": "Planner",
+          "type": "string"
+        },
+        "start_min": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Start Min"
+        },
+        "status": {
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "planner",
+        "start_min",
+        "status"
+      ],
+      "title": "Alternative",
+      "type": "object"
+    },
+    "ApprovalWindow": {
+      "additionalProperties": false,
+      "description": "The operator's approval window before T0.\n\nAttributes\n----------\nstate : {\"open\", \"approved\", \"closed\"}\n    Current window state.\nopened_at, closes_at : str\n    UTC wall-clock bounds.\nremaining_s : float\n    Seconds left while open.\napproved_by, approved_at : str or None\n    Approval record.",
+      "properties": {
+        "approved_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Approved At"
+        },
+        "approved_by": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Approved By"
+        },
+        "closes_at": {
+          "title": "Closes At",
+          "type": "string"
+        },
+        "opened_at": {
+          "title": "Opened At",
+          "type": "string"
+        },
+        "remaining_s": {
+          "title": "Remaining S",
+          "type": "number"
+        },
+        "state": {
+          "enum": [
+            "open",
+            "approved",
+            "closed"
+          ],
+          "title": "State",
+          "type": "string"
+        }
+      },
+      "required": [
+        "state",
+        "opened_at",
+        "closes_at",
+        "remaining_s",
+        "approved_by",
+        "approved_at"
+      ],
+      "title": "ApprovalWindow",
+      "type": "object"
+    },
+    "ApprovedPlan": {
+      "additionalProperties": false,
+      "description": "An approved proposal and the task windows the Metis plan flies.\n\nAttributes\n----------\nproposal_id : str\n    Approved proposal.\napproved_by : str\n    Operator display name.\napproved_at : str\n    UTC wall-clock time.\ntasks : list of TaskWindow\n    The original schedule with the proposed change applied.",
+      "properties": {
+        "approved_at": {
+          "title": "Approved At",
+          "type": "string"
+        },
+        "approved_by": {
+          "title": "Approved By",
+          "type": "string"
+        },
+        "proposal_id": {
+          "title": "Proposal Id",
+          "type": "string"
+        },
+        "tasks": {
+          "items": {
+            "$ref": "#/$defs/TaskWindow"
+          },
+          "title": "Tasks",
+          "type": "array"
+        }
+      },
+      "required": [
+        "proposal_id",
+        "approved_by",
+        "approved_at",
+        "tasks"
+      ],
+      "title": "ApprovedPlan",
+      "type": "object"
+    },
+    "ForecastBand": {
+      "additionalProperties": false,
+      "description": "Per-5-minute forecast in mission watts.\n\nAttributes\n----------\np10, p50, p90 : list of float\n    Low case, median and high case.\ncautious : list of float\n    The inputs Metis plans with.\nnominal : list of float\n    Fixed assumption for comparison.",
+      "properties": {
+        "cautious": {
+          "items": {
+            "type": "number"
+          },
+          "title": "Cautious",
+          "type": "array"
+        },
+        "nominal": {
+          "items": {
+            "type": "number"
+          },
+          "title": "Nominal",
+          "type": "array"
+        },
+        "p10": {
+          "items": {
+            "type": "number"
+          },
+          "title": "P10",
+          "type": "array"
+        },
+        "p50": {
+          "items": {
+            "type": "number"
+          },
+          "title": "P50",
+          "type": "array"
+        },
+        "p90": {
+          "items": {
+            "type": "number"
+          },
+          "title": "P90",
+          "type": "array"
+        }
+      },
+      "required": [
+        "p10",
+        "p50",
+        "p90",
+        "cautious",
+        "nominal"
+      ],
+      "title": "ForecastBand",
+      "type": "object"
+    },
+    "MetisAlert": {
+      "additionalProperties": false,
+      "description": "Metis's alert on a run it watches, and the operator's decision.\n\nAttributes\n----------\nstate : {\"pending\", \"approved\", \"dismissed\"}\n    ``pending`` holds the run until the operator decides.\nraised_at_min : float\n    Mission minute the alert was raised, before the batch starts.\ndecided_by : str or None\n    Operator who approved or dismissed it.",
+      "properties": {
+        "decided_by": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Decided By"
+        },
+        "raised_at_min": {
+          "title": "Raised At Min",
+          "type": "number"
+        },
+        "state": {
+          "enum": [
+            "pending",
+            "approved",
+            "dismissed"
+          ],
+          "title": "State",
+          "type": "string"
+        }
+      },
+      "required": [
+        "state",
+        "raised_at_min",
+        "decided_by"
+      ],
+      "title": "MetisAlert",
+      "type": "object"
+    },
+    "MetisBriefing": {
+      "additionalProperties": false,
+      "description": "Everything the Metis view shows before a run.\n\nAttributes\n----------\nmission : MissionBrief\n    Request and original schedule.\nforecast : MetisForecast\n    Forecast made at the decision time.\nproposal : MetisProposal\n    Proposed change.\nwindow : ApprovalWindow\n    Approval state.\nruns : PlanRuns\n    Latest run of each mode, for resuming and comparing.",
+      "properties": {
+        "forecast": {
+          "$ref": "#/$defs/MetisForecast"
+        },
+        "mission": {
+          "$ref": "#/$defs/MissionBrief"
+        },
+        "proposal": {
+          "$ref": "#/$defs/MetisProposal"
+        },
+        "runs": {
+          "$ref": "#/$defs/PlanRuns"
+        },
+        "window": {
+          "$ref": "#/$defs/ApprovalWindow"
+        }
+      },
+      "required": [
+        "mission",
+        "forecast",
+        "proposal",
+        "window",
+        "runs"
+      ],
+      "title": "MetisBriefing",
+      "type": "object"
+    },
+    "MetisForecast": {
+      "additionalProperties": false,
+      "description": "Forecast made at the decision time.\n\nAttributes\n----------\nsource : str\n    Training data and model description.\ndecision_time_source : str\n    Decision time in the source dataset's clock.\ntrained_through : str\n    Last day of training data.\ncaution_lambda : float\n    Calibrated caution setting.\nbin_minutes : float\n    Bin width.\nbin_start_min : list of float\n    Bin starts in mission minutes.\nsolar_w, essential_w : ForecastBand\n    Solar supply and essential load.",
+      "properties": {
+        "bin_minutes": {
+          "title": "Bin Minutes",
+          "type": "number"
+        },
+        "bin_start_min": {
+          "items": {
+            "type": "number"
+          },
+          "title": "Bin Start Min",
+          "type": "array"
+        },
+        "caution_lambda": {
+          "title": "Caution Lambda",
+          "type": "number"
+        },
+        "decision_time_source": {
+          "title": "Decision Time Source",
+          "type": "string"
+        },
+        "essential_w": {
+          "$ref": "#/$defs/ForecastBand"
+        },
+        "solar_w": {
+          "$ref": "#/$defs/ForecastBand"
+        },
+        "source": {
+          "title": "Source",
+          "type": "string"
+        },
+        "trained_through": {
+          "title": "Trained Through",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source",
+        "decision_time_source",
+        "trained_through",
+        "caution_lambda",
+        "bin_minutes",
+        "bin_start_min",
+        "solar_w",
+        "essential_w"
+      ],
+      "title": "MetisForecast",
+      "type": "object"
+    },
+    "MetisProposal": {
+      "additionalProperties": false,
+      "description": "The proposed schedule change.\n\nAttributes\n----------\nproposal_id : str\n    Stable identity of this proposal.\ntask_id : str\n    Task being moved.\nfrom_start_min, to_start_min : float\n    Original and proposed start.\nstatus : str\n    Planner status for the proposal.\nrationale : str\n    Plain-language reason.\noriginal_crossing_min : float or None\n    Where the original plan enters the reserve under the cautious forecast.\noriginal_downlink_start_wh, proposed_downlink_start_wh : float\n    Margin when the downlink starts.\nproposed_min_wh : float\n    Lowest margin of the proposed plan under the cautious forecast.\noriginal_margin, proposed_margin : MinuteSeries\n    Forecast margins, one point per minute.\nalternatives : list of Alternative\n    Slots chosen from other inputs.",
+      "properties": {
+        "alternatives": {
+          "items": {
+            "$ref": "#/$defs/Alternative"
+          },
+          "title": "Alternatives",
+          "type": "array"
+        },
+        "from_start_min": {
+          "title": "From Start Min",
+          "type": "number"
+        },
+        "original_crossing_min": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Original Crossing Min"
+        },
+        "original_downlink_start_wh": {
+          "title": "Original Downlink Start Wh",
+          "type": "number"
+        },
+        "original_margin": {
+          "$ref": "#/$defs/MinuteSeries"
+        },
+        "proposal_id": {
+          "title": "Proposal Id",
+          "type": "string"
+        },
+        "proposed_downlink_start_wh": {
+          "title": "Proposed Downlink Start Wh",
+          "type": "number"
+        },
+        "proposed_margin": {
+          "$ref": "#/$defs/MinuteSeries"
+        },
+        "proposed_min_wh": {
+          "title": "Proposed Min Wh",
+          "type": "number"
+        },
+        "rationale": {
+          "title": "Rationale",
+          "type": "string"
+        },
+        "status": {
+          "title": "Status",
+          "type": "string"
+        },
+        "task_id": {
+          "title": "Task Id",
+          "type": "string"
+        },
+        "to_start_min": {
+          "title": "To Start Min",
+          "type": "number"
+        }
+      },
+      "required": [
+        "proposal_id",
+        "task_id",
+        "from_start_min",
+        "to_start_min",
+        "status",
+        "rationale",
+        "original_crossing_min",
+        "original_downlink_start_wh",
+        "proposed_downlink_start_wh",
+        "proposed_min_wh",
+        "original_margin",
+        "proposed_margin",
+        "alternatives"
+      ],
+      "title": "MetisProposal",
+      "type": "object"
+    },
+    "MinuteSeries": {
+      "additionalProperties": false,
+      "description": "Values at mission minutes.\n\nAttributes\n----------\nminute : list of float\n    Mission minutes from T0.\nvalue : list of float\n    One value per minute entry.",
+      "properties": {
+        "minute": {
+          "items": {
+            "type": "number"
+          },
+          "title": "Minute",
+          "type": "array"
+        },
+        "value": {
+          "items": {
+            "type": "number"
+          },
+          "title": "Value",
+          "type": "array"
+        }
+      },
+      "required": [
+        "minute",
+        "value"
+      ],
+      "title": "MinuteSeries",
+      "type": "object"
+    },
+    "MissionBrief": {
+      "additionalProperties": false,
+      "description": "The emergency request and the assumed mission.\n\nAttributes\n----------\ntitle : str\n    Mission name.\nrequest : str\n    What the response team asked for.\nt0_utc : str\n    Planning-uplink closure (mission minute 0) in UTC.\ndecision_min : float\n    Mission minute when the request arrived, negative before T0.\nduration_min : float\n    Mission length after T0.\ntasks : list of MissionTask\n    Original schedule.\neclipses : list of MissionInterval\n    Assumed eclipse windows.\ndelivery_deadline_min, batch_deadline_min : float\n    Briefing and batch deadlines.\nreserve_wh : float\n    Usable margin above the protected reserve at T0.\nenvironment_source : str or None\n    Public name of the recorded data behind the simulated conditions,\n    supplied by the host.",
+      "properties": {
+        "batch_deadline_min": {
+          "title": "Batch Deadline Min",
+          "type": "number"
+        },
+        "decision_min": {
+          "title": "Decision Min",
+          "type": "number"
+        },
+        "delivery_deadline_min": {
+          "title": "Delivery Deadline Min",
+          "type": "number"
+        },
+        "duration_min": {
+          "title": "Duration Min",
+          "type": "number"
+        },
+        "eclipses": {
+          "items": {
+            "$ref": "#/$defs/MissionInterval"
+          },
+          "title": "Eclipses",
+          "type": "array"
+        },
+        "environment_source": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Environment Source"
+        },
+        "request": {
+          "title": "Request",
+          "type": "string"
+        },
+        "reserve_wh": {
+          "title": "Reserve Wh",
+          "type": "number"
+        },
+        "t0_utc": {
+          "title": "T0 Utc",
+          "type": "string"
+        },
+        "tasks": {
+          "items": {
+            "$ref": "#/$defs/MissionTask"
+          },
+          "title": "Tasks",
+          "type": "array"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "title",
+        "request",
+        "t0_utc",
+        "decision_min",
+        "duration_min",
+        "tasks",
+        "eclipses",
+        "delivery_deadline_min",
+        "batch_deadline_min",
+        "reserve_wh",
+        "environment_source"
+      ],
+      "title": "MissionBrief",
+      "type": "object"
+    },
+    "MissionInterval": {
+      "additionalProperties": false,
+      "description": "A mission-minute interval, such as an eclipse.\n\nAttributes\n----------\nstart_min, end_min : float\n    Mission minutes from T0.",
+      "properties": {
+        "end_min": {
+          "title": "End Min",
+          "type": "number"
+        },
+        "start_min": {
+          "title": "Start Min",
+          "type": "number"
+        }
+      },
+      "required": [
+        "start_min",
+        "end_min"
+      ],
+      "title": "MissionInterval",
+      "type": "object"
+    },
+    "MissionTask": {
+      "additionalProperties": false,
+      "description": "One scheduled task of the original plan.\n\nAttributes\n----------\ntask_id : str\n    ``compute_batch``, ``thermal_capture`` or ``downlink``.\nname : str\n    Display name.\nstart_min, end_min : float\n    Mission minutes from T0.\nadded_load_w : float\n    Load added to the essential load while active.\nmovable : bool\n    Whether Metis may move this task.",
+      "properties": {
+        "added_load_w": {
+          "title": "Added Load W",
+          "type": "number"
+        },
+        "end_min": {
+          "title": "End Min",
+          "type": "number"
+        },
+        "movable": {
+          "title": "Movable",
+          "type": "boolean"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "start_min": {
+          "title": "Start Min",
+          "type": "number"
+        },
+        "task_id": {
+          "title": "Task Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "task_id",
+        "name",
+        "start_min",
+        "end_min",
+        "added_load_w",
+        "movable"
+      ],
+      "title": "MissionTask",
+      "type": "object"
+    },
+    "PlanRuns": {
+      "additionalProperties": false,
+      "description": "The operator's latest demo run with Metis off and with Metis on.\n\nAttributes\n----------\nmetis_off, metis_on : str or None\n    Run IDs, or ``None`` when that mode has not flown since the last reset.\n    With Metis on this is the watched run, or the Metis-plan run that\n    continued it after approval.",
+      "properties": {
+        "metis_off": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Metis Off"
+        },
+        "metis_on": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Metis On"
+        }
+      },
+      "required": [
+        "metis_off",
+        "metis_on"
+      ],
+      "title": "PlanRuns",
+      "type": "object"
+    },
+    "RunOutcome": {
+      "additionalProperties": false,
+      "description": "What happened on one demo run so far, from public telemetry and events.\n\nAttributes\n----------\nrun_id : str\n    Demo run.\nplan : {\"original\", \"metis\"}\n    Plan the run flies.\nname : str\n    Plan display name.\nmetis_on : bool\n    Whether Metis watched the mission.\nalert : MetisAlert or None\n    Metis's alert and decision, for runs flown with Metis on.\ncommitted_min : float\n    Mission minute committed so far.\ncomplete : bool\n    Whether the run reached its end.\nthreshold_wh : float\n    Battery energy at the top of the protected reserve.\nlimit_soc : float\n    State of charge at the top of the reserve: the public low-energy limit.\nbatch_start_min : float\n    Compute-batch start of this plan.\nmargin : MinuteSeries\n    Measured energy above the reserve, sampled every 6 s.\nsolar_w : MinuteSeries\n    Measured harvested solar, one-minute means.\nmin_wh, min_at_min : float or None\n    Lowest margin so far and when.\nfirst_negative_min : float or None\n    First time inside the reserve.\ncapture_end_wh, downlink_start_wh, downlink_end_wh : float or None\n    Margins at the task edges once reached.\ndownlink_start_soc : float or None\n    Battery state of charge when the downlink was due.\ncapture, batch, downlink : {\"pending\", \"running\", \"done\", \"skipped\"}\n    Task progress.\ndownlink_progress : float\n    Fraction of the downlink window completed, 0 to 1.\ndelivered_at_min : float or None\n    When the image reached the ground: the downlink end, once done.",
+      "properties": {
+        "alert": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MetisAlert"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "batch": {
+          "enum": [
+            "pending",
+            "running",
+            "done",
+            "skipped"
+          ],
+          "title": "Batch",
+          "type": "string"
+        },
+        "batch_start_min": {
+          "title": "Batch Start Min",
+          "type": "number"
+        },
+        "capture": {
+          "enum": [
+            "pending",
+            "running",
+            "done",
+            "skipped"
+          ],
+          "title": "Capture",
+          "type": "string"
+        },
+        "capture_end_wh": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Capture End Wh"
+        },
+        "committed_min": {
+          "title": "Committed Min",
+          "type": "number"
+        },
+        "complete": {
+          "title": "Complete",
+          "type": "boolean"
+        },
+        "delivered_at_min": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Delivered At Min"
+        },
+        "downlink": {
+          "enum": [
+            "pending",
+            "running",
+            "done",
+            "skipped"
+          ],
+          "title": "Downlink",
+          "type": "string"
+        },
+        "downlink_end_wh": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Downlink End Wh"
+        },
+        "downlink_progress": {
+          "title": "Downlink Progress",
+          "type": "number"
+        },
+        "downlink_start_soc": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Downlink Start Soc"
+        },
+        "downlink_start_wh": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Downlink Start Wh"
+        },
+        "first_negative_min": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "First Negative Min"
+        },
+        "limit_soc": {
+          "title": "Limit Soc",
+          "type": "number"
+        },
+        "margin": {
+          "$ref": "#/$defs/MinuteSeries"
+        },
+        "metis_on": {
+          "title": "Metis On",
+          "type": "boolean"
+        },
+        "min_at_min": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Min At Min"
+        },
+        "min_wh": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Min Wh"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "plan": {
+          "enum": [
+            "original",
+            "metis"
+          ],
+          "title": "Plan",
+          "type": "string"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "solar_w": {
+          "$ref": "#/$defs/MinuteSeries"
+        },
+        "threshold_wh": {
+          "title": "Threshold Wh",
+          "type": "number"
+        }
+      },
+      "required": [
+        "run_id",
+        "plan",
+        "name",
+        "metis_on",
+        "alert",
+        "committed_min",
+        "complete",
+        "threshold_wh",
+        "limit_soc",
+        "batch_start_min",
+        "margin",
+        "solar_w",
+        "min_wh",
+        "min_at_min",
+        "first_negative_min",
+        "capture_end_wh",
+        "downlink_start_wh",
+        "downlink_end_wh",
+        "downlink_start_soc",
+        "capture",
+        "batch",
+        "downlink",
+        "downlink_progress",
+        "delivered_at_min"
+      ],
+      "title": "RunOutcome",
+      "type": "object"
+    },
+    "TaskWindow": {
+      "additionalProperties": false,
+      "description": "One task in simulator seconds from T0.\n\nAttributes\n----------\ntask_id : str\n    Task label.\nstart_s, end_s : int\n    Half-open window.\nadded_load_w : float\n    Load added while active.",
+      "properties": {
+        "added_load_w": {
+          "title": "Added Load W",
+          "type": "number"
+        },
+        "end_s": {
+          "title": "End S",
+          "type": "integer"
+        },
+        "start_s": {
+          "title": "Start S",
+          "type": "integer"
+        },
+        "task_id": {
+          "title": "Task Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "task_id",
+        "start_s",
+        "end_s",
+        "added_load_w"
+      ],
+      "title": "TaskWindow",
+      "type": "object"
+    },
+    "ViewerMissionRunRequest": {
+      "additionalProperties": false,
+      "description": "Fly one plan of the wildfire mission.\n\nAttributes\n----------\nplan : {\"original\", \"metis\"}\n    Plan to fly. ``metis`` requires an approved proposal and continues the\n    watched run from the alert.\nproposal_id : str or None\n    Approved proposal, required for ``metis``.\nwatch : bool, default=False\n    Fly the original plan with Metis on: the run starts at T0, pauses by\n    itself at Metis's alert and waits for the operator's decision.",
+      "properties": {
+        "plan": {
+          "enum": [
+            "original",
+            "metis"
+          ],
+          "title": "Plan",
+          "type": "string"
+        },
+        "proposal_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Proposal Id"
+        },
+        "watch": {
+          "default": false,
+          "title": "Watch",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "plan"
+      ],
+      "title": "ViewerMissionRunRequest",
+      "type": "object"
+    }
+  },
+  "$id": "https://metisorbital.local/schemas/metis-agent.v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/MinuteSeries"
+    },
+    {
+      "$ref": "#/$defs/MissionTask"
+    },
+    {
+      "$ref": "#/$defs/MissionInterval"
+    },
+    {
+      "$ref": "#/$defs/MissionBrief"
+    },
+    {
+      "$ref": "#/$defs/ForecastBand"
+    },
+    {
+      "$ref": "#/$defs/MetisForecast"
+    },
+    {
+      "$ref": "#/$defs/Alternative"
+    },
+    {
+      "$ref": "#/$defs/MetisProposal"
+    },
+    {
+      "$ref": "#/$defs/ApprovalWindow"
+    },
+    {
+      "$ref": "#/$defs/PlanRuns"
+    },
+    {
+      "$ref": "#/$defs/MetisBriefing"
+    },
+    {
+      "$ref": "#/$defs/MetisAlert"
+    },
+    {
+      "$ref": "#/$defs/TaskWindow"
+    },
+    {
+      "$ref": "#/$defs/ApprovedPlan"
+    },
+    {
+      "$ref": "#/$defs/RunOutcome"
+    },
+    {
+      "$ref": "#/$defs/ViewerMissionRunRequest"
+    }
+  ],
+  "title": "MetisAgentContracts"
+}

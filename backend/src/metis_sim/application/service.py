@@ -6,6 +6,7 @@ import logging
 import platform
 import threading
 import time
+from collections.abc import Sequence
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal, cast
@@ -22,6 +23,7 @@ from metis_sim.adapters.repository import TERMINAL, Idempotent, Repository
 from metis_sim.application.configured_orbit import configured_orbit_points, default_bupt1_orbit
 from metis_sim.application.errors import ServiceError
 from metis_sim.application.measurement import MeasurementProjector
+from metis_sim.application.mission_run import build_mission_config
 from metis_sim.application.replay import PreparedReplay
 from metis_sim.application.runner import PreparedRun, Runner
 from metis_sim.domain.config import OrbitConfiguration, SimulationConfig
@@ -59,6 +61,9 @@ class SimulationService:
         self.demo_run_id: str | None = None
         self.viewer_runs: set[str] = set()
         self.observed = ObservedRepository(repository.database)
+        # Engines computed ahead of time, keyed by configuration hash.
+        self._warm_engines: dict[str, SimulationEngine] = {}
+        self._warm_lock = threading.Lock()
 
     def create_configuration(self, config: SimulationConfig, token: Idempotent) -> dict[str, Any]:
         """Persist one fully resolved immutable configuration revision.
@@ -454,7 +459,10 @@ class SimulationService:
             revision = self.repository.configuration(configuration_id)
             config = load_configuration(json.dumps(revision["configuration"]), "json")
             self._make_prepared_room()
-            engine = SimulationEngine(config).initialize()
+            with self._warm_lock:
+                engine = self._warm_engines.get(configuration_hash(config))
+            if engine is None:
+                engine = SimulationEngine(config).initialize()
             run_id = str(uuid4())
             spacecraft = []
             for satellite in sorted(config.satellites, key=lambda item: item.satellite_id):
@@ -480,6 +488,7 @@ class SimulationService:
                     duration_s=config.run.duration_s,
                     requested_speed=config.run.speed,
                     satellites=spacecraft,
+                    environment_source=config.run.environment_source,
                     model_provenance={
                         key: engine.provenance[key]
                         for key in PublicModelProvenance.__annotations__
@@ -852,6 +861,195 @@ class SimulationService:
             )
         return Trajectory(run_id=run_id, satellites=satellites)
 
+    def _commit_history(
+        self, run_id: str, status: dict[str, Any], at_tick: int, batch: int = 4
+    ) -> dict[str, Any]:
+        """Persist genuine ticks ``0..at_tick`` at once and leave the run paused and active.
+
+        Parameters
+        ----------
+        run_id : str
+            Created physics run whose engine is prepared.
+        status : dict
+            Its public status, updated in place.
+        at_tick : int
+            Last tick to commit.
+        batch : int, default=4
+            Ticks per database transaction.
+
+        Returns
+        -------
+        dict
+            Paused status at ``at_tick``, ready for ``resume``.
+        """
+        prepared = self.runner.prepared[run_id]
+        if not isinstance(prepared, PreparedRun):
+            raise ValueError("Committing history requires a simulation engine")
+        status["status"] = "running"
+        self.repository.commit(status, [], [], [])
+        for first in range(0, at_tick + 1, batch):
+            frames, events, truth = [], [], []
+            final = min(first + batch - 1, at_tick)
+            for tick in range(first, final + 1):
+                f, e, t = prepared.projector.project(prepared.engine.sample(tick))
+                frames.extend(f)
+                events.extend(e)
+                truth.extend(t)
+            status.update(
+                committed_tick=final,
+                committed_at=frames[-1]["observed_at"],
+                frame_count=(final + 1) * len(status["satellites"]),
+            )
+            self.repository.commit(status, frames, events, truth)
+            if final % 1000 < batch or final == at_tick:
+                logger.info(
+                    "demo_preparation_progress",
+                    extra={"run_id": run_id, "tick": final, "frame_count": status["frame_count"]},
+                )
+        status["status"] = "paused"
+        self.repository.commit(status, [], [], [])
+        self.runner.active_id = run_id
+        return status
+
+    @staticmethod
+    def mission_config(
+        template_path: Path, windows: Sequence[dict[str, Any]], name: str, speed: int
+    ) -> SimulationConfig:
+        """Build the validated demo-run configuration for one plan.
+
+        Parameters
+        ----------
+        template_path : Path
+            Server-owned single-spacecraft template with its private scenario.
+        windows : sequence of dict
+            Task windows of the plan being flown.
+        name : str
+            Spacecraft display name for the run.
+        speed : int
+            Requested playback speed.
+
+        Returns
+        -------
+        SimulationConfig
+            Configuration whose hash identifies a warmed engine.
+        """
+        config = build_mission_config(load_configuration(template_path.read_text()), windows, name)
+        mapping = config.model_dump(mode="json")
+        mapping["run"]["speed"] = speed
+        return load_configuration(json.dumps(mapping), "json")
+
+    def warm_engine(self, config: SimulationConfig) -> None:
+        """Precompute a run's physics so creating that run later is fast.
+
+        Parameters
+        ----------
+        config : SimulationConfig
+            Configuration expected to be requested, such as a demo plan's run.
+        """
+        engine = SimulationEngine(config).initialize()
+        with self._warm_lock:
+            self._warm_engines[configuration_hash(config)] = engine
+        logger.info("engine_warmed", extra={"satellites": len(config.satellites)})
+
+    def create_mission_run(
+        self,
+        run_id: str,
+        template_path: Path,
+        windows: Sequence[dict[str, Any]],
+        name: str,
+        token: Idempotent,
+        *,
+        viewer_expires_at: float | None = None,
+        speed: int = 120,
+        precommit_s: int = 0,
+        hold_s: int | None = None,
+    ) -> dict[str, Any]:
+        """Replace a viewer run with a Metis demo run flying one plan.
+
+        Parameters
+        ----------
+        run_id : str
+            Current viewer-authorized run, stopped first when active.
+        template_path : Path
+            Server-owned demo template. Unlike viewer edits, its private
+            scenario is kept: it is the demo's hidden truth, and the viewer
+            only ever sees the public telemetry it produces.
+        windows : sequence of dict
+            Task windows of the plan being flown: the original schedule or an
+            approved Metis plan.
+        name : str
+            Spacecraft display name for the run.
+        token : Idempotent
+            Request identity shared by the stop, revision and run.
+        viewer_expires_at : float or None
+            Lease expiry for the replacement mock operator session.
+        speed : int, default=120
+            Requested playback speed.
+        precommit_s : int, default=0
+            Ticks committed at once, so a plan continuing a held run resumes
+            where that run paused.
+        hold_s : int or None
+            Tick where playback pauses by itself for the operator's decision.
+
+        Returns
+        -------
+        dict
+            Run status, paused at ``precommit_s`` (or created when zero).
+        """
+        with self.mutations:
+            existing = self.repository.existing((token[0] + ":run", token[1], token[2]))
+            if existing is not None:
+                return existing
+            source = self.repository.status(run_id)
+            user_id = self.repository.private_run(run_id)["user_id"]
+            if source["status"] in {"running", "paused"}:
+                self.runner.command(
+                    run_id, "stop", None, (token[0] + ":stop", token[1], token[2]), user_id=user_id
+                )
+            # The single runner drives one run at a time. A demo run left active
+            # by another session, such as a Metis-held run in a second browser,
+            # would block the new run, so stop it when it is a viewer run.
+            other = self.runner.active_id
+            if other is not None and other != run_id:
+                owner = self.repository.private_run(other)["user_id"]
+                if owner is not None and self.repository.status(other)["status"] in {
+                    "running",
+                    "paused",
+                }:
+                    self.runner.command(
+                        other,
+                        "stop",
+                        None,
+                        (token[0] + ":stop-other", token[1], token[2]),
+                        user_id=owner,
+                    )
+            config = self.mission_config(template_path, windows, name, speed)
+            revision = self.create_configuration(
+                config, (token[0] + ":configuration", token[1], token[2])
+            )
+            status = self.create_run(
+                revision["configuration_id"],
+                False,
+                (token[0] + ":run", token[1], token[2]),
+                viewer=True,
+                user_id=user_id,
+                viewer_expires_at=viewer_expires_at,
+                data_source="physics",
+            )
+            self.runner.prepared.pop(run_id, None)
+            self.viewer_runs.discard(run_id)
+            if hold_s is not None:
+                self.runner.holds[status["run_id"]] = hold_s
+            if precommit_s > 0:
+                status = self._commit_history(
+                    status["run_id"], status, min(precommit_s, config.run.duration_s - 1), batch=300
+                )
+            logger.info(
+                "mission_run_prepared",
+                extra={"run_id": status["run_id"], "tick": status["committed_tick"]},
+            )
+            return status
+
     def prepare_demo(self, path: Path, at_tick: int = 0) -> str:
         """Create a local run, optionally persisting genuine history to a paused demo point."""
         config = load_configuration(path.read_text())
@@ -877,37 +1075,7 @@ class SimulationService:
             return self.demo_run_id
         if at_tick >= config.run.duration_s:
             raise ValueError("Demo starting tick must be less than the configured duration")
-        prepared = self.runner.prepared[self.demo_run_id]
-        if not isinstance(prepared, PreparedRun):
-            raise ValueError("Physics demonstration requires a simulation engine")
-        status["status"] = "running"
-        self.repository.commit(status, [], [], [])
-        for first in range(0, at_tick + 1, 4):
-            frames, events, truth = [], [], []
-            final = min(first + 3, at_tick)
-            for tick in range(first, final + 1):
-                f, e, t = prepared.projector.project(prepared.engine.sample(tick))
-                frames.extend(f)
-                events.extend(e)
-                truth.extend(t)
-            status.update(
-                committed_tick=final,
-                committed_at=frames[-1]["observed_at"],
-                frame_count=(final + 1) * len(status["satellites"]),
-            )
-            self.repository.commit(status, frames, events, truth)
-            if final % 1000 < 4 or final == at_tick:
-                logger.info(
-                    "demo_preparation_progress",
-                    extra={
-                        "run_id": self.demo_run_id,
-                        "tick": final,
-                        "frame_count": status["frame_count"],
-                    },
-                )
-        status["status"] = "paused"
-        self.repository.commit(status, [], [], [])
-        self.runner.active_id = self.demo_run_id
+        status = self._commit_history(self.demo_run_id, status, at_tick)
         logger.info(
             "demo_prepared",
             extra={
