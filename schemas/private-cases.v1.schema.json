@@ -613,7 +613,7 @@
     },
     "DecisionCaseRequest": {
       "additionalProperties": false,
-      "description": "Record a human decision at an expected case revision.",
+      "description": "Record a human decision at an expected case revision.\n\nAttributes\n----------\nmission_proposal_id : str or None\n    Bind a direct banner approval to the unchanged saved mission proposal.\n    Ordinary investigation decisions omit this additional precondition.",
       "properties": {
         "decision": {
           "enum": [
@@ -623,6 +623,20 @@
           ],
           "title": "Decision",
           "type": "string"
+        },
+        "mission_proposal_id": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Mission Proposal Id"
         },
         "reason": {
           "maxLength": 8000,

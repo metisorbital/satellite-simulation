@@ -113,6 +113,52 @@ class NotificationRepository:
     def _sync_warnings(self, connection: Connection, run_id: str) -> list[dict[str, Any]]:
         """Synchronize warning lifecycle state without treating each sample as new."""
         warnings = self._warnings(run_id, self._latest_rows(connection, run_id))
+        mission = connection.execute(
+            select(tables.mission_states.c.state).where(tables.mission_states.c.run_id == run_id)
+        ).scalar_one_or_none()
+        run = connection.execute(
+            select(tables.runs.c.status, tables.runs.c.public_status).where(
+                tables.runs.c.run_id == run_id
+            )
+        ).first()
+        if (
+            mission
+            and mission.get("case_id")
+            and mission.get("status") == "awaiting_decision"
+            and run is not None
+            and run.status == "paused"
+            and run.public_status["committed_tick"] == mission["alert_at_s"]
+        ):
+            case = (
+                connection.execute(
+                    select(tables.operator_cases).where(
+                        tables.operator_cases.c.case_id == mission["case_id"],
+                        tables.operator_cases.c.run_id == run_id,
+                        tables.operator_cases.c.user_id == mission["user_id"],
+                    )
+                )
+                .mappings()
+                .first()
+            )
+            if case and case["status"] == "open" and case["decision"] in {"pending", "revised"}:
+                warnings.append(
+                    {
+                        "key": f"warning:{run_id}:{case['satellite_id']}:model:{mission['proposal_id']}",
+                        "satellite_id": case["satellite_id"],
+                        "title": case["title"],
+                        "summary": f"Awaiting operator approval. {case['summary']}"[:4000],
+                        "fingerprint": canonical_hash(
+                            {
+                                "proposal_id": mission["proposal_id"],
+                                "recommendation": case["recommendation"],
+                                "decision": case["decision"],
+                            }
+                        ),
+                        "source": "model_prediction",
+                        "severity": "critical",
+                        "case_id": case["case_id"],
+                    }
+                )
         active = {item["key"]: item for item in warnings}
         existing = {
             row["notification_key"]: dict(row)
@@ -213,6 +259,9 @@ class NotificationRepository:
                         "title": row["title"],
                         "summary": row["summary"][:4000] or "Operator case requires review.",
                         "unread": receipts.get(key, 0) < row["revision"],
+                        "source": "operator_case",
+                        "severity": "info",
+                        "case_id": row["case_id"],
                     }
                 )
             return {"items": items, "unread_count": sum(1 for item in items if item["unread"])}

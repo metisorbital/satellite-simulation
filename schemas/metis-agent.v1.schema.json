@@ -124,6 +124,81 @@
       "title": "ApprovedPlan",
       "type": "object"
     },
+    "DemoResult": {
+      "additionalProperties": false,
+      "description": "Persisted illustrative delivery result, separate from observed telemetry.\n\nAttributes\n----------\nresult : str\n    Delivery success, delivery failure, or failed illustrative capture.\nplan : str\n    Original or operator-approved schedule used by the budget projection.\nrecorded_at_utc : str\n    Source-clock timestamp when the modeled downlink window ended.\ncapture, downlink : str\n    Projected terminal task states, not measured spacecraft execution.\ndelivered_at_min : float or None\n    Illustrative delivery time; absent when the scenario could not deliver.\noutcome_basis : str\n    Explicit demo-projection provenance.",
+      "properties": {
+        "capture": {
+          "enum": [
+            "pending",
+            "running",
+            "done",
+            "skipped"
+          ],
+          "title": "Capture",
+          "type": "string"
+        },
+        "delivered_at_min": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Delivered At Min"
+        },
+        "downlink": {
+          "enum": [
+            "pending",
+            "running",
+            "done",
+            "skipped"
+          ],
+          "title": "Downlink",
+          "type": "string"
+        },
+        "outcome_basis": {
+          "const": "demo_projection",
+          "default": "demo_projection",
+          "title": "Outcome Basis",
+          "type": "string"
+        },
+        "plan": {
+          "enum": [
+            "original",
+            "metis"
+          ],
+          "title": "Plan",
+          "type": "string"
+        },
+        "recorded_at_utc": {
+          "title": "Recorded At Utc",
+          "type": "string"
+        },
+        "result": {
+          "enum": [
+            "delivered",
+            "missed_delivery",
+            "capture_failed"
+          ],
+          "title": "Result",
+          "type": "string"
+        }
+      },
+      "required": [
+        "result",
+        "plan",
+        "recorded_at_utc",
+        "capture",
+        "downlink",
+        "delivered_at_min",
+        "outcome_basis"
+      ],
+      "title": "DemoResult",
+      "type": "object"
+    },
     "ForecastBand": {
       "additionalProperties": false,
       "description": "Per-5-minute forecast in mission watts.\n\nAttributes\n----------\np10, p50, p90 : list of float\n    Low case, median and high case.\ncautious : list of float\n    The inputs Metis plans with.\nnominal : list of float\n    Fixed assumption for comparison.",
@@ -215,17 +290,74 @@
       "additionalProperties": false,
       "description": "Everything the Metis view shows before a run.\n\nAttributes\n----------\nmission : MissionBrief\n    Request and original schedule.\nforecast : MetisForecast\n    Forecast made at the decision time.\nproposal : MetisProposal\n    Proposed change.\nwindow : ApprovalWindow\n    Approval state.\nruns : PlanRuns\n    Latest run of each mode, for resuming and comparing.",
       "properties": {
+        "alert_at_min": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Alert At Min"
+        },
+        "alert_at_utc": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Alert At Utc"
+        },
         "forecast": {
           "$ref": "#/$defs/MetisForecast"
         },
+        "metis_enabled": {
+          "default": true,
+          "title": "Metis Enabled",
+          "type": "boolean"
+        },
         "mission": {
           "$ref": "#/$defs/MissionBrief"
+        },
+        "mission_available": {
+          "default": true,
+          "title": "Mission Available",
+          "type": "boolean"
+        },
+        "mission_state": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MissionState"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "proposal": {
           "$ref": "#/$defs/MetisProposal"
         },
         "runs": {
           "$ref": "#/$defs/PlanRuns"
+        },
+        "unavailable_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Unavailable Reason"
         },
         "window": {
           "$ref": "#/$defs/ApprovalWindow"
@@ -236,7 +368,13 @@
         "forecast",
         "proposal",
         "window",
-        "runs"
+        "runs",
+        "mission_state",
+        "mission_available",
+        "unavailable_reason",
+        "metis_enabled",
+        "alert_at_utc",
+        "alert_at_min"
       ],
       "title": "MetisBriefing",
       "type": "object"
@@ -290,6 +428,21 @@
         "essential_w"
       ],
       "title": "MetisForecast",
+      "type": "object"
+    },
+    "MetisPreferenceRequest": {
+      "additionalProperties": false,
+      "description": "Set model watching for the current compatible recorded mission.\n\nAttributes\n----------\nenabled : bool\n    Whether the saved prediction can pause replay for an operator case.",
+      "properties": {
+        "enabled": {
+          "title": "Enabled",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "enabled"
+      ],
+      "title": "MetisPreferenceRequest",
       "type": "object"
     },
     "MetisProposal": {
@@ -499,6 +652,183 @@
       "title": "MissionInterval",
       "type": "object"
     },
+    "MissionLaneOutcome": {
+      "additionalProperties": false,
+      "description": "One backend-authored scenario lane on the shared recorded clock.\n\nAttributes\n----------\nplan : str\n    Original schedule or saved Metis proposal.\ncapture, batch, downlink : str\n    Modeled task states. Inactive proposals remain pending.\ndownlink_progress : float\n    Modeled transmission fraction, zero when admission is refused.\ndelivered_at_min : float or None\n    Illustrative delivery minute, never a measured image receipt.\nbatch_start_min : float\n    Original or proposed compute-batch start.\nexecution_status : str\n    Active demo, counterfactual comparison, waiting approval or inactive.\nlabel : str\n    User-facing execution status authored by the backend.\nprovenance : str\n    Explicit separation of active demo projection and comparison proposal.",
+      "properties": {
+        "batch": {
+          "enum": [
+            "pending",
+            "running",
+            "done",
+            "skipped"
+          ],
+          "title": "Batch",
+          "type": "string"
+        },
+        "batch_start_min": {
+          "title": "Batch Start Min",
+          "type": "number"
+        },
+        "capture": {
+          "enum": [
+            "pending",
+            "running",
+            "done",
+            "skipped"
+          ],
+          "title": "Capture",
+          "type": "string"
+        },
+        "delivered_at_min": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Delivered At Min"
+        },
+        "downlink": {
+          "enum": [
+            "pending",
+            "running",
+            "done",
+            "skipped"
+          ],
+          "title": "Downlink",
+          "type": "string"
+        },
+        "downlink_progress": {
+          "title": "Downlink Progress",
+          "type": "number"
+        },
+        "execution_status": {
+          "enum": [
+            "active",
+            "comparison",
+            "awaiting_approval",
+            "inactive"
+          ],
+          "title": "Execution Status",
+          "type": "string"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "plan": {
+          "enum": [
+            "original",
+            "metis"
+          ],
+          "title": "Plan",
+          "type": "string"
+        },
+        "provenance": {
+          "enum": [
+            "active_demo_projection",
+            "comparison_demo_projection",
+            "inactive_proposal"
+          ],
+          "title": "Provenance",
+          "type": "string"
+        }
+      },
+      "required": [
+        "plan",
+        "capture",
+        "batch",
+        "downlink",
+        "downlink_progress",
+        "delivered_at_min",
+        "batch_start_min",
+        "execution_status",
+        "label",
+        "provenance"
+      ],
+      "title": "MissionLaneOutcome",
+      "type": "object"
+    },
+    "MissionState": {
+      "additionalProperties": false,
+      "description": "Public summary of one durable recorded mission.\n\nAttributes\n----------\nrun_id, satellite_id : str\n    Existing replay and real spacecraft identities.\nstatus : str\n    Durable planning and review state, never a measured task outcome.\nplan : str\n    Original or operator-approved saved schedule.\ncase_id : str or None\n    Standard operator investigation for this prediction.\nmission_epoch_utc : str\n    Mission origin aligned to the recorded source timestamp.\nenabled : bool, default=True\n    Whether this replay can raise the saved prediction alert and hold.",
+      "properties": {
+        "case_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Case Id"
+        },
+        "demo_result": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DemoResult"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "enabled": {
+          "default": true,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "mission_epoch_utc": {
+          "title": "Mission Epoch Utc",
+          "type": "string"
+        },
+        "plan": {
+          "enum": [
+            "original",
+            "metis"
+          ],
+          "title": "Plan",
+          "type": "string"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "satellite_id": {
+          "title": "Satellite Id",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "watching",
+            "awaiting_decision",
+            "approved",
+            "dismissed",
+            "reviewed",
+            "interrupted"
+          ],
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_id",
+        "satellite_id",
+        "status",
+        "plan",
+        "case_id",
+        "mission_epoch_utc",
+        "enabled",
+        "demo_result"
+      ],
+      "title": "MissionState",
+      "type": "object"
+    },
     "MissionTask": {
       "additionalProperties": false,
       "description": "One scheduled task of the original plan.\n\nAttributes\n----------\ntask_id : str\n    ``compute_batch``, ``thermal_capture`` or ``downlink``.\nname : str\n    Display name.\nstart_min, end_min : float\n    Mission minutes from T0.\nadded_load_w : float\n    Load added to the essential load while active.\nmovable : bool\n    Whether Metis may move this task.",
@@ -575,7 +905,7 @@
     },
     "RunOutcome": {
       "additionalProperties": false,
-      "description": "What happened on one demo run so far, from public telemetry and events.\n\nAttributes\n----------\nrun_id : str\n    Demo run.\nplan : {\"original\", \"metis\"}\n    Plan the run flies.\nname : str\n    Plan display name.\nmetis_on : bool\n    Whether Metis watched the mission.\nalert : MetisAlert or None\n    Metis's alert and decision, for runs flown with Metis on.\ncommitted_min : float\n    Mission minute committed so far.\ncomplete : bool\n    Whether the run reached its end.\nthreshold_wh : float\n    Battery energy at the top of the protected reserve.\nlimit_soc : float\n    State of charge at the top of the reserve: the public low-energy limit.\nbatch_start_min : float\n    Compute-batch start of this plan.\nmargin : MinuteSeries\n    Measured energy above the reserve, sampled every 6 s.\nsolar_w : MinuteSeries\n    Measured harvested solar, one-minute means.\nmin_wh, min_at_min : float or None\n    Lowest margin so far and when.\nfirst_negative_min : float or None\n    First time inside the reserve.\ncapture_end_wh, downlink_start_wh, downlink_end_wh : float or None\n    Margins at the task edges once reached.\ndownlink_start_soc : float or None\n    Battery state of charge when the downlink was due.\ncapture, batch, downlink : {\"pending\", \"running\", \"done\", \"skipped\"}\n    Task progress.\ndownlink_progress : float\n    Fraction of the downlink window completed, 0 to 1.\ndelivered_at_min : float or None\n    When the image reached the ground: the downlink end, once done.",
+      "description": "Modeled mission progression and comparison, paced by public replay time.\n\nAttributes\n----------\nrun_id : str\n    Demo run.\nplan : {\"original\", \"metis\"}\n    Plan the run flies.\nname : str\n    Plan display name.\nmetis_on : bool\n    Whether Metis watched the mission.\nalert : MetisAlert or None\n    Metis's alert and decision, for runs flown with Metis on.\ncommitted_min : float\n    Mission minute committed so far.\ncomplete : bool\n    Whether the run reached its end.\nthreshold_wh : float\n    Battery energy at the top of the protected reserve.\nlimit_soc : float\n    State of charge at the top of the reserve: the public low-energy limit.\nbatch_start_min : float\n    Compute-batch start of this plan.\nmargin : MinuteSeries\n    Saved requested-budget margin; separate from observed battery readings.\nsolar_w : MinuteSeries\n    Measured harvested solar, one-minute means.\nmin_wh, min_at_min : float or None\n    Lowest margin so far and when.\nfirst_negative_min : float or None\n    First time inside the reserve.\ncapture_end_wh, downlink_start_wh, downlink_end_wh : float or None\n    Margins at the task edges once reached.\ndownlink_start_soc : float or None\n    Battery state of charge when the downlink was due.\ncapture, batch, downlink : {\"pending\", \"running\", \"done\", \"skipped\"}\n    Task progress.\ndownlink_progress : float\n    Fraction of the downlink window completed, 0 to 1.\ndelivered_at_min : float or None\n    Illustrative image delivery when an admitted modeled downlink completes.\ncomparison : list of MissionLaneOutcome\n    Original baseline and approval-gated Metis lane on the same source clock.",
       "properties": {
         "alert": {
           "anyOf": [
@@ -622,9 +952,28 @@
           ],
           "title": "Capture End Wh"
         },
+        "case_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Case Id"
+        },
         "committed_min": {
           "title": "Committed Min",
           "type": "number"
+        },
+        "comparison": {
+          "items": {
+            "$ref": "#/$defs/MissionLaneOutcome"
+          },
+          "title": "Comparison",
+          "type": "array"
         },
         "complete": {
           "title": "Complete",
@@ -700,8 +1049,15 @@
           "title": "First Negative Min"
         },
         "limit_soc": {
-          "title": "Limit Soc",
-          "type": "number"
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Limit Soc"
         },
         "margin": {
           "$ref": "#/$defs/MinuteSeries"
@@ -736,6 +1092,11 @@
           "title": "Name",
           "type": "string"
         },
+        "outcome_basis": {
+          "default": "public_telemetry",
+          "title": "Outcome Basis",
+          "type": "string"
+        },
         "plan": {
           "enum": [
             "original",
@@ -748,12 +1109,40 @@
           "title": "Run Id",
           "type": "string"
         },
+        "satellite_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Satellite Id"
+        },
         "solar_w": {
           "$ref": "#/$defs/MinuteSeries"
         },
+        "source_kind": {
+          "default": "synthetic",
+          "enum": [
+            "observed",
+            "synthetic"
+          ],
+          "title": "Source Kind",
+          "type": "string"
+        },
         "threshold_wh": {
-          "title": "Threshold Wh",
-          "type": "number"
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Threshold Wh"
         }
       },
       "required": [
@@ -780,7 +1169,12 @@
         "batch",
         "downlink",
         "downlink_progress",
-        "delivered_at_min"
+        "delivered_at_min",
+        "source_kind",
+        "outcome_basis",
+        "satellite_id",
+        "case_id",
+        "comparison"
       ],
       "title": "RunOutcome",
       "type": "object"
@@ -886,6 +1280,15 @@
       "$ref": "#/$defs/PlanRuns"
     },
     {
+      "$ref": "#/$defs/DemoResult"
+    },
+    {
+      "$ref": "#/$defs/MissionState"
+    },
+    {
+      "$ref": "#/$defs/MetisPreferenceRequest"
+    },
+    {
       "$ref": "#/$defs/MetisBriefing"
     },
     {
@@ -896,6 +1299,9 @@
     },
     {
       "$ref": "#/$defs/ApprovedPlan"
+    },
+    {
+      "$ref": "#/$defs/MissionLaneOutcome"
     },
     {
       "$ref": "#/$defs/RunOutcome"

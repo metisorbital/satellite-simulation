@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class MetisModel(BaseModel):
@@ -256,6 +256,77 @@ class PlanRuns(MetisModel):
     metis_on: str | None
 
 
+class DemoResult(MetisModel):
+    """Persisted illustrative delivery result, separate from observed telemetry.
+
+    Attributes
+    ----------
+    result : str
+        Delivery success, delivery failure, or failed illustrative capture.
+    plan : str
+        Original or operator-approved schedule used by the budget projection.
+    recorded_at_utc : str
+        Source-clock timestamp when the modeled downlink window ended.
+    capture, downlink : str
+        Projected terminal task states, not measured spacecraft execution.
+    delivered_at_min : float or None
+        Illustrative delivery time; absent when the scenario could not deliver.
+    outcome_basis : str
+        Explicit demo-projection provenance.
+    """
+
+    result: Literal["delivered", "missed_delivery", "capture_failed"]
+    plan: Literal["original", "metis"]
+    recorded_at_utc: str
+    capture: Literal["pending", "running", "done", "skipped"]
+    downlink: Literal["pending", "running", "done", "skipped"]
+    delivered_at_min: float | None
+    outcome_basis: Literal["demo_projection"] = "demo_projection"
+
+
+class MissionState(MetisModel):
+    """Public summary of one durable recorded mission.
+
+    Attributes
+    ----------
+    run_id, satellite_id : str
+        Existing replay and real spacecraft identities.
+    status : str
+        Durable planning and review state, never a measured task outcome.
+    plan : str
+        Original or operator-approved saved schedule.
+    case_id : str or None
+        Standard operator investigation for this prediction.
+    mission_epoch_utc : str
+        Mission origin aligned to the recorded source timestamp.
+    enabled : bool, default=True
+        Whether this replay can raise the saved prediction alert and hold.
+    """
+
+    run_id: str
+    satellite_id: str
+    status: Literal[
+        "watching", "awaiting_decision", "approved", "dismissed", "reviewed", "interrupted"
+    ]
+    plan: Literal["original", "metis"]
+    case_id: str | None
+    mission_epoch_utc: str
+    enabled: bool = True
+    demo_result: DemoResult | None = None
+
+
+class MetisPreferenceRequest(MetisModel):
+    """Set model watching for the current compatible recorded mission.
+
+    Attributes
+    ----------
+    enabled : bool
+        Whether the saved prediction can pause replay for an operator case.
+    """
+
+    enabled: bool
+
+
 class MetisBriefing(MetisModel):
     """Everything the Metis view shows before a run.
 
@@ -278,6 +349,12 @@ class MetisBriefing(MetisModel):
     proposal: MetisProposal
     window: ApprovalWindow
     runs: PlanRuns
+    mission_state: MissionState | None = None
+    mission_available: bool = True
+    unavailable_reason: str | None = None
+    metis_enabled: bool = True
+    alert_at_utc: str | None = None
+    alert_at_min: float | None = None
 
 
 class TaskWindow(MetisModel):
@@ -345,8 +422,43 @@ class MetisAlert(MetisModel):
     decided_by: str | None
 
 
+class MissionLaneOutcome(MetisModel):
+    """One backend-authored scenario lane on the shared recorded clock.
+
+    Attributes
+    ----------
+    plan : str
+        Original schedule or saved Metis proposal.
+    capture, batch, downlink : str
+        Modeled task states. Inactive proposals remain pending.
+    downlink_progress : float
+        Modeled transmission fraction, zero when admission is refused.
+    delivered_at_min : float or None
+        Illustrative delivery minute, never a measured image receipt.
+    batch_start_min : float
+        Original or proposed compute-batch start.
+    execution_status : str
+        Active demo, counterfactual comparison, waiting approval or inactive.
+    label : str
+        User-facing execution status authored by the backend.
+    provenance : str
+        Explicit separation of active demo projection and comparison proposal.
+    """
+
+    plan: Plan
+    capture: TaskState
+    batch: TaskState
+    downlink: TaskState
+    downlink_progress: float
+    delivered_at_min: float | None
+    batch_start_min: float
+    execution_status: Literal["active", "comparison", "awaiting_approval", "inactive"]
+    label: str
+    provenance: Literal["active_demo_projection", "comparison_demo_projection", "inactive_proposal"]
+
+
 class RunOutcome(MetisModel):
-    """What happened on one demo run so far, from public telemetry and events.
+    """Modeled mission progression and comparison, paced by public replay time.
 
     Attributes
     ----------
@@ -371,7 +483,7 @@ class RunOutcome(MetisModel):
     batch_start_min : float
         Compute-batch start of this plan.
     margin : MinuteSeries
-        Measured energy above the reserve, sampled every 6 s.
+        Saved requested-budget margin; separate from observed battery readings.
     solar_w : MinuteSeries
         Measured harvested solar, one-minute means.
     min_wh, min_at_min : float or None
@@ -387,7 +499,9 @@ class RunOutcome(MetisModel):
     downlink_progress : float
         Fraction of the downlink window completed, 0 to 1.
     delivered_at_min : float or None
-        When the image reached the ground: the downlink end, once done.
+        Illustrative image delivery when an admitted modeled downlink completes.
+    comparison : list of MissionLaneOutcome
+        Original baseline and approval-gated Metis lane on the same source clock.
     """
 
     run_id: str
@@ -397,8 +511,8 @@ class RunOutcome(MetisModel):
     alert: MetisAlert | None
     committed_min: float
     complete: bool
-    threshold_wh: float
-    limit_soc: float
+    threshold_wh: float | None
+    limit_soc: float | None
     batch_start_min: float
     margin: MinuteSeries
     solar_w: MinuteSeries
@@ -414,6 +528,11 @@ class RunOutcome(MetisModel):
     downlink: TaskState
     downlink_progress: float
     delivered_at_min: float | None
+    source_kind: Literal["observed", "synthetic"] = "synthetic"
+    outcome_basis: str = "public_telemetry"
+    satellite_id: str | None = None
+    case_id: str | None = None
+    comparison: list[MissionLaneOutcome] = Field(default_factory=list)
 
 
 class ViewerMissionRunRequest(MetisModel):
@@ -447,14 +566,23 @@ _MODELS: tuple[type[BaseModel], ...] = (
     MetisProposal,
     ApprovalWindow,
     PlanRuns,
+    DemoResult,
+    MissionState,
+    MetisPreferenceRequest,
     MetisBriefing,
     MetisAlert,
     TaskWindow,
     ApprovedPlan,
+    MissionLaneOutcome,
     RunOutcome,
     ViewerMissionRunRequest,
 )
 METIS_MODELS: dict[str, tuple[type[BaseModel], Literal["validation", "serialization"]]] = {
-    model.__name__: (model, "validation" if model is ViewerMissionRunRequest else "serialization")
+    model.__name__: (
+        model,
+        "validation"
+        if model in {ViewerMissionRunRequest, MetisPreferenceRequest}
+        else "serialization",
+    )
     for model in _MODELS
 }

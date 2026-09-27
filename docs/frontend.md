@@ -62,11 +62,15 @@ The unread badge calls `GET /v1/viewer/notifications` and acknowledges a visible
 version through `POST /v1/viewer/notifications/read`.
 Acknowledging an item only records that operator's view; it does not resolve a
 warning or alter a case.
-Warnings use committed measurement quality and present operating state;
-investigations preserve public evidence and operator-authored recommendations,
-decisions, and outcomes. Planning reads the configured operation windows and
-reuses the constellation editor. See [Operator cases](reference/operator-cases.md)
-for the complete workflow and its limits.
+Warnings normally use committed measurement quality and present operating state.
+A source-aligned saved model prediction is explicitly labeled as a prediction,
+linked to its private operator case, and shown as critical only while its replay
+is paused awaiting a decision.
+Investigations preserve public evidence and operator-authored or server-recorded
+recommendations, decisions, and outcomes.
+Planning reads configured operation windows and reuses the constellation editor.
+See [Operator cases](reference/operator-cases.md) and the
+[recorded-mission review](reference/metis-demo.md) for workflow limits.
 
 Use dark navy surfaces, fine panel borders, readable typography, and restrained
 mint, blue, and gold accents. Color reinforces labels; it must never be the only
@@ -105,19 +109,52 @@ predict recurrence or replace backend schedule validation.
 
 ## Metis in the Overview
 
-When the server has the Metis demo installed, the **Overview** (`lib/metis/metis_panels.dart`) shows it around the globe; there is no separate Metis tab. `MetisBar`, above the globe, shows the wildfire request, the simulated conditions and a **Metis OFF | ON** switch.
-- **Off:** **Fly mission** flies the original schedule.
-- **On:** **Fly mission** starts the run at T0 with "Metis watching". At +60 the run pauses by itself and the **Metis alert** appears: the proposal with **Approve and uplink** and **Dismiss**, and one folded **Metis forecast** section that opens both the solar supply and essential load charts (p10–p90 band) together. Nothing about the proposal shows before the alert.
+When the server has the recorded-mission review installed, the **Overview**
+(`lib/metis/metis_panels.dart`) shows a compact summary of the saved BUPT-1
+prediction for a source-aligned recorded replay. Selecting it opens the mission
+details in **Missions**.
+The standard **Start** control begins that replay.
+The mission's persisted **Metis OFF / ON** control is available before Start or
+while paused before the alert. Its timing hint shows the configured source UTC
+and mission minute. OFF keeps the original schedule without a model review pause.
+When replay is positioned outside the saved mission origin, the switches remain
+visible but disabled. **Load wildfire mission** positions an idle BUPT-1 recording
+at the saved T0; the operator then chooses OFF/ON and presses Start as usual.
+Below the globe, the energy chart, task timeline, and split OFF/ON illustrative
+delivery panels show the demo scenario. Missions shows preventive analysis and the proposed
+shift only after the linked alert exists. The original plan misses ground image
+delivery because its modeled admission gate blocks an unsustainable downlink
+before transmission. Approving the saved shift preserves the T+90 capture and
+T+100 downlink, with progressive image reception through T+103.
+At its committed review tick, a critical model-prediction banner links directly
+to the existing investigation workspace.
 
-Both Metis sections render text 15% larger than the rest of the Overview.
+The banner has a concise saved-prediction label, a critical visual treatment,
+and accessible **Review** and **Approve** actions. Direct approval reads the
+latest case revision and submits the same durable case decision with the saved
+proposal identity. A changed recommendation requires investigation review;
+duplicate clicks are disabled and failed confirmation keeps the banner visible.
+The proposed ON lane never claims execution before approval. The OFF comparison
+and active ON lane share one committed replay clock and are labeled as demo projections.
+Its sound is armed after the user starts or resumes the run, or selects the
+banner's sound-enable control after restoring a page. Each displayed notification
+version plays `assets/sound_effects/soundreality-code-red-185448.mp3` once at
+50% gain. Dismissing or reviewing the banner, resolving the alert, or closing
+the page stops playback. Closing the banner only hides that display; marking
+the warning viewed records its per-operator receipt. Neither action approves
+or changes the linked case.
 
-`MetisResults`, below the globe, shows the energy-margin chart (the active run, plus the other plan's latest run for comparison), the wildfire image panel, verdict cards and a task timeline that crosses out skipped tasks. The globe keeps a fixed height, and the whole Overview, including its run toolbar, scrolls. Metis is hidden for recorded replays and when `/v1/metis/briefing` returns 404.
-The image panel reveals `assets/images/wildfire-camp-fire-landsat8.jpg` (NASA Earth Observatory, Landsat 8) as the downlink progresses, and only once telemetry shows the capture and the downlink done. It is credited as an illustrative product.
+`MetisController` reads `/v1/metis/briefing` and the recorded projection endpoint.
+It persists the watch setting through `/v1/metis/preference`.
+It does not launch replacement runs, calculate physics, alter telemetry, or call
+Metis-specific approval endpoints.
+The case workspace remains the only surface for recommendation revision and
+approval, rejection, or revision decisions.
 
-`MetisController`, owned by the mission shell, loads `/v1/metis/briefing` and calls `Mission.launchMissionRun`, which launches the plan's run and resumes it unless Metis holds it for its alert. Approving launches the Metis plan from the alert; dismissing resumes the held run. It then polls `/v1/metis/runs/{run_id}/outcome` once a second until the run completes. All values come from the Metis API; the view computes no physics.
-
-The Overview's data-source line also shows `Conditions: …` when the run status carries `environment_source`.
-See the [Metis demo guide](reference/metis-demo.md).
+The saved prediction is unavailable for another source or replay origin.
+The viewer then keeps ordinary recorded telemetry visible and explains the
+source-alignment requirement.
+See the [recorded-mission review](reference/metis-demo.md).
 
 ## Component Responsibilities
 

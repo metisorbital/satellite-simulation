@@ -1,130 +1,100 @@
 ---
-title: Metis Wildfire Demo
-description: Run the Metis demo, in which a wildfire image is lost with Metis off and delivered with Metis on.
+title: Metis Recorded-Mission Review
+description: Review one saved, source-aligned model prediction through the durable operator workflow.
 content-type: guide
 audience: presenters and developers
 ---
 
-# Metis Wildfire Demo
+# Metis Recorded-Mission Review
 
-The **Overview** tells one wildfire story twice, with a **Metis OFF | ON** switch above the globe.
-- **The request:** a thermal capture at +90 and a downlink from +100 to +103, needed before a +120 briefing.
-- **The risk:** a routine 16-minute compute batch at +70 drains the battery the downlink needs.
-- **The rule:** the spacecraft starts a task only when its battery is above the protected reserve (50% charge). Otherwise it skips the task to keep its essential systems alive.
+Metis adds one saved planning prediction to a recorded BUPT-1 replay.
+It does not create a synthetic spacecraft, replace the replay, or produce a new forecast while the replay is running.
 
-**Metis off:** the mission flies its original schedule. The battery enters the reserve at +99.5, so the spacecraft skips the +100 downlink. The image stays on board and misses the briefing.
+The saved prediction is available only when the selected BUPT-1 recording begins at its recorded mission origin.
+The viewer states when another source or start time is selected; ordinary recorded telemetry remains available in that state.
 
-**Metis on:** the run starts at T0 and Metis watches it quietly. At +60, ten minutes before the batch, the run pauses by itself and Metis raises an alert: its forecast (solar supply and essential load for 195 minutes, from models trained on BUPT-1 satellite telemetry, made at −15) says the batch will push the battery into the reserve during the downlink, so it proposes moving the batch to +122. The run holds at +60 until the operator decides.
-- **Approve and uplink:** the mission continues from +60 on the Metis plan; the downlink runs and the wildfire image arrives at +103.
-- **Dismiss:** the mission continues on the original schedule and the image is lost.
+## Review a Prediction
 
-Metis does not re-forecast at +60; the alert uses the forecast made at −15.
+1. Sign in as a named demo operator and select the source-aligned BUPT-1 replay.
+2. Choose **Metis OFF** for the original plan or **Metis ON** for preventive review. The setting is saved with the mission. It can be changed before Start, or while paused before the alert; an existing pending decision cannot be bypassed with the switch.
+3. Start the existing recorded run with the normal **Start** control.
+4. With Metis ON, the writer commits the review tick, pauses the run, and creates one durable operator case with immutable committed evidence.
+5. The **Early warnings** workspace shows a critical **model prediction** item and its linked investigation. The alert is a saved forecast for review, not a measured fault.
+6. Choose **Review** to inspect the investigation, or **Approve** in the banner to accept the unchanged saved proposal directly. Both paths use the normal revision-checked, attributed case workflow. An edited proposal requires investigation review.
+7. An unchanged approved proposal applies only the recorded mission-planning interpretation and resumes the same replay. A rejection resumes the original interpretation. A revised recommendation remains operator narrative and does not alter recorded telemetry or issue a spacecraft command.
+8. Record a later observed outcome separately. It may support, correct, or leave the saved prediction inconclusive.
 
-Metis lives in `backend/src/metis_agent`, which never imports the simulator.
-- **Before a run**, every Metis number on the Overview comes from Metis's saved decision.
-- **During and after a run**, every number comes from the simulator's public telemetry and events.
+## Present the Wildfire Mission
 
-## Run it
+The scenario represents an uploaded request for a wildfire image before a response briefing.
+Recorded BUPT-1 telemetry streams throughout the demonstration; the energy budget, scheduled imaging, and image reception are a separate modeled demo projection.
 
-Use the local database. The remote Render database commits too slowly for demo playback: about 3.5× instead of 120×.
+| Milestone | Mission time | Source UTC, 21 June 2023 |
+| --- | --- | --- |
+| Mission begins | T0 | 13:05 |
+| Metis ON alert and operator review | T+60 | 14:05 |
+| Original routine batch | T+70 | 14:15 |
+| Wildfire capture | T+90–91.5 | 14:35–14:36:30 |
+| Downlink window | T+100–103 | 14:45–14:48 |
+| Response briefing | T+120 | 15:05 |
+| Approved routine batch begins | T+122 | 15:07 |
 
-```sh
-METIS_USE_REMOTE=0 uv run metis-sim migrate
-METIS_USE_REMOTE=0 uv run metis-sim demo
-```
+With Metis OFF, the original plan captures the image but cannot power the full downlink window. At T+100 the modeled admission gate blocks transmission: no downlink starts and no usable image reaches the ground. The admission gate is a demo assumption evaluated from the saved energy budget; it is not an observed onboard BUPT-1 command or a second Metis alert.
+With Metis ON, the alert proposes moving the routine batch from T+70 to T+122 while retaining the capture and downlink windows.
+Approving that unchanged recommendation delivers the illustrative image at T+103, 17 minutes before the briefing, enabling the scenario's emergency response.
+Turning Metis on alone does not approve a plan or guarantee delivery: rejecting the change retains the original outcome.
 
-Open `http://127.0.0.1:8000/`. The Metis bar is on the **Overview**, above the globe; the results (energy chart, wildfire image, verdicts and timeline) are below it. The Metis bar and, during a demo run, the data-source line name the simulated conditions: "BUPT-1 solar harvest, 21 June 2023 (scaled)". At start-up the server precomputes both plans' runs in the background (two `engine_warmed` log events), so each launch takes under 2 seconds.
+The Overview shows the energy chart, an OFF/ON delivery comparison, and task timeline below the globe. After approval, the ON lane shows the rescheduled routine batch, scheduled capture/downlink, transmission progress, and delivered image at T+103. The OFF baseline uses the same committed clock and shows the blocked downlink. Before approval the proposed lane does not claim execution; with Metis disabled it remains inactive. Comparison outcomes are labeled separately from the active demo plan, and neither changes the recorded telemetry.
+Before the alert, Missions shows the uploaded request and original schedule; preventive analysis and the shifted plan appear only after the linked case exists.
+The exact alert hint comes from the backend's configured `METIS_ALERT_S`, default 3,600 seconds after T0.
+The modeled result is persisted and added to the Shift Log and, when present, the linked case's activity.
+It never changes the human-recorded observed outcome to supported.
 
-## Present it (about 3 minutes)
+The warning and case use the existing per-operator read receipts, case revisions, idempotency keys, CSRF protection, ownership checks, activity timeline, and Shift Log attribution.
+Acknowledging the warning records only that it was viewed; it does not decide the case.
 
-| Time | On screen |
-|---|---|
-| 0:00 | **Metis OFF.** The request and the simulated conditions. Explain the rule: a task starts only above the protected reserve. Press **Fly mission**. The run starts at T0 and plays at 120× (one mission minute every half second), and the Overview scrolls to the results; the globe shows SAT-1 moving along its orbit. |
-| 0:35 | **Energy chart.** The batch starts at +70 and drains the battery; it enters the reserve at +99.5, inside the eclipse. |
-| 0:50 | **Image panel.** "Image not delivered": the downlink was due at +100 at 49.6% charge, below the 50% limit, so the spacecraft skipped it. The timeline crosses out the downlink. |
-| 1:05 | **Metis ON.** Press **Fly mission**. The run starts at T0 with "Metis watching". |
-| 1:35 | **Metis alert.** At +60 the run pauses by itself: "Move the routine compute batch from +70 to +122?" Unfold **Metis forecast** to show the solar and load charts with their shaded low-to-high band. Press **Approve and uplink**. |
-| 1:55 | **Energy chart.** The Metis plan stays above the reserve, lowest +0.74 Wh at +115; the Metis-off run stays on the chart in faded amber. |
-| 2:00 | **Image panel.** The wildfire image sweeps in during the downlink: "Delivered at +103, 17 minutes before the +120 briefing." The batch then runs from +122 to +138. |
+## Data and Authority Boundaries
 
-To show the other ending, fly again with Metis on and press **Dismiss**. To rehearse from scratch, press **Reset rehearsal**; it clears the approval and both modes' runs.
+`backend/src/metis_agent` owns the saved forecast and planning proposal.
+It does not import simulator physics, configuration, scenario, private truth, or evaluator data.
+The host gives it only the authenticated operator, authorized recorded run, and public replay status.
 
-Approvals and runs are kept per demo operator, so two browsers signed in as the same operator share them. Press **Reset rehearsal** before presenting.
+The case stores the saved forecast origin, proposal, and planning assumptions as private operator narrative beside immutable public replay evidence.
+No prediction fields are added to public frames, consumer exports, visual streams, or operational events.
+The replay provides source timestamps and measurements; it does not establish the forecast's assumed battery reserve, task execution, image delivery, access geometry, or link capacity.
 
-## The image
+Approval records a human decision.
+It can resume a paused replay but never uploads a command, modifies historical measurements, changes source telemetry, or establishes that the recommendation was correct.
 
-The delivered image is `frontend/assets/images/wildfire-camp-fire-landsat8.jpg`. It is a resized copy of the NASA Earth Observatory image by Joshua Stevens, using Landsat 8 data from the U.S. Geological Survey: the Camp Fire in California on 8 November 2018 ([source](https://science.nasa.gov/earth/earth-observatory/camp-fire-rages-in-california-144225/)). NASA Earth Observatory images are free to reuse with credit.
+## Persistence and Recovery
 
-It is an illustrative product. The simulator models energy and timing, not imaging. The simulated capture happens in eclipse, while this is a daytime scene of a different fire. The view shows the image only when telemetry shows both the capture and the downlink done, and it says so in the caption.
+Mission snapshots bind the saved decision, selected source-aligned run, and linked case to the named operator in the database.
+The model case identity is deterministic, so recovery reconciliation can link a case created immediately before an interruption without creating another case.
 
-## How it fits together
+The simulator's ordinary recovery policy still aborts active or paused runs after process restart and preserves their committed history.
+It does not seamlessly continue a recorded replay or reconstruct uncommitted state.
+If interruption occurs at the committed review point, recovery reconciles the durable case link; operators must explicitly start a new replay when they need another run.
 
-1. `GET /v1/metis/briefing` returns:
-   - the mission;
-   - the forecast in mission watts: p10, p50 and p90, plus the cautious series Metis plans with and the nominal series;
-   - the proposal, with margins forecast one minute apart;
-   - the approval window, restarted each time a watched mission launches;
-   - the operator's latest run with Metis off and with Metis on.
+## API Surface
 
-   The forecast comes from `metis_agent/data/decision-bupt1-20230621T1250.json`. That is an allowlisted extract with no realized values, and the planner recomputes the +122 slot at start-up.
-2. `POST /v1/viewer/mission-run {plan, proposal_id?, watch?}` flies a plan. It does five things:
-   - stops the viewer's current run;
-   - moves the task windows in `configs/metis-wildfire.yaml` to the plan, keeping each task's start guard;
-   - creates the run with its private scenario;
-   - for `watch: true`, sets a hold at `METIS_ALERT_S` (+60), where the runner pauses the run in the same transaction as that tick; for the Metis plan, commits ticks up to the hold instead;
-   - rebinds the session cookie.
+All Metis routes require the signed-in, run-scoped viewer session.
+State-changing operator work occurs through the existing private case routes, which also require allowed origin, CSRF token, and `Idempotency-Key`.
 
-   Metis records the run and the viewer starts it at T0. With `watch: true` (Metis on), Metis records a pending alert at +60; the outcome reports it only once the run has reached +60 and paused, and dismissing earlier returns 409 `alert_not_pending`.
-3. The operator decides on the alert:
-   - `POST /v1/metis/proposals/{id}/approve` records the approval (409 `uplink_closed` if the window elapsed), then `POST /v1/viewer/mission-run {plan: metis, proposal_id}` continues the mission on the Metis plan from +60. Both plans are identical up to the batch at +70, so the new run's committed history matches the held one.
-   - `POST /v1/metis/runs/{run_id}/dismiss` records the dismissal, and the viewer resumes the held run on the original schedule.
-4. `GET /v1/metis/runs/{run_id}/outcome` reports the run from public data, reading only frames not yet seen:
-   - the margin: `eps.battery_energy_wh − public limit × capacity`;
-   - each task's state: `skipped` when an `operation_skipped` event names it, otherwise `pending`, `running` or `done` by committed time;
-   - the downlink progress and, once the capture and downlink are done, the delivery time;
-   - whether Metis watched the mission, and its alert: `pending`, `approved` or `dismissed`, with who decided.
+| Route | Purpose |
+| --- | --- |
+| `GET /v1/metis/briefing` | Read the saved forecast/proposal and current run's durable mission state or source-alignment availability. |
+| `POST /v1/metis/preference` | Persist `{enabled: true/false}` before the decision boundary, with CSRF and an idempotency key. |
+| `GET /v1/metis/runs/{run_id}/outcome` | Read `demo_projection` task states, energy margin, and illustrative delivery progress paced by the current session's committed replay. |
+| `POST /v1/viewer/cases/{case_id}/recommendation` | Record an operator revision through the normal case contract. |
+| `POST /v1/viewer/cases/{case_id}/decision` | Record approval, rejection, or revision and, when applicable, resolve the paused replay. |
+| `POST /v1/viewer/cases/{case_id}/outcome` | Record a separate observed outcome. |
 
-## The scenario and its limits
+The former Metis-only approval, dismissal, rehearsal, and synthetic mission-launch routes reject requests and direct operators to the attached case.
 
-`configs/metis-wildfire.yaml` is generated by `scripts/build_metis_scenario.py`. It holds one spacecraft, `SAT-1`, with the original schedule.
+## Limits
 
-- **Orbit:** circular, 97.6° inclination, about 95 minutes, calibrated so the simulator's own eclipses fall at mission 0–15, 75–110 and 170 onward.
-- **Array:** a healthy ideal array of 68 W.
-- **Battery:** 19 Wh with a public limit at 50% charge, the top of the protected reserve. That leaves a 9.5 Wh margin above the reserve.
-- **Start guard:** every task has `min_start_soc: 0.5`.
-- **Essential load:** a constant 8.1 W, BUPT-1's realized mean after scaling.
-- **Hidden truth:** a private solar-derating scenario reproduces BUPT-1's realized harvest on 21 June 2023, per 5-minute bin. Its values never reach the viewer or consumers; only its source's name does, through `run.environment_source`.
-- **Task loads:** set per operation with `added_load_w`: batch 16 W, capture 20 W, downlink 30 W.
-
-What this does not establish:
-- **The decision time:** 21 June 12:50 was picked after testing as a clear case where the plan works. Across 501 test decision times, repeating the last orbit made the better plan. See the Metis_Data walk-forward experiment.
-- **Metis off:** it stands for flying the schedule unchanged. The other planner inputs on the proposal card would have chosen +102 to +106 instead.
-- **Downlink:** it is judged by energy only. Ground contacts, link budget and data volume are not modeled.
-- **The guard:** it checks only at a task's start and never ends a running task.
-- **Approval:** approving creates a new run that continues from the alert; no command is uploaded into the held run.
-- **Alert timing:** the alert fires at a fixed +60 hold, not from a live re-forecast.
-- **Decision state:** approvals and the run registry are held in memory and are lost when the server restarts.
-- **One active run:** the simulator drives one run at a time. A demo launch stops the session's own run and any other active viewer run, for example a Metis-held run left open in a second browser.
-
-To regenerate after changing the forecast:
-
-```sh
-uv run python scripts/extract_metis_decision.py <demo_origin.json> <mission_scenario.json>
-uv run python scripts/build_metis_scenario.py <demo_origin.json>
-uv run python scripts/metis_demo_evidence.py <demo_origin.json>
-```
-
-Both inputs come from `Metis_Data/BUPT-1`:
-- `experiments/mission-budget-walkforward/demo_origin.json`
-- `scripts/mission_scenario.json`
-
-The evidence script exits non-zero if the story no longer holds in simulator physics.
-
-**Settings:**
-
-| Variable | Default | Meaning |
-|---|---|---|
-| `METIS_MISSION_CONFIG` | `configs/metis-wildfire.yaml` | Demo template; Metis is hidden from the Overview when the file is missing |
-| `METIS_MISSION_SPEED` | 120 | Playback speed of a demo run |
-| `METIS_ALERT_S` | 3600 | Mission second where a Metis-on run pauses with its alert; the Metis plan continues from it |
-| `METIS_DECISION_WINDOW_S` | 900 | Approval window, in wall-clock seconds |
+- The source alignment is deliberately narrow: one saved BUPT-1 decision origin, not a general live prediction service.
+- The forecast is fixed at its saved origin. It does not re-forecast from later replay samples.
+- Critical presentation means an operator decision is required for this demonstration. It does not classify a real spacecraft fault or establish operational urgency beyond the configured exercise.
+- The recorded replay preserves telemetry provenance. It contains no synthetic orbit, hidden solar derating, battery state-of-charge, replacement `SAT-1`, or fabricated delivery evidence.
+- Model accuracy, calibration, warning lead time, and operational benefit require separate evaluation on held-out and ultimately real mission data.

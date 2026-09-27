@@ -1,936 +1,900 @@
 import 'package:flutter/material.dart';
 
 import '../api/metis_generated.dart' as metis;
-import '../api/mission.dart';
 import 'metis_charts.dart';
 import 'metis_controller.dart';
 
 const _imageAsset = 'assets/images/wildfire-camp-fire-landsat8.jpg';
-const _imageAspect = 1400 / 933;
-const _imageCredit =
-    'Illustrative product: NASA Earth Observatory image by Joshua Stevens, using Landsat 8 '
-    'data from the U.S. Geological Survey (Camp Fire, California, 8 November 2018). The '
-    'simulator models energy and timing, not imaging.';
 
-/// Metis in the Overview, above the globe: the request, the Metis switch, and
-/// the plan to fly, with the proposal and forecast when Metis is on.
-class MetisBar extends StatelessWidget {
-  const MetisBar({super.key, required this.controller, required this.onLaunch});
+/// Small Overview entry point for the operator's saved mission record.
+class MetisSummary extends StatelessWidget {
+  const MetisSummary({
+    super.key,
+    required this.controller,
+    required this.onOpen,
+  });
 
   final MetisController controller;
-
-  /// Runs a launch, such as flying a plan, then brings the results into view.
-  final Future<void> Function(Future<void> Function() launch) onLaunch;
+  final VoidCallback onOpen;
 
   @override
-  Widget build(BuildContext context) => _scaled(
-    context,
-    ListenableBuilder(
-      listenable: Listenable.merge([controller, controller.mission]),
-      builder: (context, _) {
-        final briefing = controller.briefing;
-        if (controller.unavailable) return const SizedBox.shrink();
-        final view = _MetisView(controller, onLaunch);
-        if (briefing == null) {
-          return Padding(
-            padding: const EdgeInsets.fromLTRB(22, 16, 22, 0),
-            child: controller.error != null
-                ? view._problem(controller.error!)
-                : const LinearProgressIndicator(minHeight: 2),
-          );
-        }
-        return LayoutBuilder(
-          builder: (context, constraints) {
-            final wide = constraints.maxWidth >= 740;
-            return Padding(
-              padding: const EdgeInsets.fromLTRB(22, 18, 22, 18),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: controller,
+    builder: (context, _) {
+      if (controller.unavailable) return const SizedBox.shrink();
+      final brief = controller.briefing;
+      if (brief == null) return const SizedBox.shrink();
+      final runStatus = controller.mission.status?['status'] as String?;
+      final phase = runStatus == 'created'
+          ? 'mission ready'
+          : controller.state == 'awaiting_decision'
+          ? 'awaiting decision'
+          : runStatus ?? 'mission ready';
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(20, 14, 20, 10),
+        child: Material(
+          color: metisSurface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+            side: const BorderSide(color: metisBorder),
+          ),
+          child: InkWell(
+            onTap: onOpen,
+            borderRadius: BorderRadius.circular(8),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+              child: Row(
                 children: [
-                  view._header(briefing),
-                  const SizedBox(height: 16),
-                  view._switch(),
-                  const SizedBox(height: 14),
-                  if (controller.error != null) ...[
-                    view._problem(controller.error!),
-                    const SizedBox(height: 14),
-                  ],
-                  if (controller.alert case final alert?) ...[
-                    view._alert(briefing, alert),
-                    const SizedBox(height: 16),
-                    view._forecasts(briefing, wide),
-                    if (alert.state != 'pending') ...[
-                      const SizedBox(height: 16),
-                      view._flyRow(),
-                    ],
-                  ] else
-                    view._flyRow(),
+                  const Icon(
+                    Icons.local_fire_department_outlined,
+                    color: originalColor,
+                    size: 23,
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          brief.mission.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: metisText,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          controller.hasMission
+                              ? 'BUPT-1 · $phase · Metis ${controller.metisOn ? 'ON' : 'OFF'}'
+                              : !controller.missionAvailable
+                              ? 'Saved forecast unavailable for this source'
+                              : 'BUPT-1 recorded replay · mission ready when run starts',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: metisMuted,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  const Text(
+                    'Open Missions',
+                    style: TextStyle(color: metisText, fontSize: 11),
+                  ),
+                  const SizedBox(width: 4),
+                  const Icon(Icons.chevron_right, color: metisText, size: 19),
                 ],
               ),
-            );
-          },
-        );
-      },
-    ),
+            ),
+          ),
+        ),
+      );
+    },
   );
 }
 
-/// Metis text is set a little larger than the rest of the Overview.
-Widget _scaled(BuildContext context, Widget child) => MediaQuery(
-  data: MediaQuery.of(
-    context,
-  ).copyWith(textScaler: const TextScaler.linear(1.15)),
-  child: child,
-);
+/// Below-globe context for the recorded mission and its original schedule.
+///
+/// Saved forecasts and shifted schedules stay hidden until the server creates
+/// the linked operator case, so the overview cannot imply an alert early.
+class MetisOverviewPanels extends StatelessWidget {
+  /// Creates the below-globe Metis panels.
+  const MetisOverviewPanels({
+    super.key,
+    required this.controller,
+    this.controls,
+    this.onOpenMissions,
+    this.onInvestigation,
+  });
 
-/// Metis in the Overview, below the globe: energy margin, the wildfire image,
-/// verdicts and the task timeline of the plan being shown.
-class MetisResults extends StatelessWidget {
-  const MetisResults({super.key, required this.controller});
-
+  /// Controller that supplies the saved mission and case state.
   final MetisController controller;
 
+  /// Persisted Metis On/Off controls supplied by the integration layer.
+  final Widget? controls;
+
+  /// Opens the detailed Missions surface.
+  final VoidCallback? onOpenMissions;
+
+  /// Opens the linked investigation once the preventive alert is raised.
+  final VoidCallback? onInvestigation;
+
   @override
-  Widget build(BuildContext context) => _scaled(
-    context,
-    ListenableBuilder(
-      listenable: controller,
-      builder: (context, _) {
-        final briefing = controller.briefing;
-        if (controller.unavailable || briefing == null) {
-          return const SizedBox.shrink();
-        }
-        final view = _MetisView(controller, (launch) => launch());
-        return LayoutBuilder(
-          builder: (context, constraints) => Padding(
-            padding: const EdgeInsets.fromLTRB(22, 18, 22, 18),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                view._run(briefing, constraints.maxWidth >= 740),
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: controller,
+    builder: (context, _) {
+      final brief = controller.briefing;
+      if (controller.unavailable || brief == null) {
+        return const SizedBox.shrink();
+      }
+      final alertRaised = controller.caseId != null;
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _card(
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Expanded(
+                        child: Text(
+                          'WILDFIRE RESPONSE MISSION',
+                          style: TextStyle(
+                            color: metisMuted,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 1.2,
+                          ),
+                        ),
+                      ),
+                      if (onOpenMissions != null)
+                        TextButton(
+                          onPressed: onOpenMissions,
+                          child: const Text('Open Missions'),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Uploaded mission',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Capture is planned for T+90–91.5, followed by image downlink at T+100–103.',
+                    style: TextStyle(
+                      color: metisMuted,
+                      fontSize: 11,
+                      height: 1.45,
+                    ),
+                  ),
+                  if (controls != null) ...[
+                    const SizedBox(height: 12),
+                    controls!,
+                  ],
+                  const SizedBox(height: 16),
+                  TaskTimeline(
+                    mission: brief.mission,
+                    metisBatchStart: brief.proposal.to_start_min,
+                    lanes: alertRaised
+                        ? const ['original', 'metis']
+                        : const ['original'],
+                    active:
+                        alertRaised && controller.missionState?.plan == 'metis'
+                        ? 'metis'
+                        : 'original',
+                  ),
+                  const SizedBox(height: 16),
+                  _SplitMissionProgress(
+                    briefing: brief,
+                    outcome: controller.outcome,
+                    metisEnabled: controller.metisOn,
+                    alertRaised: alertRaised,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            _EnergyMarginProjection(
+              briefing: brief,
+              outcome: controller.outcome,
+              playhead: controller.missionMinute,
+              showComparison: alertRaised,
+            ),
+            if (alertRaised) ...[
+              const SizedBox(height: 16),
+              _ForecastProjection(
+                briefing: brief,
+                playhead: controller.missionMinute,
+              ),
+              const SizedBox(height: 16),
+              _ProposalProjection(briefing: brief),
+              if (onInvestigation != null) ...[
                 const SizedBox(height: 12),
-                Text(
-                  controller.metisOn
-                      ? '${briefing.forecast.source} Forecast made at ${briefing.forecast.decision_time_source}, '
-                            'mapped to mission −15; the run pauses at +60, before the batch starts, for Metis\'s '
-                            'alert, which does not re-forecast. Everything measured is simulator physics '
-                            'through public telemetry and events.'
-                      : 'Metis is off: the mission flies its original schedule with no forecast. Everything '
-                            'shown is simulator physics through public telemetry and events.',
-                  style: const TextStyle(fontSize: 11, color: metisMuted),
+                OutlinedButton.icon(
+                  onPressed: onInvestigation,
+                  icon: const Icon(Icons.open_in_new, size: 16),
+                  label: const Text('Review preventive warning'),
+                ),
+              ],
+            ],
+          ],
+        ),
+      );
+    },
+  );
+}
+
+/// Full mission intent, saved forecast, proposal, and observable replay status.
+class MetisMissionDetail extends StatelessWidget {
+  const MetisMissionDetail({
+    super.key,
+    required this.controller,
+    required this.onInvestigation,
+    this.controls,
+  });
+
+  final MetisController controller;
+  final VoidCallback onInvestigation;
+
+  /// Persisted Metis On/Off controls supplied by the integration layer.
+  final Widget? controls;
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: controller,
+    builder: (context, _) {
+      final brief = controller.briefing;
+      if (brief == null) {
+        return Center(
+          child: Text(
+            controller.error ?? 'Loading mission details…',
+            style: const TextStyle(color: metisMuted),
+          ),
+        );
+      }
+      final mission = brief.mission;
+      final proposal = brief.proposal;
+      final state = controller.missionState;
+      final status = controller.state.replaceAll('_', ' ');
+      return ListView(
+        padding: const EdgeInsets.all(24),
+        children: [
+          const Text(
+            'MISSIONS / WILDFIRE OBSERVATION',
+            style: TextStyle(
+              color: metisMuted,
+              fontSize: 10,
+              letterSpacing: 1.4,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            mission.title,
+            style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            mission.request,
+            style: const TextStyle(
+              color: metisMuted,
+              fontSize: 13,
+              height: 1.5,
+            ),
+          ),
+          const SizedBox(height: 16),
+          if (controls != null) ...[controls!, const SizedBox(height: 16)],
+          _card(
+            Wrap(
+              spacing: 30,
+              runSpacing: 14,
+              children: [
+                _fact('SPACECRAFT', state?.satellite_id ?? 'BUPT-1'),
+                _fact('SOURCE', 'Recorded BUPT-1 power telemetry'),
+                _fact('MISSION T0', mission.t0_utc),
+                _fact(
+                  'STATE',
+                  controller.mission.status?['status'] as String? ?? status,
+                ),
+                _fact(
+                  'DELIVERY WINDOW',
+                  minuteLabel(mission.delivery_deadline_min),
                 ),
               ],
             ),
           ),
-        );
-      },
+          const SizedBox(height: 16),
+          if (controller.caseId != null) ...[
+            _ForecastProjection(
+              briefing: brief,
+              playhead: controller.missionMinute,
+            ),
+            const SizedBox(height: 16),
+            _ProposalProjection(briefing: brief),
+          ],
+          const SizedBox(height: 16),
+          _card(
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  controller.caseId == null
+                      ? 'Mission status'
+                      : 'Operator decision',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  state == null
+                      ? controller.missionAvailable
+                            ? 'Press Start run in Overview to replay the recorded source and attach this mission.'
+                            : controller.unavailableReason ??
+                                  'This saved forecast requires the source-aligned BUPT-1 replay.'
+                      : controller.caseId != null
+                      ? 'A Metis forecast raised a case. Review evidence and decide in Investigations.'
+                      : state.status == 'interrupted'
+                      ? 'This replay ended before the forecast alert. Start a new source-aligned run to review the mission again.'
+                      : controller.metisOn
+                      ? 'No alert has been raised. The uploaded mission remains on its original schedule.'
+                      : 'Metis is off. The uploaded mission follows its original schedule.',
+                  style: const TextStyle(
+                    color: metisMuted,
+                    fontSize: 12,
+                    height: 1.5,
+                  ),
+                ),
+                if (controller.caseId != null) ...[
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    onPressed: onInvestigation,
+                    icon: const Icon(Icons.open_in_new, size: 16),
+                    label: const Text('Review investigation'),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          _card(
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Mission schedule',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Task windows describe intent. The recording does not verify command execution or image delivery.',
+                  style: TextStyle(color: metisMuted, fontSize: 11),
+                ),
+                const SizedBox(height: 18),
+                TaskTimeline(
+                  mission: mission,
+                  metisBatchStart: proposal.to_start_min,
+                  lanes: controller.caseId == null
+                      ? const ['original']
+                      : const ['original', 'metis'],
+                  active: controller.caseId != null && state?.plan == 'metis'
+                      ? 'metis'
+                      : 'original',
+                ),
+                const SizedBox(height: 14),
+                for (final task in mission.tasks)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 5),
+                    child: Text(
+                      '${task.name} · ${minuteLabel(task.start_min)} to ${minuteLabel(task.end_min)}'
+                      '${task.added_load_w > 0 ? ' · planned +${task.added_load_w.toStringAsFixed(0)} W' : ''}',
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          _card(
+            _SplitMissionProgress(
+              briefing: brief,
+              outcome: controller.outcome,
+              metisEnabled: controller.metisOn,
+              alertRaised: controller.caseId != null,
+            ),
+          ),
+        ],
+      );
+    },
+  );
+}
+
+class _EnergyMarginProjection extends StatelessWidget {
+  const _EnergyMarginProjection({
+    required this.briefing,
+    required this.outcome,
+    required this.playhead,
+    required this.showComparison,
+  });
+
+  final metis.MetisBriefing briefing;
+  final metis.RunOutcome? outcome;
+  final double? playhead;
+  final bool showComparison;
+
+  @override
+  Widget build(BuildContext context) => _card(
+    Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'ENERGY MARGIN · DEMO PROJECTION',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          showComparison
+              ? 'Original and preventive plans are shown beside the committed demo trace.'
+              : 'The committed demo trace appears after Start.',
+          style: TextStyle(color: metisMuted, fontSize: 11, height: 1.45),
+        ),
+        const SizedBox(height: 14),
+        if (outcome == null || outcome!.margin.minute.isEmpty)
+          const Text(
+            'Start run to populate the committed energy-margin trace.',
+            style: TextStyle(color: metisMuted, fontSize: 12),
+          )
+        else
+          MissionLineChart(
+            title: '',
+            unit: 'Wh',
+            eclipses: briefing.mission.eclipses,
+            threshold: outcome!.threshold_wh,
+            playhead: playhead,
+            markers: const [(90.0, 'Capture'), (100.0, 'Downlink')],
+            series: [
+              ChartSeries(
+                'Committed demo trace',
+                actualColor,
+                seriesSpots(outcome!.margin),
+              ),
+              if (showComparison)
+                ChartSeries(
+                  'Original plan',
+                  originalColor,
+                  seriesSpots(briefing.proposal.original_margin),
+                  dash: const [6, 4],
+                ),
+              if (showComparison)
+                ChartSeries(
+                  'Preventive plan',
+                  metisColor,
+                  seriesSpots(briefing.proposal.proposed_margin),
+                  dash: const [3, 3],
+                ),
+            ],
+            note:
+                'Demo projection; white marker is the committed replay position.',
+          ),
+      ],
     ),
   );
 }
 
-class _MetisView {
-  _MetisView(this.controller, this.onLaunch);
+/// Shows the recorded-replay demo's modeled capture and downlink progression.
+class _SplitMissionProgress extends StatelessWidget {
+  const _SplitMissionProgress({
+    required this.briefing,
+    required this.outcome,
+    required this.metisEnabled,
+    required this.alertRaised,
+  });
 
-  final MetisController controller;
-  final Future<void> Function(Future<void> Function() launch) onLaunch;
+  final metis.MetisBriefing briefing;
+  final metis.RunOutcome? outcome;
+  final bool metisEnabled;
+  final bool alertRaised;
 
-  Mission get mission => controller.mission;
-
-  Widget _header(metis.MetisBriefing briefing) {
-    final mission = briefing.mission;
-    final t0 = DateTime.tryParse(mission.t0_utc);
-    String hhmm(DateTime? t) => t == null
-        ? '—'
-        : '${t.toUtc().hour.toString().padLeft(2, '0')}:${t.toUtc().minute.toString().padLeft(2, '0')}';
-    final decision = t0?.add(Duration(minutes: mission.decision_min.round()));
-    final outcome = controller.outcome;
+  @override
+  Widget build(BuildContext context) {
+    final lanes = outcome?.comparison ?? const <metis.MissionLaneOutcome>[];
+    final original = lanes.where((lane) => lane.plan == 'original').firstOrNull;
+    final preventive = lanes.where((lane) => lane.plan == 'metis').firstOrNull;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          'METIS / WILDFIRE OBSERVATION',
-          style: TextStyle(color: metisMuted, fontSize: 10, letterSpacing: 1.6),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          mission.title,
-          style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          mission.request,
-          style: const TextStyle(color: metisMuted, fontSize: 13),
-        ),
-        const SizedBox(height: 16),
-        Wrap(
-          spacing: 34,
-          runSpacing: 12,
-          children: [
-            _fact(
-              'REQUEST ARRIVED',
-              '${hhmm(decision)} UTC · T0 ${minuteLabel(mission.decision_min)} min',
-            ),
-            _fact('MISSION T0', '${hhmm(t0)} UTC'),
-            _fact(
-              'IMAGE NEEDED BY',
-              'Briefing ${minuteLabel(mission.delivery_deadline_min)} min',
-            ),
-            if (mission.environment_source != null)
-              _fact('SIMULATED CONDITIONS', mission.environment_source!),
-            _fact(
-              'RUN',
-              outcome == null
-                  ? 'Not flown'
-                  : outcome.complete
-                  ? 'Complete'
-                  : controller.alert?.state == 'pending'
-                  ? 'Held at ${minuteLabel(outcome.committed_min)} min for your decision'
-                  : controller.activeMode == controller.mode
-                  ? 'Playing · ${minuteLabel(outcome.committed_min)} min'
-                        '${controller.metisOn && controller.alert == null ? ' · Metis watching' : ''}'
-                  : 'Stopped at ${minuteLabel(outcome.committed_min)} min',
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _switch() {
-    final busy = controller.busy || mission.busy;
-    return Wrap(
-      spacing: 18,
-      runSpacing: 10,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      children: [
-        SegmentedButton<bool>(
-          segments: const [
-            ButtonSegment(value: false, label: Text('Metis OFF')),
-            ButtonSegment(
-              value: true,
-              label: Text('Metis ON'),
-              icon: Icon(Icons.auto_awesome, size: 16),
-            ),
-          ],
-          selected: {controller.metisOn},
-          showSelectedIcon: false,
-          onSelectionChanged: busy ? null : (s) => controller.setMetis(s.first),
-        ),
-        Text(
-          controller.metisOn
-              ? 'Metis watches the power budget and alerts you when a change is needed.'
-              : 'The mission flies its original schedule, with no power forecast.',
-          style: const TextStyle(color: metisMuted, fontSize: 12),
-        ),
-      ],
-    );
-  }
-
-  Widget _flyRow() {
-    final busy = controller.busy || mission.busy;
-    return Wrap(
-      spacing: 12,
-      runSpacing: 10,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      children: [
-        FilledButton.icon(
-          onPressed: busy ? null : () => onLaunch(controller.fly),
-          icon: const Icon(Icons.rocket_launch_outlined, size: 18),
-          label: Text(controller.outcome == null ? 'Fly mission' : 'Fly again'),
-        ),
-        if (controller.outcomes.isNotEmpty)
-          OutlinedButton.icon(
-            onPressed: busy ? null : controller.reset,
-            icon: const Icon(Icons.replay, size: 16),
-            label: const Text('Reset rehearsal'),
+          'DEMO MISSION · IMAGE DOWNLINK',
+          style: TextStyle(
+            color: metisMuted,
+            fontSize: 10,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 1.2,
           ),
-        if (busy) _spinner(),
+        ),
+        const SizedBox(height: 8),
+        if (!metisEnabled)
+          _MissionLaneCard(
+            title: 'METIS OFF · ROUTINE PLAN',
+            lane: original,
+            emptyBatch: 'T+70 · scheduled',
+            showBatchStart: true,
+            emptyMessage:
+                'Original batch +70 · capture +90 · downlink +100–103',
+          )
+        else
+          _MissionLaneCard(
+            title: 'METIS ON · PREVENTIVE PLAN',
+            lane: preventive,
+            emptyBatch: alertRaised
+                ? 'T+122 · awaiting approval'
+                : 'Available after preventive alert',
+            showBatchStart: alertRaised,
+            emptyMessage:
+                'Waiting for preventive review and standard approval.',
+          ),
+        const SizedBox(height: 8),
+        const Text(
+          'Demo projection · task and image states are modeled from the saved mission plan.',
+          style: TextStyle(color: metisMuted, fontSize: 10, height: 1.4),
+        ),
+        const SizedBox(height: 4),
+        const Text(
+          'Illustrative image: NASA Earth Observatory / USGS Landsat 8, Camp Fire, 2018.',
+          style: TextStyle(color: metisMuted, fontSize: 10, height: 1.4),
+        ),
       ],
     );
   }
+}
 
-  Widget _alert(metis.MetisBriefing briefing, metis.MetisAlert alert) {
-    final p = briefing.proposal;
-    final busy = controller.busy || mission.busy;
-    final at = minuteLabel(alert.raised_at_min);
-    if (alert.state != 'pending') {
-      final approved = alert.state == 'approved';
-      return _card(
-        Row(
-          children: [
-            Icon(
-              approved ? Icons.check_circle : Icons.do_not_disturb_on_outlined,
-              color: approved ? metisColor : originalColor,
-              size: 20,
-            ),
-            const SizedBox(width: 10),
-            Flexible(
-              child: Text(
-                approved
-                    ? 'Metis alert at $at approved by ${alert.decided_by}: the batch moved from '
-                          '${minuteLabel(p.from_start_min)} to ${minuteLabel(p.to_start_min)}.'
-                    : 'Metis alert at $at dismissed by ${alert.decided_by}: the original schedule continues.',
-                style: const TextStyle(fontSize: 14),
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-    final alternatives = p.alternatives
-        .map(
-          (a) =>
-              '${a.planner} ${a.start_min == null ? 'no slot' : minuteLabel(a.start_min!)}',
-        )
-        .join(' · ');
+class _MissionLaneCard extends StatelessWidget {
+  const _MissionLaneCard({
+    required this.title,
+    required this.lane,
+    required this.emptyMessage,
+    required this.emptyBatch,
+    required this.showBatchStart,
+  });
+
+  final String title;
+  final metis.MissionLaneOutcome? lane;
+  final String emptyMessage;
+  final String emptyBatch;
+  final bool showBatchStart;
+
+  @override
+  Widget build(BuildContext context) {
+    final progress = (lane?.downlink_progress ?? 0).clamp(0.0, 1.0);
+    final delivered = lane?.delivered_at_min != null;
+    final receiving = lane?.downlink == 'running';
+    final reveal = delivered
+        ? 1.0
+        : receiving
+        ? progress.clamp(.03, .98)
+        : 0.0;
+    final state = lane == null
+        ? emptyMessage
+        : lane!.execution_status == 'inactive'
+        ? lane!.label
+        : lane!.execution_status == 'awaiting_approval'
+        ? 'Waiting for preventive review and standard approval.'
+        : lane!.downlink == 'skipped'
+        ? 'Downlink blocked before radio activation · no usable image.'
+        : delivered
+        ? 'Delivered +103 · response enabled.'
+        : receiving
+        ? 'Transmitting image · ${(progress * 100).round()}%'
+        : lane!.capture == 'done'
+        ? 'Image onboard · scheduled for downlink.'
+        : lane!.capture == 'running'
+        ? 'Capturing image.'
+        : 'Scheduled.';
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: originalColor.withValues(alpha: .07),
-        border: Border.all(
-          color: originalColor.withValues(alpha: .7),
-          width: 1.4,
-        ),
-        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: metisBorder),
+        borderRadius: BorderRadius.circular(6),
+        color: metisSurface,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Icon(
-                Icons.warning_amber_rounded,
-                color: originalColor,
-                size: 20,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                'METIS ALERT · $at',
-                style: const TextStyle(
-                  color: originalColor,
-                  fontSize: 11,
-                  letterSpacing: 1.6,
-                  fontWeight: FontWeight.w600,
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
+              if (lane != null)
+                _LaneTag(label: lane!.execution_status.replaceAll('_', ' ')),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 7),
           Text(
-            'Move the routine compute batch from ${minuteLabel(p.from_start_min)} to ${minuteLabel(p.to_start_min)}?',
-            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 10),
-          Text(p.rationale, style: const TextStyle(fontSize: 13, height: 1.45)),
-          const SizedBox(height: 14),
-          Wrap(
-            spacing: 34,
-            runSpacing: 12,
-            children: [
-              _fact(
-                'ORIGINAL ENTERS RESERVE',
-                p.original_crossing_min == null
-                    ? 'Never'
-                    : '+${p.original_crossing_min!.toStringAsFixed(1)} min',
-              ),
-              _fact(
-                'MARGIN AT DOWNLINK, ORIGINAL VS METIS',
-                '${p.original_downlink_start_wh.toStringAsFixed(2)} vs ${p.proposed_downlink_start_wh.toStringAsFixed(2)} Wh',
-              ),
-              _fact(
-                'LOWEST MARGIN, METIS PLAN',
-                '${p.proposed_min_wh.toStringAsFixed(2)} Wh',
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Text(
-            'Other planner inputs would choose: $alternatives',
-            style: const TextStyle(fontSize: 11, color: metisMuted),
-          ),
-          const SizedBox(height: 16),
-          Wrap(
-            spacing: 12,
-            runSpacing: 10,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              FilledButton.icon(
-                onPressed: busy ? null : () => onLaunch(controller.approve),
-                icon: const Icon(Icons.check_circle_outline, size: 18),
-                label: const Text('Approve and uplink'),
-              ),
-              OutlinedButton.icon(
-                onPressed: busy ? null : controller.dismiss,
-                icon: const Icon(Icons.close, size: 16),
-                label: const Text('Dismiss'),
-              ),
-              Text(
-                'The run is held at $at until you decide; the batch starts at ${minuteLabel(p.from_start_min)}.',
-                style: const TextStyle(fontSize: 12, color: metisMuted),
-              ),
-              if (busy) _spinner(),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _forecasts(metis.MetisBriefing briefing, bool wide) {
-    final f = briefing.forecast;
-    final eclipses = briefing.mission.eclipses;
-    final measured = controller.outcomes['metis_on'];
-    Widget chart(
-      String title,
-      metis.ForecastBand band, {
-      bool solar = false,
-    }) => MissionLineChart(
-      title: title,
-      unit: 'W',
-      eclipses: eclipses,
-      band: (0, 1),
-      minY: 0,
-      series: [
-        ChartSeries(
-          'Low case',
-          medianColor,
-          stepSpots(f.bin_start_min, f.bin_minutes, band.p10),
-          width: 0.6,
-          legend: false,
-        ),
-        ChartSeries(
-          'High case',
-          medianColor,
-          stepSpots(f.bin_start_min, f.bin_minutes, band.p90),
-          width: 0.6,
-          legend: false,
-        ),
-        ChartSeries(
-          'Model median',
-          medianColor,
-          stepSpots(f.bin_start_min, f.bin_minutes, band.p50),
-        ),
-        ChartSeries(
-          'Cautious (Metis plans with this)',
-          metisColor,
-          stepSpots(f.bin_start_min, f.bin_minutes, band.cautious),
-          dash: const [5, 3],
-        ),
-        ChartSeries(
-          'Nominal assumption',
-          nominalColor,
-          stepSpots(f.bin_start_min, f.bin_minutes, band.nominal),
-          dash: const [2, 3],
-          width: 1.4,
-        ),
-        if (solar && measured != null && measured.solar_w.minute.isNotEmpty)
-          ChartSeries(
-            'Measured in the simulator',
-            actualColor,
-            seriesSpots(measured.solar_w),
-            width: 1.4,
-          ),
-      ],
-      note: solar
-          ? 'Forecast made at mission −15 for this spacecraft, per 5 minutes. Zero in eclipse.'
-          : 'Housekeeping only; each task adds its own load.',
-    );
-    final open = controller.forecastOpen;
-    final header = InkWell(
-      onTap: controller.toggleForecast,
-      borderRadius: BorderRadius.circular(4),
-      child: Row(
-        children: [
-          Icon(
-            open ? Icons.expand_less : Icons.expand_more,
-            size: 20,
-            color: metisMuted,
-          ),
-          const SizedBox(width: 8),
-          const Flexible(
-            child: Text(
-              'Metis forecast: solar supply and essential load',
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+            state,
+            style: const TextStyle(
+              color: metisMuted,
+              fontSize: 11,
+              height: 1.35,
             ),
           ),
-          if (!open) ...[
-            const SizedBox(width: 10),
-            const Flexible(
-              child: Text(
-                'Low-to-high band and the cautious input Metis plans with',
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 11, color: metisMuted),
-              ),
+          if (lane != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              lane!.label,
+              style: const TextStyle(color: metisMuted, fontSize: 10),
             ),
           ],
-        ],
-      ),
-    );
-    if (!open) return _card(header);
-    final solar = chart('Solar supply forecast', f.solar_w, solar: true);
-    final load = chart('Essential load forecast', f.essential_w);
-    return _card(
-      Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          header,
-          const SizedBox(height: 14),
-          if (wide)
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(child: solar),
-                const SizedBox(width: 24),
-                Expanded(child: load),
-              ],
-            )
-          else ...[
-            solar,
-            const SizedBox(height: 20),
-            load,
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _run(metis.MetisBriefing briefing, bool wide) {
-    final outcome = controller.outcome;
-    final margin = _card(_margin(briefing));
-    final image = _card(_image(briefing, outcome));
-    return Column(
-      children: [
-        if (wide)
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(flex: 3, child: margin),
-              const SizedBox(width: 16),
-              Expanded(flex: 2, child: image),
-            ],
-          )
-        else ...[
-          image,
-          const SizedBox(height: 16),
-          margin,
-        ],
-        if (outcome != null) ...[
-          const SizedBox(height: 16),
-          _verdicts(outcome, wide),
-        ],
-        const SizedBox(height: 16),
-        _card(
-          TaskTimeline(
-            mission: briefing.mission,
-            metisBatchStart: briefing.proposal.to_start_min,
-            lanes: controller.alert != null
-                ? const ['original', 'metis']
-                : const ['original'],
-            active: outcome?.plan ?? 'original',
-            skipped: {
-              for (final run in [?controller.comparison, ?outcome])
-                run.plan: {
-                  if (run.capture == 'skipped') 'thermal_capture',
-                  if (run.batch == 'skipped') 'compute_batch',
-                  if (run.downlink == 'skipped') 'downlink',
-                },
-            },
-            playhead: outcome?.committed_min,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _margin(metis.MetisBriefing briefing) {
-    final p = briefing.proposal;
-    final on = controller.alert != null;
-    final outcome = controller.outcome, other = controller.comparison;
-    Color tone(String plan) => plan == 'metis' ? metisColor : originalColor;
-    String label(metis.RunOutcome run) => !run.metis_on
-        ? 'Metis OFF'
-        : run.alert?.state == 'dismissed'
-        ? 'Metis ON, alert dismissed'
-        : 'Metis ON';
-    final series = [
-      if (on) ...[
-        ChartSeries(
-          'Original, Metis forecast',
-          originalColor.withValues(alpha: outcome != null ? .4 : 1),
-          seriesSpots(p.original_margin),
-          dash: const [5, 3],
-          width: outcome != null ? 1.1 : 2,
-        ),
-        ChartSeries(
-          'Metis plan, forecast',
-          metisColor.withValues(alpha: outcome != null ? .4 : 1),
-          seriesSpots(p.proposed_margin),
-          dash: const [5, 3],
-          width: outcome != null ? 1.1 : 2,
-        ),
-      ],
-      if (other != null && other.margin.minute.isNotEmpty)
-        ChartSeries(
-          '${label(other)}, last run',
-          tone(other.plan).withValues(alpha: .45),
-          seriesSpots(other.margin),
-          width: 1.4,
-        ),
-      if (outcome != null && outcome.margin.minute.isNotEmpty)
-        ChartSeries(
-          '${label(outcome)}, measured',
-          tone(outcome.plan),
-          seriesSpots(outcome.margin),
-        ),
-    ];
-    if (series.isEmpty) {
-      return const SizedBox(
-        height: 300,
-        child: Center(
-          child: Text(
-            'Fly the mission to watch the battery margin.',
-            style: TextStyle(color: metisMuted, fontSize: 13),
-          ),
-        ),
-      );
-    }
-    return MissionLineChart(
-      title: 'Battery energy above the protected reserve',
-      unit: 'Wh',
-      eclipses: briefing.mission.eclipses,
-      threshold: 0,
-      height: 260,
-      playhead: outcome?.committed_min,
-      markers: const [
-        (90, 'Capture'),
-        (100, 'Downlink'),
-        (103, ''),
-        (120, 'Briefing'),
-        (165, 'Batch due'),
-      ],
-      series: series,
-      note: outcome != null
-          ? 'Measured in the simulator from public battery telemetry. Below zero the battery is inside '
-                'its reserve and the satellite skips any task due. Shaded: eclipse.'
-          : 'Metis forecast at −15. Below zero the plan would need energy from the protected reserve. '
-                'Shaded: eclipse.',
-    );
-  }
-
-  Widget _image(metis.MetisBriefing briefing, metis.RunOutcome? outcome) {
-    final deadline = briefing.mission.delivery_deadline_min;
-    String pct(double? v) =>
-        v == null ? '—' : '${(v * 100).toStringAsFixed(1)}%';
-    final (title, detail, tone) = switch (outcome) {
-      null => (
-        'Wildfire image',
-        'The image appears here once it reaches the ground.',
-        metisMuted,
-      ),
-      _ when outcome.delivered_at_min != null => (
-        'Delivered at ${minuteLabel(outcome.delivered_at_min!)}',
-        '${(deadline - outcome.delivered_at_min!).round()} minutes before the '
-            '${minuteLabel(deadline)} briefing.',
-        metisColor,
-      ),
-      _ when outcome.downlink == 'skipped' => (
-        'Image not delivered',
-        'The downlink was due at +100, but the battery was inside its protected reserve '
-            '(${pct(outcome.downlink_start_soc)} charge, limit ${pct(outcome.limit_soc)}), so the '
-            'satellite skipped it. The image is still on board and misses the '
-            '${minuteLabel(deadline)} briefing.',
-        thresholdColor,
-      ),
-      _ when outcome.capture == 'skipped' => (
-        'No image captured',
-        'The capture at +90 was skipped: the battery was inside its protected reserve.',
-        thresholdColor,
-      ),
-      _ when outcome.downlink == 'running' => (
-        'Receiving image · ${(outcome.downlink_progress * 100).round()}%',
-        'Downlink +100 to +103.',
-        medianColor,
-      ),
-      _ when outcome.capture == 'done' => (
-        'Image captured at +90, stored on board',
-        'Waiting for the +100 downlink.',
-        medianColor,
-      ),
-      _ when outcome.capture == 'running' => (
-        'Capturing',
-        'Thermal capture +90 to +91.5.',
-        medianColor,
-      ),
-      _ => (
-        'Waiting for the capture at +90',
-        'The image appears here once it reaches the ground.',
-        metisMuted,
-      ),
-    };
-    final progress = outcome == null
-        ? 0.0
-        : outcome.delivered_at_min != null
-        ? 1.0
-        : outcome.downlink == 'running' && outcome.capture == 'done'
-        ? outcome.downlink_progress
-        : 0.0;
-    final failed =
-        outcome != null &&
-        (outcome.downlink == 'skipped' || outcome.capture == 'skipped');
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          title,
-          style: TextStyle(
-            color: tone,
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(detail, style: const TextStyle(fontSize: 12, height: 1.4)),
-        const SizedBox(height: 12),
-        AspectRatio(
-          aspectRatio: _imageAspect,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(6),
-            child: LayoutBuilder(
-              builder: (context, box) => Stack(
-                fit: StackFit.expand,
+          const SizedBox(height: 10),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: SizedBox(
+              height: 112,
+              width: double.infinity,
+              child: Stack(
                 children: [
-                  Container(
-                    decoration: BoxDecoration(
-                      color: const Color(0xff050b16),
-                      border: Border.all(
-                        color: failed
-                            ? thresholdColor.withValues(alpha: .5)
-                            : metisBorder,
-                      ),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: progress == 0
-                        ? Icon(
-                            failed
-                                ? Icons.cloud_off_outlined
-                                : Icons.satellite_alt_outlined,
-                            size: 40,
-                            color: failed
-                                ? thresholdColor.withValues(alpha: .7)
-                                : metisBorder,
-                          )
-                        : null,
-                  ),
-                  if (progress > 0)
-                    // The downlink lasts about 1.5 s at demo speed; ease between
-                    // polled progress values so the image visibly sweeps in.
+                  const ColoredBox(color: Color(0xff040d1a)),
+                  if (reveal > 0)
                     TweenAnimationBuilder<double>(
-                      tween: Tween(end: progress),
-                      duration: const Duration(milliseconds: 1400),
-                      curve: Curves.easeOut,
-                      builder: (context, shown, _) => Stack(
-                        fit: StackFit.expand,
+                      tween: Tween<double>(begin: 0, end: reveal),
+                      duration: const Duration(milliseconds: 350),
+                      builder: (context, value, child) =>
+                          ClipRect(clipper: _ImageReveal(value), child: child),
+                      child: Image.asset(
+                        _imageAsset,
+                        fit: BoxFit.cover,
+                        width: double.infinity,
+                      ),
+                    ),
+                  if (lane?.downlink == 'skipped')
+                    const Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          ClipRect(
-                            clipper: _TopFraction(shown),
-                            child: Image.asset(_imageAsset, fit: BoxFit.cover),
+                          Icon(
+                            Icons.error_outline_rounded,
+                            color: Color(0xffff5268),
+                            size: 30,
                           ),
-                          if (shown < .999)
-                            Positioned(
-                              top: box.maxHeight * shown - 1,
-                              left: 0,
-                              right: 0,
-                              child: Container(height: 2, color: medianColor),
+                          SizedBox(height: 8),
+                          Text(
+                            'Downlink failed',
+                            style: TextStyle(
+                              color: Color(0xffff5268),
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
                             ),
+                          ),
                         ],
+                      ),
+                    )
+                  else if (reveal == 0)
+                    Center(
+                      child: Text(
+                        lane?.execution_status == 'awaiting_approval'
+                            ? 'AWAITING APPROVAL'
+                            : lane?.capture == 'running'
+                            ? 'AWAITING CAPTURE'
+                            : 'AWAITING TRANSMISSION',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: metisText,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 1,
+                        ),
                       ),
                     ),
                 ],
               ),
             ),
           ),
-        ),
-        if (progress > 0) ...[
-          const SizedBox(height: 8),
-          const Text(
-            _imageCredit,
-            style: TextStyle(fontSize: 10, color: metisMuted, height: 1.4),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 14,
+            runSpacing: 6,
+            children: [
+              _fact(
+                'BATCH',
+                lane == null || !showBatchStart
+                    ? emptyBatch
+                    : '${minuteLabel(lane!.batch_start_min)} · ${lane!.batch}',
+              ),
+              _fact('CAPTURE', lane?.capture ?? 'T+90'),
+              _fact('DOWNLINK', lane?.downlink ?? 'T+100–103'),
+            ],
           ),
-        ],
-      ],
-    );
-  }
-
-  Widget _verdicts(metis.RunOutcome outcome, bool wide) {
-    final batchEnd = outcome.batch_start_min + 16;
-    Widget verdict(String label, String state, String text) {
-      final (icon, tone) = switch (state) {
-        'good' => (Icons.check_circle, metisColor),
-        'bad' => (Icons.cancel, thresholdColor),
-        'live' => (Icons.timelapse, medianColor),
-        _ => (Icons.hourglass_empty, metisMuted),
-      };
-      return Row(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, size: 18, color: tone),
-          const SizedBox(width: 8),
-          Flexible(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: const TextStyle(
-                    color: metisMuted,
-                    fontSize: 9,
-                    letterSpacing: 1.4,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  text,
-                  style: TextStyle(
-                    color: tone,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      );
-    }
-
-    String task(String state, String done) => switch (state) {
-      'done' => done,
-      'running' => 'Running',
-      'skipped' => 'Skipped',
-      _ => 'Pending',
-    };
-    String tone(String state) => switch (state) {
-      'done' => 'good',
-      'running' => 'live',
-      'skipped' => 'bad',
-      _ => 'wait',
-    };
-    final low = outcome.min_wh == null
-        ? ''
-        : ' · lowest ${outcome.min_wh!.toStringAsFixed(2)} Wh';
-    final items = [
-      verdict(
-        'WILDFIRE IMAGE',
-        outcome.delivered_at_min != null
-            ? 'good'
-            : outcome.downlink == 'skipped' || outcome.capture == 'skipped'
-            ? 'bad'
-            : outcome.downlink == 'running'
-            ? 'live'
-            : 'wait',
-        outcome.delivered_at_min != null
-            ? 'Delivered at ${minuteLabel(outcome.delivered_at_min!)}'
-            : outcome.downlink == 'skipped' || outcome.capture == 'skipped'
-            ? 'Not delivered'
-            : outcome.downlink == 'running'
-            ? 'Receiving'
-            : 'Pending',
-      ),
-      verdict(
-        'COMPUTE BATCH ${minuteLabel(outcome.batch_start_min)} TO ${minuteLabel(batchEnd)}',
-        tone(outcome.batch),
-        task(outcome.batch, 'Done'),
-      ),
-      verdict(
-        'BATTERY RESERVE',
-        outcome.first_negative_min != null
-            ? 'bad'
-            : outcome.complete
-            ? 'good'
-            : 'live',
-        outcome.first_negative_min != null
-            ? 'Entered at +${outcome.first_negative_min!.toStringAsFixed(1)}$low'
-            : '${outcome.complete ? 'Kept' : 'Intact so far'}$low',
-      ),
-    ];
-    return _card(
-      Wrap(
-        spacing: 40,
-        runSpacing: 14,
-        children: [
-          for (final item in items)
-            ConstrainedBox(
-              constraints: BoxConstraints(maxWidth: wide ? 360 : 520),
-              child: item,
-            ),
+          if (receiving && !delivered) ...[
+            const SizedBox(height: 9),
+            LinearProgressIndicator(value: progress, minHeight: 4),
+          ],
         ],
       ),
     );
   }
+}
 
-  Widget _spinner() => const SizedBox(
-    width: 18,
-    height: 18,
-    child: CircularProgressIndicator(strokeWidth: 2),
-  );
+class _LaneTag extends StatelessWidget {
+  const _LaneTag({required this.label});
 
-  Widget _fact(String label, String value) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      Text(
-        label,
-        style: const TextStyle(
-          color: metisMuted,
-          fontSize: 9,
-          letterSpacing: 1.4,
-        ),
-      ),
-      const SizedBox(height: 4),
-      Text(
-        value,
-        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-      ),
-    ],
-  );
+  final String label;
 
-  Widget _card(Widget child) => Container(
-    width: double.infinity,
-    padding: const EdgeInsets.all(18),
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
     decoration: BoxDecoration(
-      color: metisSurface,
-      border: Border.all(color: metisBorder),
-      borderRadius: BorderRadius.circular(8),
-    ),
-    child: child,
-  );
-
-  Widget _problem(String message) => Container(
-    padding: const EdgeInsets.all(14),
-    decoration: BoxDecoration(
-      color: thresholdColor.withValues(alpha: .08),
-      border: Border.all(color: thresholdColor.withValues(alpha: .4)),
-      borderRadius: BorderRadius.circular(6),
+      color: metisBorder,
+      borderRadius: BorderRadius.circular(3),
     ),
     child: Text(
-      message,
-      style: const TextStyle(color: thresholdColor, fontSize: 12),
+      label.toUpperCase(),
+      style: const TextStyle(
+        color: metisText,
+        fontSize: 8,
+        fontWeight: FontWeight.w700,
+        letterSpacing: .7,
+      ),
     ),
   );
 }
 
-/// Clips to the top [fraction] of the child, for the image arriving line by line.
-class _TopFraction extends CustomClipper<Rect> {
-  _TopFraction(this.fraction);
+class _ImageReveal extends CustomClipper<Rect> {
+  const _ImageReveal(this.fraction);
 
   final double fraction;
 
   @override
   Rect getClip(Size size) =>
-      Rect.fromLTWH(0, 0, size.width, size.height * fraction.clamp(0, 1));
+      Rect.fromLTWH(0, 0, size.width, size.height * fraction);
 
   @override
-  bool shouldReclip(_TopFraction old) => old.fraction != fraction;
+  bool shouldReclip(_ImageReveal oldClipper) => oldClipper.fraction != fraction;
 }
+
+class _ForecastProjection extends StatelessWidget {
+  const _ForecastProjection({required this.briefing, required this.playhead});
+
+  final metis.MetisBriefing briefing;
+  final double? playhead;
+
+  @override
+  Widget build(BuildContext context) => _card(
+    Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'METIS PREVENTIVE ANALYSIS',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Origin ${briefing.forecast.decision_time_source} · ${briefing.forecast.source}. This fixed model projection does not re-forecast during the replay.',
+          style: const TextStyle(color: metisMuted, fontSize: 11, height: 1.45),
+        ),
+        const SizedBox(height: 16),
+        MissionLineChart(
+          title: 'Solar supply projection',
+          unit: 'W',
+          eclipses: briefing.mission.eclipses,
+          playhead: playhead,
+          series: _bandSeries(
+            briefing.forecast.bin_start_min,
+            briefing.forecast.bin_minutes,
+            briefing.forecast.solar_w,
+          ),
+        ),
+        const SizedBox(height: 16),
+        MissionLineChart(
+          title: 'Essential load projection',
+          unit: 'W',
+          eclipses: briefing.mission.eclipses,
+          playhead: playhead,
+          series: _bandSeries(
+            briefing.forecast.bin_start_min,
+            briefing.forecast.bin_minutes,
+            briefing.forecast.essential_w,
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+List<ChartSeries> _bandSeries(
+  List<double> starts,
+  double width,
+  metis.ForecastBand band,
+) => [
+  ChartSeries('P10', originalColor, stepSpots(starts, width, band.p10)),
+  ChartSeries('P50', medianColor, stepSpots(starts, width, band.p50)),
+  ChartSeries('P90', metisColor, stepSpots(starts, width, band.p90)),
+];
+
+class _ProposalProjection extends StatelessWidget {
+  const _ProposalProjection({required this.briefing});
+
+  final metis.MetisBriefing briefing;
+
+  @override
+  Widget build(BuildContext context) => _card(
+    Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'RECOMMENDED SHIFT · CASE-LINKED',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Move the routine batch from T+70 to T+122 to protect the T+90 capture and T+100 downlink. ${briefing.proposal.rationale}',
+          style: const TextStyle(color: metisMuted, fontSize: 12, height: 1.45),
+        ),
+        const SizedBox(height: 14),
+        TaskTimeline(
+          mission: briefing.mission,
+          metisBatchStart: briefing.proposal.to_start_min,
+          lanes: const ['original', 'metis'],
+        ),
+        const SizedBox(height: 14),
+        Wrap(
+          spacing: 30,
+          runSpacing: 14,
+          children: [
+            _fact(
+              'ROUTINE BATCH',
+              '${minuteLabel(briefing.proposal.from_start_min)} → ${minuteLabel(briefing.proposal.to_start_min)}',
+            ),
+            _fact(
+              'PROJECTED ORIGINAL MARGIN',
+              '${briefing.proposal.original_downlink_start_wh.toStringAsFixed(2)} Wh',
+            ),
+            _fact(
+              'PROJECTED PROPOSED MARGIN',
+              '${briefing.proposal.proposed_downlink_start_wh.toStringAsFixed(2)} Wh',
+            ),
+          ],
+        ),
+      ],
+    ),
+  );
+}
+
+Widget _fact(String name, String value) => Column(
+  crossAxisAlignment: CrossAxisAlignment.start,
+  mainAxisSize: MainAxisSize.min,
+  children: [
+    Text(
+      name,
+      style: const TextStyle(
+        color: metisMuted,
+        fontSize: 9,
+        letterSpacing: 1.2,
+      ),
+    ),
+    const SizedBox(height: 5),
+    Text(value, style: const TextStyle(color: metisText, fontSize: 13)),
+  ],
+);
+
+Widget _card(Widget child) => Container(
+  width: double.infinity,
+  padding: const EdgeInsets.all(20),
+  decoration: BoxDecoration(
+    color: metisSurface,
+    border: Border.all(color: metisBorder),
+    borderRadius: BorderRadius.circular(8),
+  ),
+  child: child,
+);

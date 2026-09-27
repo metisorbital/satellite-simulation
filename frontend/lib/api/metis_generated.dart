@@ -94,6 +94,47 @@ class ApprovedPlan {
   };
 }
 
+/// Persisted illustrative delivery result, separate from observed telemetry.
+class DemoResult {
+  const DemoResult({
+    required this.result,
+    required this.plan,
+    required this.recorded_at_utc,
+    required this.capture,
+    required this.downlink,
+    required this.delivered_at_min,
+    required this.outcome_basis,
+  });
+
+  final String result;
+  final String plan;
+  final String recorded_at_utc;
+  final String capture;
+  final String downlink;
+  final double? delivered_at_min;
+  final String outcome_basis;
+
+  factory DemoResult.fromJson(Map<String, dynamic> json) => DemoResult(
+    result: json['result'] as String,
+    plan: json['plan'] as String,
+    recorded_at_utc: json['recorded_at_utc'] as String,
+    capture: json['capture'] as String,
+    downlink: json['downlink'] as String,
+    delivered_at_min: json['delivered_at_min'] == null ? null : (json['delivered_at_min'] as num).toDouble(),
+    outcome_basis: (json['outcome_basis'] ?? "demo_projection") as String,
+  );
+
+  Map<String, dynamic> toJson() => {
+    'result': result,
+    'plan': plan,
+    'recorded_at_utc': recorded_at_utc,
+    'capture': capture,
+    'downlink': downlink,
+    'delivered_at_min': delivered_at_min == null ? null : delivered_at_min!,
+    'outcome_basis': outcome_basis,
+  };
+}
+
 /// Per-5-minute forecast in mission watts.
 class ForecastBand {
   const ForecastBand({
@@ -160,6 +201,12 @@ class MetisBriefing {
     required this.proposal,
     required this.window,
     required this.runs,
+    required this.mission_state,
+    required this.mission_available,
+    required this.unavailable_reason,
+    required this.metis_enabled,
+    required this.alert_at_utc,
+    required this.alert_at_min,
   });
 
   final MissionBrief mission;
@@ -167,6 +214,12 @@ class MetisBriefing {
   final MetisProposal proposal;
   final ApprovalWindow window;
   final PlanRuns runs;
+  final MissionState? mission_state;
+  final bool mission_available;
+  final String? unavailable_reason;
+  final bool metis_enabled;
+  final String? alert_at_utc;
+  final double? alert_at_min;
 
   factory MetisBriefing.fromJson(Map<String, dynamic> json) => MetisBriefing(
     mission: MissionBrief.fromJson(Map<String, dynamic>.from(json['mission'] as Map)),
@@ -174,6 +227,12 @@ class MetisBriefing {
     proposal: MetisProposal.fromJson(Map<String, dynamic>.from(json['proposal'] as Map)),
     window: ApprovalWindow.fromJson(Map<String, dynamic>.from(json['window'] as Map)),
     runs: PlanRuns.fromJson(Map<String, dynamic>.from(json['runs'] as Map)),
+    mission_state: json['mission_state'] == null ? null : MissionState.fromJson(Map<String, dynamic>.from(json['mission_state'] as Map)),
+    mission_available: (json['mission_available'] ?? true) as bool,
+    unavailable_reason: json['unavailable_reason'] == null ? null : json['unavailable_reason'] as String,
+    metis_enabled: (json['metis_enabled'] ?? true) as bool,
+    alert_at_utc: json['alert_at_utc'] == null ? null : json['alert_at_utc'] as String,
+    alert_at_min: json['alert_at_min'] == null ? null : (json['alert_at_min'] as num).toDouble(),
   );
 
   Map<String, dynamic> toJson() => {
@@ -182,6 +241,12 @@ class MetisBriefing {
     'proposal': proposal.toJson(),
     'window': window.toJson(),
     'runs': runs.toJson(),
+    'mission_state': mission_state == null ? null : mission_state!.toJson(),
+    'mission_available': mission_available,
+    'unavailable_reason': unavailable_reason == null ? null : unavailable_reason!,
+    'metis_enabled': metis_enabled,
+    'alert_at_utc': alert_at_utc == null ? null : alert_at_utc!,
+    'alert_at_min': alert_at_min == null ? null : alert_at_min!,
   };
 }
 
@@ -227,6 +292,23 @@ class MetisForecast {
     'bin_start_min': bin_start_min.map((item) => item).toList(),
     'solar_w': solar_w.toJson(),
     'essential_w': essential_w.toJson(),
+  };
+}
+
+/// Set model watching for the current compatible recorded mission.
+class MetisPreferenceRequest {
+  const MetisPreferenceRequest({
+    required this.enabled,
+  });
+
+  final bool enabled;
+
+  factory MetisPreferenceRequest.fromJson(Map<String, dynamic> json) => MetisPreferenceRequest(
+    enabled: json['enabled'] as bool,
+  );
+
+  Map<String, dynamic> toJson() => {
+    'enabled': enabled,
   };
 }
 
@@ -394,6 +476,104 @@ class MissionInterval {
   };
 }
 
+/// One backend-authored scenario lane on the shared recorded clock.
+class MissionLaneOutcome {
+  const MissionLaneOutcome({
+    required this.plan,
+    required this.capture,
+    required this.batch,
+    required this.downlink,
+    required this.downlink_progress,
+    required this.delivered_at_min,
+    required this.batch_start_min,
+    required this.execution_status,
+    required this.label,
+    required this.provenance,
+  });
+
+  final String plan;
+  final String capture;
+  final String batch;
+  final String downlink;
+  final double downlink_progress;
+  final double? delivered_at_min;
+  final double batch_start_min;
+  final String execution_status;
+  final String label;
+  final String provenance;
+
+  factory MissionLaneOutcome.fromJson(Map<String, dynamic> json) => MissionLaneOutcome(
+    plan: json['plan'] as String,
+    capture: json['capture'] as String,
+    batch: json['batch'] as String,
+    downlink: json['downlink'] as String,
+    downlink_progress: (json['downlink_progress'] as num).toDouble(),
+    delivered_at_min: json['delivered_at_min'] == null ? null : (json['delivered_at_min'] as num).toDouble(),
+    batch_start_min: (json['batch_start_min'] as num).toDouble(),
+    execution_status: json['execution_status'] as String,
+    label: json['label'] as String,
+    provenance: json['provenance'] as String,
+  );
+
+  Map<String, dynamic> toJson() => {
+    'plan': plan,
+    'capture': capture,
+    'batch': batch,
+    'downlink': downlink,
+    'downlink_progress': downlink_progress,
+    'delivered_at_min': delivered_at_min == null ? null : delivered_at_min!,
+    'batch_start_min': batch_start_min,
+    'execution_status': execution_status,
+    'label': label,
+    'provenance': provenance,
+  };
+}
+
+/// Public summary of one durable recorded mission.
+class MissionState {
+  const MissionState({
+    required this.run_id,
+    required this.satellite_id,
+    required this.status,
+    required this.plan,
+    required this.case_id,
+    required this.mission_epoch_utc,
+    required this.enabled,
+    required this.demo_result,
+  });
+
+  final String run_id;
+  final String satellite_id;
+  final String status;
+  final String plan;
+  final String? case_id;
+  final String mission_epoch_utc;
+  final bool enabled;
+  final DemoResult? demo_result;
+
+  factory MissionState.fromJson(Map<String, dynamic> json) => MissionState(
+    run_id: json['run_id'] as String,
+    satellite_id: json['satellite_id'] as String,
+    status: json['status'] as String,
+    plan: json['plan'] as String,
+    case_id: json['case_id'] == null ? null : json['case_id'] as String,
+    mission_epoch_utc: json['mission_epoch_utc'] as String,
+    enabled: (json['enabled'] ?? true) as bool,
+    demo_result: json['demo_result'] == null ? null : DemoResult.fromJson(Map<String, dynamic>.from(json['demo_result'] as Map)),
+  );
+
+  Map<String, dynamic> toJson() => {
+    'run_id': run_id,
+    'satellite_id': satellite_id,
+    'status': status,
+    'plan': plan,
+    'case_id': case_id == null ? null : case_id!,
+    'mission_epoch_utc': mission_epoch_utc,
+    'enabled': enabled,
+    'demo_result': demo_result == null ? null : demo_result!.toJson(),
+  };
+}
+
 /// One scheduled task of the original plan.
 class MissionTask {
   const MissionTask({
@@ -452,7 +632,7 @@ class PlanRuns {
   };
 }
 
-/// What happened on one demo run so far, from public telemetry and events.
+/// Modeled mission progression and comparison, paced by public replay time.
 class RunOutcome {
   const RunOutcome({
     required this.run_id,
@@ -479,6 +659,11 @@ class RunOutcome {
     required this.downlink,
     required this.downlink_progress,
     required this.delivered_at_min,
+    required this.source_kind,
+    required this.outcome_basis,
+    required this.satellite_id,
+    required this.case_id,
+    required this.comparison,
   });
 
   final String run_id;
@@ -488,8 +673,8 @@ class RunOutcome {
   final MetisAlert? alert;
   final double committed_min;
   final bool complete;
-  final double threshold_wh;
-  final double limit_soc;
+  final double? threshold_wh;
+  final double? limit_soc;
   final double batch_start_min;
   final MinuteSeries margin;
   final MinuteSeries solar_w;
@@ -505,6 +690,11 @@ class RunOutcome {
   final String downlink;
   final double downlink_progress;
   final double? delivered_at_min;
+  final String source_kind;
+  final String outcome_basis;
+  final String? satellite_id;
+  final String? case_id;
+  final List<MissionLaneOutcome> comparison;
 
   factory RunOutcome.fromJson(Map<String, dynamic> json) => RunOutcome(
     run_id: json['run_id'] as String,
@@ -514,8 +704,8 @@ class RunOutcome {
     alert: json['alert'] == null ? null : MetisAlert.fromJson(Map<String, dynamic>.from(json['alert'] as Map)),
     committed_min: (json['committed_min'] as num).toDouble(),
     complete: json['complete'] as bool,
-    threshold_wh: (json['threshold_wh'] as num).toDouble(),
-    limit_soc: (json['limit_soc'] as num).toDouble(),
+    threshold_wh: json['threshold_wh'] == null ? null : (json['threshold_wh'] as num).toDouble(),
+    limit_soc: json['limit_soc'] == null ? null : (json['limit_soc'] as num).toDouble(),
     batch_start_min: (json['batch_start_min'] as num).toDouble(),
     margin: MinuteSeries.fromJson(Map<String, dynamic>.from(json['margin'] as Map)),
     solar_w: MinuteSeries.fromJson(Map<String, dynamic>.from(json['solar_w'] as Map)),
@@ -531,6 +721,11 @@ class RunOutcome {
     downlink: json['downlink'] as String,
     downlink_progress: (json['downlink_progress'] as num).toDouble(),
     delivered_at_min: json['delivered_at_min'] == null ? null : (json['delivered_at_min'] as num).toDouble(),
+    source_kind: (json['source_kind'] ?? "synthetic") as String,
+    outcome_basis: (json['outcome_basis'] ?? "public_telemetry") as String,
+    satellite_id: json['satellite_id'] == null ? null : json['satellite_id'] as String,
+    case_id: json['case_id'] == null ? null : json['case_id'] as String,
+    comparison: (json['comparison'] as List).map((item) => MissionLaneOutcome.fromJson(Map<String, dynamic>.from(item as Map))).toList(),
   );
 
   Map<String, dynamic> toJson() => {
@@ -541,8 +736,8 @@ class RunOutcome {
     'alert': alert == null ? null : alert!.toJson(),
     'committed_min': committed_min,
     'complete': complete,
-    'threshold_wh': threshold_wh,
-    'limit_soc': limit_soc,
+    'threshold_wh': threshold_wh == null ? null : threshold_wh!,
+    'limit_soc': limit_soc == null ? null : limit_soc!,
     'batch_start_min': batch_start_min,
     'margin': margin.toJson(),
     'solar_w': solar_w.toJson(),
@@ -558,6 +753,11 @@ class RunOutcome {
     'downlink': downlink,
     'downlink_progress': downlink_progress,
     'delivered_at_min': delivered_at_min == null ? null : delivered_at_min!,
+    'source_kind': source_kind,
+    'outcome_basis': outcome_basis,
+    'satellite_id': satellite_id == null ? null : satellite_id!,
+    'case_id': case_id == null ? null : case_id!,
+    'comparison': comparison.map((item) => item.toJson()).toList(),
   };
 }
 

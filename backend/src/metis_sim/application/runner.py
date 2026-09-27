@@ -99,6 +99,7 @@ class Runner:
         # Run ID to the tick where playback pauses by itself, such as a Metis
         # demo run held for the operator's decision.
         self.holds: dict[str, int] = {}
+        self.on_commit: Callable[[dict[str, Any]], None] | None = None
         self.commands: queue.Queue[PendingCommand] = queue.Queue(maxsize=32)
         self.stop_event = threading.Event()
         self.wakeup = threading.Event()
@@ -385,6 +386,9 @@ class Runner:
             status["run_id"],
             len(frames),
         )
+        callback = self.on_commit
+        if callback is not None:
+            self._retry_persistence(lambda: callback(result), status["run_id"])
         if frames and status["committed_tick"] % 100 < 4:
             logger.info(
                 "batch_committed",

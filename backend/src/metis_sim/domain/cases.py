@@ -1,8 +1,8 @@
 """Private, operator-authored case workflow contracts.
 
-Cases deliberately contain only operator narrative and snapshots of already
-committed public telemetry. They never project a private manifest, truth,
-future state, prediction, or command.
+Cases contain operator narrative, labelled saved-model recommendations, and
+snapshots of already committed public telemetry. Prediction narrative is never
+inserted into measurement evidence. Private manifests and truth stay excluded.
 """
 
 from datetime import datetime
@@ -280,12 +280,20 @@ class RecommendationCaseRequest(CaseRequest):
 
 
 class DecisionCaseRequest(CaseRequest):
-    """Record a human decision at an expected case revision."""
+    """Record a human decision at an expected case revision.
+
+    Attributes
+    ----------
+    mission_proposal_id : str or None
+        Bind a direct banner approval to the unchanged saved mission proposal.
+        Ordinary investigation decisions omit this additional precondition.
+    """
 
     revision: int = Field(ge=1)
     decision: Literal["approved", "rejected", "revised"]
     reason: str = Field(max_length=8000)
     revised_recommendation: str | None = Field(default=None, max_length=8000)
+    mission_proposal_id: str | None = Field(default=None, min_length=1, max_length=200)
 
     @field_validator("reason")
     @classmethod
@@ -302,6 +310,8 @@ class DecisionCaseRequest(CaseRequest):
             raise ValueError("A revised decision requires revised_recommendation")
         if self.decision != "revised" and self.revised_recommendation is not None:
             raise ValueError("revised_recommendation is only valid for a revised decision")
+        if self.mission_proposal_id is not None and self.decision != "approved":
+            raise ValueError("mission_proposal_id is only valid for an approval")
         return self
 
 

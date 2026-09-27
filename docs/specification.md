@@ -50,10 +50,10 @@ It does **not** own anomaly models, risk scores, estimated failure time, natural
 The viewer may show measured state and explicitly configured limit violations; it must not fabricate an AI health score.
 
 The September 26 [operator workflow extension](reference/operator-cases.md) adds
-private human-authored investigations, recommendations, decisions, and observed
-outcomes alongside configured mission planning and handover records.
-It preserves committed public evidence without implementing the separate
-automated analytics product or changing simulation physics.
+private investigations, recommendations, decisions, and observed outcomes alongside
+configured mission planning and handover records.
+It preserves committed public evidence without implementing the separate automated
+analytics product or changing simulation physics.
 
 ## 3. Priorities and Completion Boundary
 
@@ -346,22 +346,44 @@ The extension preserves commit-before-publication, one simulated clock, independ
 Its first health mechanism remains solar derating propagated through the power ledger and dependent physical states; future inference, real-mission validation, and a telemetry dashboard are not delivered by this source extension.
 Acceptance requires focused model/contract evidence and integration checks; neither the number of named channels nor successful export alone establishes physical fidelity or ML performance.
 
-## 14. Metis Wildfire Demo
+## 14. Metis Recorded-Mission Review
 
-The [Metis demo](reference/metis-demo.md) shows the separate analytics product making a decision against this simulator.
+The [recorded-mission review](reference/metis-demo.md) exercises a separate
+analytics product against an existing BUPT-1 replay at one saved source-time origin.
 
-**Metis's role:**
-- It forecasts solar supply and essential load from a model trained on BUPT-1 telemetry.
-- It proposes moving a compute batch away from a downlink.
-- It raises an alert before the batch starts and records the operator's decision.
+**Metis's role:** it exposes a saved forecast and planning proposal, then requests
+human review through the normal private operator-case workflow.
+It does not re-forecast from replay samples, create a new telemetry source, or
+issue a spacecraft command.
 
-**The simulator's role:** the Overview has a Metis on/off switch. Each choice flies the same spacecraft, orbit and hidden truth. With Metis off the original schedule flies. With Metis on the run starts at T0 and pauses by itself at +60 on Metis's alert; approving continues it on the Metis plan, dismissing on the original. The spacecraft's onboard start guard decides which tasks run; with Metis off it skips the downlink and the image misses the briefing. The simulator computes all physics.
+**The simulator's role:** it preserves the recorded BUPT-1 stream and pauses it
+only at the durable committed review tick.
+The bridge creates a linked private case with immutable public evidence, and the
+existing Early warnings, Investigations, Case history, notification receipts, and
+Shift Log surfaces present and audit the work.
+An unchanged approved proposal changes only the planning interpretation while the
+same replay resumes; rejection retains the original interpretation.
+An observed outcome remains a separate human-recorded result.
 
-The simulator still owns no forecast or recommendation logic. Metis lives in its own package, and its outputs are labelled as forecasts.
+The uploaded-wildfire-mission demonstration also projects task execution and
+illustrative image delivery from the saved plan's energy margins. With Metis OFF,
+the modeled admission gate prevents the original downlink from starting because
+the saved budget cannot sustain its full window; with Metis ON and the proposed shift approved,
+the image reaches the ground at T+103, before the T+120 response briefing.
+These `demo_projection` outcomes are separate from unchanged recorded telemetry.
+The durable watch setting, model alert, human decision, and labeled demo result
+remain auditable; a demo result never automatically establishes a supported
+observed outcome. The exact default alert is T+60, 21 June 2023 at 14:05 UTC.
+The critical banner offers Review and direct Approve through the same audited
+case API. Overview compares OFF and approved ON delivery at one committed clock;
+the ON lane cannot display executed actions before approval.
 
-**Scope extensions made for the demo:**
-- per-operation `added_load_w`, `label` and `min_start_soc`, with the public `operation_skipped` event;
-- one `solar_derating` scenario per satellite;
-- a private scenario shaped from BUPT-1's realized harvest, the approved exception in the physics model.
+The saved forecast and proposal remain private operator-review data, not public
+telemetry, operational events, simulator truth, or evidence of a real fault.
+The normal restart policy aborts active/paused runs at a committed boundary;
+recovery can reconcile the deterministic linked case but does not resume or invent
+recorded playback.
 
-Validation is recorded in [Metis demo validation](validation/metis-demo.md).
+This narrow integration preserves the simulator's P0 boundary: a separate future
+analytics product may consume public measurements, but forecast performance,
+calibration, and operational benefit require independent evaluation.

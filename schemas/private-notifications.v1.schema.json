@@ -49,8 +49,20 @@
     },
     "OperatorNotification": {
       "additionalProperties": false,
-      "description": "One visible warning or open investigation notification.\n\nAttributes\n----------\nkey : str\n    Stable server-created notification identity.\nversion : int\n    Material lifecycle version used by per-operator read receipts.\ncategory : {\"warning\", \"case\"}\n    The visible workspace item category.\nsatellite_id : str\n    Selected spacecraft in the warning or investigation workspace.\ntitle, summary : str\n    Public warning copy or operator-authored case summary.",
+      "description": "One visible warning or open investigation notification.\n\nAttributes\n----------\nkey : str\n    Stable server-created notification identity.\nversion : int\n    Material lifecycle version used by per-operator read receipts.\ncategory : {\"warning\", \"case\"}\n    The visible workspace item category.\nsatellite_id : str\n    Selected spacecraft in the warning or investigation workspace.\ntitle, summary : str\n    Public warning copy or operator-authored case summary.\nsource : {\"telemetry\", \"model_prediction\", \"operator_case\"}\n    Distinguish a committed measurement from a saved model prediction.\nseverity : {\"warning\", \"critical\", \"info\"}\n    Presentation urgency; critical predictions can trigger the alert banner.\ncase_id : str or None\n    Existing investigation to review instead of creating a duplicate case.",
       "properties": {
+        "case_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Case Id"
+        },
         "category": {
           "enum": [
             "warning",
@@ -69,6 +81,26 @@
           "maxLength": 64,
           "minLength": 1,
           "title": "Satellite Id",
+          "type": "string"
+        },
+        "severity": {
+          "default": "warning",
+          "enum": [
+            "warning",
+            "critical",
+            "info"
+          ],
+          "title": "Severity",
+          "type": "string"
+        },
+        "source": {
+          "default": "telemetry",
+          "enum": [
+            "telemetry",
+            "model_prediction",
+            "operator_case"
+          ],
+          "title": "Source",
           "type": "string"
         },
         "summary": {
@@ -100,7 +132,10 @@
         "satellite_id",
         "title",
         "summary",
-        "unread"
+        "unread",
+        "source",
+        "severity",
+        "case_id"
       ],
       "title": "OperatorNotification",
       "type": "object"

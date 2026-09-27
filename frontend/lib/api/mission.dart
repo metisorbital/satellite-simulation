@@ -787,47 +787,6 @@ class Mission extends ChangeNotifier {
   Future<JsonMap> metis(String path, {JsonMap? body}) =>
       _request(path, body: body);
 
-  /// Replace this run with a Metis demo run flying [plan], then start playback
-  /// unless [resume] is false.
-  ///
-  /// [plan] is `original` or `metis`; the Metis plan needs its approved
-  /// [proposalId]. With [watch], Metis watches the original plan and raises its alert.
-  Future<bool> launchMissionRun(
-    String plan, {
-    String? proposalId,
-    bool watch = false,
-    bool resume = true,
-  }) async {
-    if (_closed || busy) return false;
-    final generation = _generation;
-    busy = true;
-    error = null;
-    notifyListeners();
-    try {
-      final bootstrap = await _request(
-        '/v1/viewer/mission-run',
-        body: {'plan': plan, 'proposal_id': ?proposalId, 'watch': watch},
-      );
-      if (_closed || generation != _generation) return false;
-      busy = false;
-      await connect(initial: bootstrap);
-      final state = status?['status'];
-      // A held run waits for an operator decision, such as a Metis alert.
-      if (resume && state == 'paused') {
-        await control('resume');
-      } else if (resume && state == 'created') {
-        await control('start');
-      }
-      return !_closed && error == null;
-    } catch (exception) {
-      if (_closed || generation != _generation) return false;
-      error = '$exception';
-      busy = false;
-      notifyListeners();
-      return false;
-    }
-  }
-
   /// Create an unstarted run for the selected producer without mixing sources.
   Future<void> selectSource(String source, {String? datasetId}) async {
     if (_closed || busy || !canReplaceRun) return;

@@ -462,6 +462,9 @@ class Repository:
                         ~select(tables.operator_cases.c.case_id)
                         .where(tables.operator_cases.c.run_id == tables.runs.c.run_id)
                         .exists(),
+                        ~select(tables.mission_states.c.run_id)
+                        .where(tables.mission_states.c.run_id == tables.runs.c.run_id)
+                        .exists(),
                     )
                     .limit(100)
                 ).mappings()

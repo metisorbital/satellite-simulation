@@ -26,6 +26,12 @@ class OperatorNotification(NotificationModel):
         Selected spacecraft in the warning or investigation workspace.
     title, summary : str
         Public warning copy or operator-authored case summary.
+    source : {"telemetry", "model_prediction", "operator_case"}
+        Distinguish a committed measurement from a saved model prediction.
+    severity : {"warning", "critical", "info"}
+        Presentation urgency; critical predictions can trigger the alert banner.
+    case_id : str or None
+        Existing investigation to review instead of creating a duplicate case.
     """
 
     key: str = Field(min_length=1, max_length=256)
@@ -35,6 +41,9 @@ class OperatorNotification(NotificationModel):
     title: str = Field(min_length=1, max_length=512)
     summary: str = Field(min_length=1, max_length=4000)
     unread: bool
+    source: Literal["telemetry", "model_prediction", "operator_case"] = "telemetry"
+    severity: Literal["warning", "critical", "info"] = "warning"
+    case_id: str | None = None
 
 
 class NotificationList(NotificationModel):

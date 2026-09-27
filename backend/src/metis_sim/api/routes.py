@@ -2,12 +2,13 @@
 
 import json
 import time
+from contextlib import nullcontext
 from dataclasses import asdict
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
 from fastapi import APIRouter, Query, Request, Response
-from metis_agent.models import ViewerMissionRunRequest
+from metis_agent.models import MetisPreferenceRequest, MissionState
 from starlette.concurrency import run_in_threadpool
 
 from metis_sim.adapters.configuration import normalize_configuration
@@ -166,15 +167,95 @@ async def control(run_id: str, request: Request) -> dict:
         raise ServiceError("invalid_control", "Only set_speed requires a speed value.", 422)
     principal.require(VIEWERS, run_id, command.action)
     context.auth.csrf(request, principal)
-    if command.action == "start" and principal.interactive:
-        await run_in_threadpool(context.service.ensure_prepared_viewer_run, run_id)
+    token = mutation_token(request, principal, body)
+    return await run_in_threadpool(_control_locked, context, principal, run_id, command, token)
+
+
+def _control_locked(
+    context: Any,
+    principal: Principal,
+    run_id: str,
+    command: ControlRequest,
+    token: tuple[str, str, str],
+) -> dict:
+    """Keep preference changes and interactive Start/Resume in one worker lock."""
+    metis = getattr(context, "metis", None)
+    serialized = (
+        metis is not None and principal.interactive and command.action in {"start", "resume"}
+    )
+    workflow = metis.control_workflow(run_id) if serialized and metis is not None else nullcontext()
+    with workflow:
+        lock = metis.case_workflow() if serialized and metis is not None else nullcontext()
+        with lock:
+            if (
+                command.action in {"start", "resume"}
+                and principal.interactive
+                and principal.user_id
+            ):
+                metis = getattr(context, "metis", None)
+                if metis is not None:
+                    state = metis.store.get(run_id, principal.user_id)
+                    if state is not None:
+                        status = context.repository.status(run_id)
+                        pending = state["status"] == "awaiting_decision" or (
+                            state["status"] == "watching"
+                            and state.get("enabled", True)
+                            and int(status["committed_tick"]) >= int(state["alert_at_s"])
+                        )
+                        if pending:
+                            raise ServiceError(
+                                "case_approval_required",
+                                "Review and decide in the attached operator case before resuming this mission.",
+                                409,
+                            )
+            if command.action == "start" and principal.interactive:
+                context.service.ensure_prepared_viewer_run(run_id)
+                status = context.repository.status(run_id)
+                metis = getattr(context, "metis", None)
+                if metis is not None and principal.user_id and metis.source_compatible(status):
+                    state = metis.attach_run(
+                        principal.user_id,
+                        run_id,
+                        status,
+                        context.settings.metis_alert_s / 60,
+                    )
+                    if state["status"] == "watching" and state.get("enabled", True):
+                        context.runner.holds[run_id] = state["alert_at_s"]
+                    elif not state.get("enabled", True):
+                        context.runner.holds.pop(run_id, None)
+        return context.runner.command(
+            run_id, command.action, command.speed, token, user_id=principal.user_id
+        )
+
+
+@router.post("/v1/metis/preference", response_model=MissionState)
+async def metis_preference(request: Request) -> MissionState:
+    """Persist the authenticated replay's Metis watching preference.
+
+    Parameters
+    ----------
+    request : Request
+        Viewer request with enabled, CSRF and an idempotency key.
+
+    Returns
+    -------
+    MissionState
+        Updated durable summary on the existing recorded run.
+    """
+    context = request.app.state
+    principal = context.auth.principal(request)
+    principal.require({"viewer_control"})
+    context.auth.csrf(request, principal)
+    if principal.run_id is None or principal.user_id is None:
+        raise ServiceError("unauthorized", "Sign in with a demo operator.", 401)
+    metis = getattr(context, "metis", None)
+    if metis is None:
+        raise ServiceError("metis_unavailable", "The saved mission prediction is unavailable.", 404)
+    body = parse_json(await body_text(request))
+    command = MetisPreferenceRequest.model_validate(body)
+    token = mutation_token(request, principal, body)
     return await run_in_threadpool(
-        context.runner.command,
-        run_id,
-        command.action,
-        command.speed,
-        mutation_token(request, principal, body),
-        user_id=principal.user_id,
+        metis.set_enabled, principal.user_id, principal.run_id, command.enabled, token[1]
     )
 
 
@@ -732,59 +813,16 @@ async def seek_viewer_source(request: Request, response: Response) -> ViewerBoot
 
 @router.post("/v1/viewer/mission-run", response_model=ViewerBootstrap)
 async def launch_mission_run(request: Request, response: Response) -> ViewerBootstrap:
-    """Replace the viewer run with a Metis demo run flying one plan.
-
-    Parameters
-    ----------
-    request : Request
-        Scoped viewer request naming the plan (``original`` or ``metis``, the
-        latter with its approved proposal) and whether Metis watches it, with
-        CSRF and idempotency headers.
-    response : Response
-        Receives the cookie rebound to the new run.
-
-    Returns
-    -------
-    ViewerBootstrap
-        Demo run ready to start at T0. A watched run pauses by itself at the
-        Metis alert; the Metis plan resumes from there.
-    """
+    """Require the standard Start control on the existing recorded spacecraft."""
     context = request.app.state
-    metis = getattr(context, "metis", None)
-    if metis is None:
-        raise ServiceError("metis_unavailable", "The Metis demo template is not installed.", 404)
     principal = context.auth.principal(request)
     principal.require({"viewer_control"}, action="start")
     context.auth.csrf(request, principal)
-    if principal.user_id is None:
-        raise ServiceError("unauthorized", "Sign in with a demo operator.", 401)
-    body = parse_json(await body_text(request))
-    command = ViewerMissionRunRequest.model_validate(body)
-    windows = metis.flight_windows(principal.user_id, command.plan, command.proposal_id)
-    alert_s = context.settings.metis_alert_s
-    expires_at = time.time() + context.settings.session_lifetime_s
-    run = await run_in_threadpool(
-        context.service.create_mission_run,
-        principal.run_id,
-        context.settings.metis_mission_config,
-        windows,
-        metis.plan_name(command.plan),
-        mutation_token(request, principal, body),
-        viewer_expires_at=expires_at,
-        speed=context.settings.metis_mission_speed,
-        precommit_s=alert_s if command.plan == "metis" else 0,
-        hold_s=alert_s if command.watch else None,
+    raise ServiceError(
+        "use_standard_start",
+        "Use Start run to begin the mission on the existing recorded spacecraft.",
+        409,
     )
-    metis.record_run(
-        principal.user_id,
-        run["run_id"],
-        command.plan,
-        windows,
-        watch=command.watch,
-        alert_min=alert_s / 60,
-        operator=context.metis_host.viewer(request).display_name,
-    )
-    return _viewer_bootstrap_response(request, response, run, user_id=principal.user_id)
 
 
 @router.post("/v1/operator/runs/{run_id}/viewer-session", response_model=ViewerBootstrap)

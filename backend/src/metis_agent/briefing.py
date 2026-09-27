@@ -142,7 +142,8 @@ def build_decision(t0_utc: str, environment_source: str | None = None) -> Decisi
         source=(
             f"Gradient-boosted quantile models trained on {artifact['source']['dataset']} "
             f"telemetry ({artifact['source']['training_origins']:,} forecast origins), "
-            "retrained weekly; each model corrects repeating the last orbit."
+            "saved walk-forward prediction; each model corrects repeating the last orbit. "
+            "Forecasts are scaled to an assumed mission budget, not measured battery state."
         ),
         decision_time_source=f"{artifact['source']['decision_time']} (BUPT-1 time)",
         trained_through=artifact["source"]["last_training_origin"][:10],

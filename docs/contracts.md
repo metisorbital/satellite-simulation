@@ -498,24 +498,61 @@ Interval integrals use channel-unit seconds and exclude zero-duration or non-val
 The standalone public [dataset exporter](../examples/export_run.py) preserves frame identities and the captured boundary without including evaluator truth.
 Outcome labels and private reproducibility metadata remain separately authorized, and related executions must remain grouped when forming ML splits.
 
-## Metis Demo Agent
+## Metis Recorded-Mission Review
 
-The Metis agent (`backend/src/metis_agent`) is mounted when `METIS_MISSION_CONFIG` exists. It never imports the simulator.
-Its contracts are generated into `schemas/metis-agent.v1.schema.json` and `frontend/lib/api/metis_generated.dart`.
-
-Every route requires a signed-in viewer session. State-changing routes also require the CSRF token and an `Idempotency-Key`.
+The optional Metis agent (`backend/src/metis_agent`) attaches one saved forecast
+and planning proposal to an existing source-aligned BUPT-1 recorded replay.
+It never imports the simulator.
+Its read contracts are generated into `schemas/metis-agent.v1.schema.json` and
+`frontend/lib/api/metis_generated.dart`.
 
 | Route | Result |
 |---|---|
-| `GET /v1/metis/briefing` | `MetisBriefing`: mission, forecast bands in mission watts, proposal with forecast margins, approval window, and the operator's latest run with Metis off and on (`runs.metis_off`, `runs.metis_on`) |
-| `POST /v1/metis/proposals/{id}/approve` | `ApprovedPlan` with the Metis plan's task windows, or 409 `uplink_closed` after the window |
-| `POST /v1/metis/proposals/{id}/reopen` | `ApprovalWindow`, cleared and reopened for rehearsal; both modes' runs are forgotten |
-| `POST /v1/viewer/mission-run {plan, proposal_id?, watch?}` | `ViewerBootstrap` for a run flying `original` or the approved `metis` plan; `watch: true` flies the original plan with Metis on: the run starts at T0 and pauses by itself at the alert (`METIS_ALERT_S`, +60), the pending alert is reported only once the run reaches it, and the approval window restarts; `plan: metis` commits history up to the alert and continues from there; 409 `not_approved` for an unapproved Metis plan; the cookie is rebound to the new run |
-| `POST /v1/metis/runs/{run_id}/dismiss` | `MetisAlert`, dismissed; 409 `alert_not_pending` when there is no pending alert |
-| `GET /v1/metis/runs/{run_id}/outcome` | `RunOutcome` from public frames and events: margin, task states (`pending`, `running`, `done`, `skipped`), downlink progress and delivery time, `metis_on` and the alert; 404 for a run this operator did not launch |
+| `GET /v1/metis/briefing` | `MetisBriefing`: saved mission/forecast/proposal, durable state for the current owned replay, and whether its source and playback origin are eligible. |
+| `POST /v1/metis/preference` | Save `enabled` before Start or while paused before the alert. Requires the named run-scoped session, allowed origin, CSRF, and idempotency key. Pending cases must be decided through the case workflow. |
+| `GET /v1/metis/runs/{run_id}/outcome` | `demo_projection`: modeled energy, task states and illustrative image delivery paced by the current session's committed replay. These fields are not measured task or delivery evidence. |
+| `POST /v1/viewer/cases/{case_id}/recommendation` | Standard private case mutation; an edited model recommendation remains narrative. |
+| `POST /v1/viewer/cases/{case_id}/decision` | Standard private case decision; an unchanged approved proposal or a rejection resolves the held replay. |
 
-**Data boundary:**
-- Metis reads only its allowlisted decision artifact (no realized values) and public run status, frames and events.
-- Each demo run is created server-side from `configs/metis-wildfire.yaml` with its private scenario. The browser chooses only the plan; it can neither read that scenario nor supply it.
-- An edit through `/v1/viewer/configuration` still strips the scenario.
-- Approval state and the run registry are held in memory per operator.
+The normal `start` control creates and starts the recorded run.
+At the configured saved hold, its committed tick and paused lifecycle state are
+durable before the bridge creates the linked operator case.
+The mission snapshot records the named owner, run, saved proposal, replay origin,
+hold, and case link in the database.
+It is not a public telemetry object.
+The snapshot also saves the Metis watch preference and terminal demo result.
+`MetisBriefing.metis_enabled`, `alert_at_min`, and `alert_at_utc` drive the
+switch and exact timing hint. Disabling Metis removes its review hold.
+Demo-result activity is added to the private case when present and to the Shift
+Log, without changing the case's human decision or observed-outcome fields.
+In `RunOutcome`, `source_kind` identifies the underlying recorded telemetry;
+`outcome_basis` governs the modeled task and image-result interpretation.
+`RunOutcome.comparison` carries backend-evaluated original/proposed lanes with
+explicit active, comparison, awaiting-approval, or inactive status and provenance.
+The proposed lane reports no execution until the saved proposal is approved.
+An original downlink whose full-window budget violates the reserve is blocked
+at its start, with zero transmission progress. This is a modeled admission rule.
+
+The private case API remains the authority for all state-changing review work:
+named interactive viewer session, allowed origin, CSRF token, case ownership,
+expected revision, and `Idempotency-Key` are required.
+Direct banner approval adds `mission_proposal_id` to the standard decision body.
+Under the mission workflow lock, the server requires the current owned mission,
+matching saved proposal and unchanged recommendation. A mismatch returns 409
+without recording an approval. Ordinary investigation decisions omit this extra
+precondition and retain the narrative-revision behavior.
+The former Metis-specific approval, dismissal, rehearsal, and replacement-run
+routes reject requests so they cannot bypass that audit trail.
+
+The saved forecast/proposal are private operator-review narrative, not public
+measurements, operational events, consumer exports, simulator truth, or evaluator
+labels.
+The bridge has only the authenticated run identity and public replay status.
+It cannot modify recorded frames, change source provenance, issue a spacecraft
+command, or establish a later observed outcome.
+
+The standard restart policy still aborts active and paused runs, preserves the
+committed boundary, and requires explicit regeneration rather than seamless replay
+continuation.
+Recovery may reconcile a deterministic model-case identity at an already committed
+hold, but it never invents a missed tick or uncommitted state.

@@ -22,6 +22,7 @@ class CaseWorkspace extends StatefulWidget {
     required this.onShiftLog,
     required this.onInvestigation,
     required this.notifications,
+    this.requestedCaseId,
   });
 
   final Mission mission;
@@ -32,6 +33,7 @@ class CaseWorkspace extends StatefulWidget {
   final VoidCallback onShiftLog;
   final VoidCallback onInvestigation;
   final NotificationController notifications;
+  final String? requestedCaseId;
 
   @override
   State<CaseWorkspace> createState() => CaseWorkspaceState();
@@ -61,6 +63,7 @@ class CaseWorkspaceState extends State<CaseWorkspace> {
   late String _identity;
   String? _reportSatellite;
   int? _reportSequence;
+  String _caseVersions = '';
 
   String get _runId => widget.mission.status?['run_id'] as String? ?? '';
   String get _userId => widget.mission.operatorUserId ?? '';
@@ -79,6 +82,7 @@ class CaseWorkspaceState extends State<CaseWorkspace> {
     _title.addListener(_trackCreateDraft);
     _summary.addListener(_trackCreateDraft);
     widget.mission.addListener(_missionChanged);
+    widget.notifications.addListener(_notificationsChanged);
     unawaited(_load());
     unawaited(widget.notifications.refresh());
   }
@@ -86,6 +90,14 @@ class CaseWorkspaceState extends State<CaseWorkspace> {
   @override
   void didUpdateWidget(covariant CaseWorkspace oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.notifications != widget.notifications) {
+      oldWidget.notifications.removeListener(_notificationsChanged);
+      widget.notifications.addListener(_notificationsChanged);
+    }
+    if (widget.requestedCaseId != null &&
+        oldWidget.requestedCaseId != widget.requestedCaseId) {
+      unawaited(openCase(widget.requestedCaseId!));
+    }
     if (oldWidget.mission == widget.mission) {
       if (oldWidget.section == 'warnings' && widget.section != 'warnings') {
         final record = _detail;
@@ -118,6 +130,7 @@ class CaseWorkspaceState extends State<CaseWorkspace> {
   @override
   void dispose() {
     widget.mission.removeListener(_missionChanged);
+    widget.notifications.removeListener(_notificationsChanged);
     _title.dispose();
     _summary.dispose();
     super.dispose();
@@ -128,6 +141,27 @@ class CaseWorkspaceState extends State<CaseWorkspace> {
         _showCreate &&
         (_title.text.trim().isNotEmpty || _summary.text.trim().isNotEmpty);
     if (mounted && _createDirty != dirty) setState(() => _createDirty = dirty);
+  }
+
+  void _notificationsChanged() {
+    final versions = widget.notifications.items
+        .where((item) => item.category == 'case')
+        .map((item) => '${item.key}:${item.version}')
+        .join('|');
+    if (versions == _caseVersions) return;
+    _caseVersions = versions;
+    if (!_dirty && !_saving && !_loading && _validSession) unawaited(_load());
+  }
+
+  /// Open the exact durable investigation linked from a mission or alert.
+  Future<void> openCase(String caseId) async {
+    if (!await canLeave() || !mounted) return;
+    setState(() {
+      _selectedCaseId = caseId;
+      _detail = null;
+      _detailError = null;
+    });
+    await _loadDetail(caseId);
   }
 
   void _missionChanged() {
@@ -230,7 +264,10 @@ class CaseWorkspaceState extends State<CaseWorkspace> {
         _summaries = listed.items;
         _total = listed.total;
         _hasMore = listed.has_more;
-        selection = _summaries.any((item) => item.case_id == _selectedCaseId)
+        final requested = widget.requestedCaseId;
+        selection = requested != null && _selectedCaseId == null
+            ? requested
+            : _summaries.any((item) => item.case_id == _selectedCaseId)
             ? _selectedCaseId
             : _summaries
                       .where(
@@ -315,6 +352,14 @@ class CaseWorkspaceState extends State<CaseWorkspace> {
   }
 
   Future<void> _openSignal(_WarningSignal signal) async {
+    final linkedCaseId = signal.notification.case_id;
+    if (linkedCaseId != null) {
+      if (!await canLeave() || !mounted) return;
+      setState(() => _selectedCaseId = linkedCaseId);
+      widget.onInvestigation();
+      unawaited(_loadDetail(linkedCaseId));
+      return;
+    }
     if (!await _beginReport() || !mounted) return;
     setState(() {
       _priority = 'review';
@@ -482,7 +527,9 @@ class CaseWorkspaceState extends State<CaseWorkspace> {
         (item) => _WarningSignal(
           title: item.title,
           summary: item.summary,
-          kind: 'committed signal',
+          kind: item.source == 'model_prediction'
+              ? 'model prediction · awaiting approval'
+              : 'committed signal',
           notification: item,
         ),
       )
@@ -561,7 +608,7 @@ class CaseWorkspaceState extends State<CaseWorkspace> {
     };
     final subtitle = switch (widget.section) {
       'warnings' =>
-        'Committed data quality and explicit operating signals. Risk models are not connected.',
+        'Committed telemetry signals and clearly labelled model predictions. Review linked investigations before approving a recommendation.',
       'history' => 'Durable operator cases and their append-only activities.',
       _ =>
         'Review evidence, record operator judgment, and observe the outcome.',
@@ -791,7 +838,7 @@ class CaseWorkspaceState extends State<CaseWorkspace> {
                 : 'No committed sample is available',
             message: stale
                 ? 'Last known data may be incomplete. Warning status is not a current health assessment.'
-                : 'There is no committed sample for this spacecraft yet. Risk models are not connected.',
+                : 'There is no committed sample for this spacecraft yet. Saved model predictions, when available, are labelled separately.',
           ),
         if (stale || frame == null) const SizedBox(height: 16),
         if (widget.notifications.error != null)
@@ -815,7 +862,7 @@ class CaseWorkspaceState extends State<CaseWorkspace> {
             icon: Icons.info_outline,
             title: 'No configured warning condition in this sample',
             message:
-                'No missing, invalid, or saturated reading; positive unserved EPS power; safe mode; or open operator case was found. This does not establish spacecraft health.',
+                'No active telemetry warning, pending model recommendation, or open operator case was found. This does not establish spacecraft health.',
           ),
         for (final signal in signals) ...[
           CasePanel(

@@ -57,6 +57,7 @@ class SimulationService:
 
     def __init__(self, repository: Repository, runner: Runner) -> None:
         self.repository, self.runner = repository, runner
+        self.recorded_mission_epoch: datetime | None = None
         self.mutations = threading.RLock()
         self.demo_run_id: str | None = None
         self.viewer_runs: set[str] = set()
@@ -1139,6 +1140,14 @@ class SimulationService:
             data_source: Literal["physics", "satellitecots"] = (
                 "satellitecots" if len(self.observed.list_datasets()) == 1 else "physics"
             )
+            start_elapsed_s = 0
+            if data_source == "satellitecots" and self.recorded_mission_epoch is not None:
+                dataset = self.observed.list_datasets()[0]
+                aligned = int(
+                    (self.recorded_mission_epoch - dataset.observed_start).total_seconds()
+                )
+                if dataset.satellite_id.upper() == "BUPT-1" and 0 <= aligned <= dataset.duration_s:
+                    start_elapsed_s = aligned
             return self.create_run(
                 revision["configuration_id"],
                 False,
@@ -1147,6 +1156,7 @@ class SimulationService:
                 user_id=user_id,
                 viewer_expires_at=viewer_expires_at,
                 data_source=data_source,
+                start_elapsed_s=start_elapsed_s,
             )
 
     def stop_viewer_run(

@@ -118,6 +118,9 @@ class NotificationController extends ChangeNotifier {
       title: '',
       summary: '',
       unread: true,
+      source: 'operator_case',
+      severity: 'info',
+      case_id: caseId,
     ),
   );
 

@@ -12,6 +12,7 @@ from typing import Any
 from fastapi import Request
 from metis_agent.api import Viewer
 
+from metis_sim.adapters.records import canonical_hash
 from metis_sim.application.errors import ServiceError
 
 
@@ -79,6 +80,41 @@ class SimulatorMetisHost:
             Public status, including each satellite's capacity and public limits.
         """
         return self.state.repository.status(run_id)
+
+    def set_hold(self, run_id: str, tick: int | None) -> None:
+        """Update the saved prediction hold for a created or paused replay.
+
+        Parameters
+        ----------
+        run_id : str
+            Authorized recorded replay.
+        tick : int or None
+            Absolute source alert tick; None disables the model hold.
+        """
+        if tick is None:
+            self.state.runner.holds.pop(run_id, None)
+        else:
+            self.state.runner.holds[run_id] = tick
+
+    def resume(self, run_id: str, user_id: str, decision: str) -> None:
+        """Resume the same replay after its audited mission decision.
+
+        Parameters
+        ----------
+        run_id, user_id : str
+            Operator-owned recorded run.
+        decision : str
+            Durable decision identity for idempotent pacing.
+        """
+        status = self.state.repository.status(run_id)
+        if status["status"] != "paused":
+            return
+        token = (
+            "mission:resume",
+            f"{run_id}:{decision}",
+            canonical_hash({"run_id": run_id, "decision": decision}),
+        )
+        self.state.runner.command(run_id, "resume", None, token, user_id=user_id)
 
     def frames(
         self, run_id: str, satellite_id: str, from_sequence: int, through_sequence: int
