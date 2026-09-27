@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'dart:convert';
 
@@ -11,6 +12,9 @@ import 'auth/operator_gate.dart';
 import 'data_source_selector.dart';
 import 'mission_shell.dart';
 import 'mission_planning.dart';
+import 'metis/metis_controller.dart';
+import 'metis/metis_controls.dart';
+import 'metis/metis_panels.dart';
 import 'observed_timeline.dart';
 import 'overview_inspector.dart';
 import 'payload_schedule.dart';
@@ -20,6 +24,8 @@ import 'telemetry/dashboard.dart';
 import 'shift_log/shift_log_dialog.dart';
 import 'workflows/case_workspace.dart';
 import 'workflows/notification_controller.dart';
+import 'workflows/critical_alert_audio.dart';
+import 'workflows/critical_alert_banner.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -94,15 +100,18 @@ class MissionPage extends StatefulWidget {
 class _MissionPageState extends State<MissionPage> {
   late final Mission mission;
   late final NotificationController notifications;
+  late final CriticalAlertAudio criticalAlertAudio;
   Ticker? ticker;
   DialogRoute<void>? _constellationEditorRoute;
   final historyFocus = FocusNode(debugLabel: "Measurement history");
   final overviewScroll = ScrollController();
+  late final MetisController metis;
   String selected = '', chart = 'eps.battery_soc';
   MissionView view = MissionView.overview;
   bool get telemetryVisible => view == MissionView.telemetry;
   bool get overviewVisible => view == MissionView.overview;
   final _caseWorkspaceKey = GlobalKey<CaseWorkspaceState>();
+  String? requestedCaseId;
   final _shiftPageKey = GlobalKey<ShiftLogPageState>();
   bool _navigating = false;
   bool telemetryFocused = false;
@@ -116,10 +125,13 @@ class _MissionPageState extends State<MissionPage> {
     mission = Mission(onSessionExpired: widget.onSessionExpired);
     mission.addListener(refresh);
     notifications = NotificationController(mission)..addListener(refresh);
+    criticalAlertAudio = CriticalAlertAudio();
     mission.connect(initial: widget.bootstrap);
-    WidgetsBinding.instance.addPostFrameCallback(
-      (_) => notifications.refresh(),
-    );
+    metis = MetisController(mission);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      notifications.refresh();
+      metis.load();
+    });
     ticker = Ticker((_) {
       final second = mission.clock.elapsed.inSeconds;
       if (overviewVisible || second != lastDashboardSecond) {
@@ -160,6 +172,8 @@ class _MissionPageState extends State<MissionPage> {
       });
     }
     ticker?.dispose();
+    unawaited(criticalAlertAudio.dispose());
+    metis.dispose();
     historyFocus.dispose();
     overviewScroll.dispose();
     mission.removeListener(refresh);
@@ -763,6 +777,14 @@ class _MissionPageState extends State<MissionPage> {
     }
   }
 
+  Future<void> openInvestigation(String? caseId) async {
+    setState(() => requestedCaseId = caseId);
+    await navigateTo(MissionView.investigations);
+    if (caseId != null && mounted) {
+      await _caseWorkspaceKey.currentState?.openCase(caseId);
+    }
+  }
+
   Future<void> switchOperator(String login) async {
     if (mission.busy ||
         _navigating ||
@@ -1053,6 +1075,7 @@ class _MissionPageState extends State<MissionPage> {
                               mission: mission,
                               notifications: notifications,
                               section: view.name,
+                              requestedCaseId: requestedCaseId,
                               selectedSatellite: selected,
                               onSelected: (id) => setState(() => selected = id),
                               onTelemetry: (satelliteId) => navigateTo(
@@ -1060,8 +1083,14 @@ class _MissionPageState extends State<MissionPage> {
                                 satelliteId: satelliteId,
                               ),
                               onShiftLog: showShiftLog,
+                              onInvestigation: () => openInvestigation(null),
+                            )
+                          : view == MissionView.missions
+                          ? MetisMissionDetail(
+                              controller: metis,
+                              controls: MetisControls(controller: metis),
                               onInvestigation: () =>
-                                  navigateTo(MissionView.investigations),
+                                  openInvestigation(metis.caseId),
                             )
                           : view == MissionView.planning
                           ? MissionPlanningPage(
@@ -1092,12 +1121,40 @@ class _MissionPageState extends State<MissionPage> {
                               ],
                             )
                           : mobile
-                          ? orbitStage(
-                              status,
-                              frame,
-                              satellites.length,
-                              false,
-                              mobile: true,
+                          ? SingleChildScrollView(
+                              child: Column(
+                                children: [
+                                  if (!metis.unavailable)
+                                    MetisSummary(
+                                      controller: metis,
+                                      onOpen: () =>
+                                          navigateTo(MissionView.missions),
+                                    ),
+                                  if (!metis.unavailable)
+                                    MetisControls(controller: metis),
+                                  SizedBox(
+                                    height: math.max(
+                                      320,
+                                      constraints.maxHeight - 100,
+                                    ),
+                                    child: orbitStage(
+                                      status,
+                                      frame,
+                                      satellites.length,
+                                      false,
+                                      mobile: true,
+                                    ),
+                                  ),
+                                  if (!metis.unavailable)
+                                    MetisOverviewPanels(
+                                      controller: metis,
+                                      onOpenMissions: () =>
+                                          navigateTo(MissionView.missions),
+                                      onInvestigation: () =>
+                                          openInvestigation(metis.caseId),
+                                    ),
+                                ],
+                              ),
                             )
                           : Row(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1127,7 +1184,31 @@ class _MissionPageState extends State<MissionPage> {
               ),
             ],
           );
-          return body;
+          return Stack(
+            children: [
+              body,
+              Positioned(
+                top: focused
+                    ? 12
+                    : mobile
+                    ? 48
+                    : 60,
+                right: 16,
+                child: SizedBox(
+                  width: math.min(390, math.max(0, constraints.maxWidth - 32)),
+                  child: CriticalAlertBanner(
+                    notifications: notifications.items,
+                    audio: criticalAlertAudio,
+                    onReview: (caseId) => openInvestigation(caseId),
+                    onApprove: (caseId) async {
+                      await metis.approveAlert(caseId);
+                      await notifications.refresh();
+                    },
+                  ),
+                ),
+              ),
+            ],
+          );
         },
       ),
     );
@@ -1298,6 +1379,8 @@ class _MissionPageState extends State<MissionPage> {
     required bool scrollToolbar,
   }) => LayoutBuilder(
     builder: (context, constraints) {
+      final fixedScene =
+          scrollToolbar || (!metis.unavailable && metis.briefing != null);
       // This height also stops intrinsic layout at the platform view boundary.
       final scene = SizedBox(
         height: scrollToolbar
@@ -1309,8 +1392,24 @@ class _MissionPageState extends State<MissionPage> {
         children: [
           if (scrollToolbar) toolbar(status, compact: true),
           if (scrollToolbar && mission.error != null) connectionIssue(),
-          if (scrollToolbar) scene else Expanded(child: scene),
+          if (!metis.unavailable)
+            MetisSummary(
+              controller: metis,
+              onOpen: () => navigateTo(MissionView.missions),
+            ),
+          if (!metis.unavailable)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 14),
+              child: MetisControls(controller: metis),
+            ),
+          if (fixedScene) scene else Expanded(child: scene),
           if (mission.isObserved) ObservedTimeline(mission: mission),
+          if (!metis.unavailable)
+            MetisOverviewPanels(
+              controller: metis,
+              onOpenMissions: () => navigateTo(MissionView.missions),
+              onInvestigation: () => openInvestigation(metis.caseId),
+            ),
           if (!compact)
             Focus(focusNode: historyFocus, child: historyPanel())
           else
@@ -1335,7 +1434,7 @@ class _MissionPageState extends State<MissionPage> {
           primary: false,
           // Keep the scroll thumb outside the platform view's pointer surface.
           padding: const EdgeInsets.only(right: 12),
-          child: scrollToolbar
+          child: fixedScene
               ? content
               : ConstrainedBox(
                   constraints: BoxConstraints(minHeight: constraints.maxHeight),
@@ -1392,9 +1491,12 @@ class _MissionPageState extends State<MissionPage> {
         : starting
         ? 'start'
         : 'resume';
+    final awaitingMissionDecision =
+        status?['status'] == 'paused' && metis.state == 'awaiting_decision';
     final disabled =
         status == null ||
         mission.busy ||
+        metis.savingPreference ||
         [
           'completed',
           'stopped',
@@ -1412,7 +1514,18 @@ class _MissionPageState extends State<MissionPage> {
                 child: FilledButton.icon(
                   onPressed: disabled || !mission.canPerform(primaryAction)
                       ? null
-                      : () => mission.control(primaryAction),
+                      : () async {
+                          if (awaitingMissionDecision) {
+                            await openInvestigation(metis.caseId);
+                            return;
+                          }
+                          if (primaryAction == 'start' ||
+                              primaryAction == 'resume') {
+                            unawaited(criticalAlertAudio.arm());
+                          }
+                          await mission.control(primaryAction);
+                          await metis.load();
+                        },
                   style: FilledButton.styleFrom(
                     backgroundColor: const Color(0xff5d84ff),
                     foregroundColor: const Color(0xff040d1a),
